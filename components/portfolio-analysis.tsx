@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -38,6 +38,7 @@ export default function PortfolioAnalysis() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const [activeTab, setActiveTab] = useState("upload")
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   // Manual entry form state
   const [manualEntry, setManualEntry] = useState({
@@ -47,6 +48,10 @@ export default function PortfolioAnalysis() {
     units: "",
     currentValue: "",
   })
+
+  const handleFileButtonClick = () => {
+    fileInputRef.current?.click()
+  }
 
   const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files
@@ -128,7 +133,9 @@ export default function PortfolioAnalysis() {
     } finally {
       setIsUploading(false)
       // Clear the input
-      event.target.value = ""
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ""
+      }
     }
   }
 
@@ -242,39 +249,60 @@ export default function PortfolioAnalysis() {
                 <FileText className="h-5 w-5" />
                 Upload Investment Statements
               </CardTitle>
+              <p className="text-sm text-muted-foreground">
+                Upload your brokerage statements, mutual fund statements, or portfolio CSV files
+              </p>
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
                 <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <div className="space-y-2">
                   <p className="text-lg font-medium text-gray-900">Drop your investment statements here</p>
-                  <p className="text-sm text-gray-600">Supports Excel (.xlsx), CSV, and PDF files</p>
+                  <p className="text-sm text-gray-600">Supports Excel (.xlsx), CSV, and PDF files up to 10MB</p>
                 </div>
                 <div className="mt-6">
-                  <label htmlFor="file-upload" className="cursor-pointer">
-                    <Button disabled={isUploading} className="relative">
-                      {isUploading ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Processing...
-                        </>
-                      ) : (
-                        <>
-                          <Upload className="h-4 w-4 mr-2" />
-                          Choose Files
-                        </>
-                      )}
-                    </Button>
-                    <input
-                      id="file-upload"
-                      type="file"
-                      multiple
-                      accept=".xlsx,.xls,.csv,.pdf"
-                      onChange={handleFileUpload}
-                      className="sr-only"
-                      disabled={isUploading}
-                    />
-                  </label>
+                  <Button onClick={handleFileButtonClick} disabled={isUploading} className="relative">
+                    {isUploading ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Processing...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Choose Files
+                      </>
+                    )}
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".xlsx,.xls,.csv,.pdf"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                    disabled={isUploading}
+                  />
+                </div>
+              </div>
+
+              {/* Supported Platforms */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Zerodha Console
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Groww Statements
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  HDFC Securities
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Angel One
                 </div>
               </div>
 
@@ -317,6 +345,7 @@ export default function PortfolioAnalysis() {
                 <Plus className="h-5 w-5" />
                 Add Investment Manually
               </CardTitle>
+              <p className="text-sm text-muted-foreground">Add your investments manually for detailed analysis</p>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleManualSubmit} className="space-y-4">
@@ -416,7 +445,7 @@ export default function PortfolioAnalysis() {
                             <span>Invested: ₹{entry.amount.toLocaleString()}</span>
                             <span>Current: ₹{entry.currentValue.toLocaleString()}</span>
                             <span className={entry.gainLoss >= 0 ? "text-green-600" : "text-red-600"}>
-                              {entry.gainLoss >= 0 ? "+" : ""}₹{entry.gainLoss.toLocaleString()}(
+                              {entry.gainLoss >= 0 ? "+" : ""}₹{entry.gainLoss.toLocaleString()} (
                               {entry.gainLossPercentage.toFixed(2)}%)
                             </span>
                           </div>

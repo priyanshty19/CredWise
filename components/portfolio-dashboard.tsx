@@ -2,7 +2,8 @@
 
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Target, AlertTriangle } from "lucide-react"
+import { Progress } from "@/components/ui/progress"
+import { TrendingUp, TrendingDown, PieChart, BarChart3, Target, DollarSign } from "lucide-react"
 
 interface PortfolioEntry {
   id: string
@@ -28,20 +29,20 @@ export default function PortfolioDashboard({ portfolioEntries }: PortfolioDashbo
   const totalGainLoss = totalCurrentValue - totalInvested
   const totalGainLossPercentage = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0
 
-  // Asset allocation
-  const assetAllocation = portfolioEntries.reduce(
+  // Calculate allocation by type
+  const allocationByType = portfolioEntries.reduce(
     (acc, entry) => {
-      const type = entry.type
-      if (!acc[type]) {
-        acc[type] = { count: 0, value: 0, invested: 0 }
-      }
-      acc[type].count += 1
-      acc[type].value += entry.currentValue
-      acc[type].invested += entry.amount
+      acc[entry.type] = (acc[entry.type] || 0) + entry.currentValue
       return acc
     },
-    {} as Record<string, { count: number; value: number; invested: number }>,
+    {} as Record<string, number>,
   )
+
+  const allocationData = Object.entries(allocationByType).map(([type, value]) => ({
+    type: type.replace("_", " ").toUpperCase(),
+    value,
+    percentage: (value / totalCurrentValue) * 100,
+  }))
 
   // Top performers
   const topPerformers = [...portfolioEntries].sort((a, b) => b.gainLossPercentage - a.gainLossPercentage).slice(0, 5)
@@ -49,29 +50,7 @@ export default function PortfolioDashboard({ portfolioEntries }: PortfolioDashbo
   // Bottom performers
   const bottomPerformers = [...portfolioEntries].sort((a, b) => a.gainLossPercentage - b.gainLossPercentage).slice(0, 5)
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
-
-  const getAssetTypeLabel = (type: string) => {
-    switch (type) {
-      case "mutual_fund":
-        return "Mutual Funds"
-      case "stock":
-        return "Stocks"
-      case "bond":
-        return "Bonds"
-      default:
-        return "Other"
-    }
-  }
-
-  const getAssetTypeColor = (type: string) => {
+  const getTypeColor = (type: string) => {
     switch (type) {
       case "mutual_fund":
         return "bg-blue-100 text-blue-800"
@@ -86,16 +65,16 @@ export default function PortfolioDashboard({ portfolioEntries }: PortfolioDashbo
 
   return (
     <div className="space-y-6">
-      {/* Portfolio Overview Cards */}
+      {/* Portfolio Overview */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Invested</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalInvested)}</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Invested</p>
+                <p className="text-2xl font-bold">₹{totalInvested.toLocaleString("en-IN")}</p>
               </div>
-              <DollarSign className="h-8 w-8 text-blue-600" />
+              <DollarSign className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
@@ -104,10 +83,10 @@ export default function PortfolioDashboard({ portfolioEntries }: PortfolioDashbo
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Current Value</p>
-                <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalCurrentValue)}</p>
+                <p className="text-sm font-medium text-muted-foreground">Current Value</p>
+                <p className="text-2xl font-bold">₹{totalCurrentValue.toLocaleString("en-IN")}</p>
               </div>
-              <BarChart3 className="h-8 w-8 text-green-600" />
+              <BarChart3 className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
@@ -116,10 +95,9 @@ export default function PortfolioDashboard({ portfolioEntries }: PortfolioDashbo
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total Gain/Loss</p>
+                <p className="text-sm font-medium text-muted-foreground">Total Gain/Loss</p>
                 <p className={`text-2xl font-bold ${totalGainLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
-                  {totalGainLoss >= 0 ? "+" : ""}
-                  {formatCurrency(totalGainLoss)}
+                  {totalGainLoss >= 0 ? "+" : ""}₹{totalGainLoss.toLocaleString("en-IN")}
                 </p>
               </div>
               {totalGainLoss >= 0 ? (
@@ -135,160 +113,149 @@ export default function PortfolioDashboard({ portfolioEntries }: PortfolioDashbo
           <CardContent className="p-6">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Return %</p>
-                <p className={`text-2xl font-bold ${totalGainLossPercentage >= 0 ? "text-green-600" : "text-red-600"}`}>
+                <p className="text-sm font-medium text-muted-foreground">Return %</p>
+                <p className={`text-2xl font-bold ${totalGainLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
                   {totalGainLossPercentage >= 0 ? "+" : ""}
                   {totalGainLossPercentage.toFixed(2)}%
                 </p>
               </div>
-              <Target className="h-8 w-8 text-purple-600" />
+              <Target className="h-8 w-8 text-muted-foreground" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Asset Allocation */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <PieChart className="h-5 w-5" />
-            Asset Allocation
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {Object.entries(assetAllocation).map(([type, data]) => {
-              const percentage = (data.value / totalCurrentValue) * 100
-              return (
-                <div key={type} className="p-4 bg-gray-50 rounded-lg">
-                  <div className="flex items-center justify-between mb-2">
-                    <Badge className={getAssetTypeColor(type)}>{getAssetTypeLabel(type)}</Badge>
-                    <span className="text-sm text-gray-600">{data.count} items</span>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-lg font-semibold">{formatCurrency(data.value)}</p>
-                    <p className="text-sm text-gray-600">{percentage.toFixed(1)}% of portfolio</p>
-                    <p className={`text-sm ${data.value >= data.invested ? "text-green-600" : "text-red-600"}`}>
-                      {data.value >= data.invested ? "+" : ""}
-                      {formatCurrency(data.value - data.invested)}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Performance Analysis */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Asset Allocation */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PieChart className="h-5 w-5" />
+              Asset Allocation
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {allocationData.map((item) => (
+              <div key={item.type} className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm font-medium">{item.type}</span>
+                  <span className="text-sm text-muted-foreground">
+                    ₹{item.value.toLocaleString("en-IN")} ({item.percentage.toFixed(1)}%)
+                  </span>
+                </div>
+                <Progress value={item.percentage} className="h-2" />
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
         {/* Top Performers */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-green-600">
-              <TrendingUp className="h-5 w-5" />
+            <CardTitle className="flex items-center gap-2">
+              <TrendingUp className="h-5 w-5 text-green-600" />
               Top Performers
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {topPerformers.map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
-                  <div className="flex-1 min-w-0">
+          <CardContent className="space-y-3">
+            {topPerformers.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
                     <p className="font-medium text-gray-900 truncate">{entry.name}</p>
-                    <p className="text-sm text-gray-600">
-                      {formatCurrency(entry.amount)} → {formatCurrency(entry.currentValue)}
-                    </p>
+                    <Badge variant="outline" className={`text-xs ${getTypeColor(entry.type)}`}>
+                      {entry.type.replace("_", " ")}
+                    </Badge>
                   </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-green-600">+{entry.gainLossPercentage.toFixed(2)}%</p>
-                    <p className="text-sm text-green-600">+{formatCurrency(entry.gainLoss)}</p>
-                  </div>
+                  <p className="text-sm text-gray-600">₹{entry.currentValue.toLocaleString("en-IN")}</p>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Bottom Performers */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-600">
-              <TrendingDown className="h-5 w-5" />
-              Needs Attention
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {bottomPerformers.map((entry) => (
-                <div key={entry.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
-                  <div className="flex-1 min-w-0">
-                    <p className="font-medium text-gray-900 truncate">{entry.name}</p>
-                    <p className="text-sm text-gray-600">
-                      {formatCurrency(entry.amount)} → {formatCurrency(entry.currentValue)}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <p className="font-semibold text-red-600">{entry.gainLossPercentage.toFixed(2)}%</p>
-                    <p className="text-sm text-red-600">{formatCurrency(entry.gainLoss)}</p>
-                  </div>
+                <div className="text-right">
+                  <p className="font-medium text-green-600">+{entry.gainLossPercentage.toFixed(2)}%</p>
+                  <p className="text-sm text-green-600">+₹{entry.gainLoss.toLocaleString("en-IN")}</p>
                 </div>
-              ))}
-            </div>
+              </div>
+            ))}
           </CardContent>
         </Card>
       </div>
 
-      {/* Portfolio Summary */}
+      {/* All Holdings */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
-            Portfolio Summary
+            All Holdings ({portfolioEntries.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
-              <div className="p-4 bg-blue-50 rounded-lg">
-                <p className="text-2xl font-bold text-blue-600">{portfolioEntries.length}</p>
-                <p className="text-sm text-blue-800">Total Investments</p>
-              </div>
-              <div className="p-4 bg-green-50 rounded-lg">
-                <p className="text-2xl font-bold text-green-600">
-                  {portfolioEntries.filter((e) => e.gainLoss > 0).length}
-                </p>
-                <p className="text-sm text-green-800">Profitable Investments</p>
-              </div>
-              <div className="p-4 bg-red-50 rounded-lg">
-                <p className="text-2xl font-bold text-red-600">
-                  {portfolioEntries.filter((e) => e.gainLoss < 0).length}
-                </p>
-                <p className="text-sm text-red-800">Loss-making Investments</p>
-              </div>
-            </div>
-
-            {/* Recommendations */}
-            <div className="mt-6 p-4 bg-yellow-50 rounded-lg border border-yellow-200">
-              <div className="flex items-start gap-3">
-                <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
-                <div>
-                  <h4 className="font-medium text-yellow-800 mb-2">Portfolio Insights</h4>
-                  <ul className="text-sm text-yellow-700 space-y-1">
-                    <li>
-                      • Your portfolio has a {totalGainLossPercentage >= 0 ? "positive" : "negative"} return of{" "}
-                      {totalGainLossPercentage.toFixed(2)}%
-                    </li>
-                    <li>• Consider rebalancing if any asset class exceeds 60% of your portfolio</li>
-                    <li>• Review underperforming investments for potential reallocation</li>
-                    <li>• Diversification across asset classes can help reduce risk</li>
-                  </ul>
+          <div className="space-y-3">
+            {portfolioEntries.map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between p-4 border rounded-lg hover:bg-gray-50">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1">
+                    <p className="font-medium text-gray-900 truncate">{entry.name}</p>
+                    <Badge variant="outline" className={`text-xs ${getTypeColor(entry.type)}`}>
+                      {entry.type.replace("_", " ")}
+                    </Badge>
+                    {entry.source === "upload" && (
+                      <Badge variant="secondary" className="text-xs">
+                        Uploaded
+                      </Badge>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-4 text-sm text-gray-600">
+                    <span>Invested: ₹{entry.amount.toLocaleString("en-IN")}</span>
+                    <span>Current: ₹{entry.currentValue.toLocaleString("en-IN")}</span>
+                    {entry.units && <span>Units: {entry.units}</span>}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className={`font-medium ${entry.gainLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    {entry.gainLoss >= 0 ? "+" : ""}₹{entry.gainLoss.toLocaleString("en-IN")}
+                  </p>
+                  <p className={`text-sm ${entry.gainLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    ({entry.gainLossPercentage >= 0 ? "+" : ""}
+                    {entry.gainLossPercentage.toFixed(2)}%)
+                  </p>
                 </div>
               </div>
-            </div>
+            ))}
           </div>
         </CardContent>
       </Card>
+
+      {/* Bottom Performers */}
+      {bottomPerformers.some((entry) => entry.gainLoss < 0) && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <TrendingDown className="h-5 w-5 text-red-600" />
+              Needs Attention
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {bottomPerformers
+              .filter((entry) => entry.gainLoss < 0)
+              .map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <p className="font-medium text-gray-900 truncate">{entry.name}</p>
+                      <Badge variant="outline" className={`text-xs ${getTypeColor(entry.type)}`}>
+                        {entry.type.replace("_", " ")}
+                      </Badge>
+                    </div>
+                    <p className="text-sm text-gray-600">₹{entry.currentValue.toLocaleString("en-IN")}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-red-600">{entry.gainLossPercentage.toFixed(2)}%</p>
+                    <p className="text-sm text-red-600">₹{entry.gainLoss.toLocaleString("en-IN")}</p>
+                  </div>
+                </div>
+              ))}
+          </CardContent>
+        </Card>
+      )}
     </div>
   )
 }

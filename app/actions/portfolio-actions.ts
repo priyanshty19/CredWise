@@ -20,7 +20,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
       return { success: false, error: "No files provided" }
     }
 
-    console.log(`Processing ${files.length} files...`)
+    console.log(`📄 Processing ${files.length} files...`)
 
     // Simulate processing delay
     await new Promise((resolve) => setTimeout(resolve, 2000))
@@ -28,7 +28,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
     const portfolioData: PortfolioEntry[] = []
 
     for (const file of files) {
-      console.log(`Processing file: ${file.name}`)
+      console.log(`📊 Processing file: ${file.name}`)
 
       // Generate mock data based on file name
       const isMutualFund = file.name.toLowerCase().includes("mutual")
@@ -104,7 +104,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
       }
     }
 
-    console.log(`Generated ${portfolioData.length} portfolio entries`)
+    console.log(`✅ Generated ${portfolioData.length} portfolio entries from ${files.length} files`)
 
     return {
       success: true,
@@ -112,7 +112,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
       message: `Successfully processed ${files.length} files and found ${portfolioData.length} investments`,
     }
   } catch (error) {
-    console.error("Error processing portfolio files:", error)
+    console.error("❌ Error processing portfolio files:", error)
     return {
       success: false,
       error: "Failed to process files. Please try again.",
