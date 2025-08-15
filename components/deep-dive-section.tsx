@@ -23,28 +23,51 @@ export default function DeepDiveSection() {
   return (
     <div className="space-y-6">
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-8">
-          <TabsTrigger value="portfolio" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            <span className="hidden sm:inline">Current Portfolio & Analysis</span>
-            <span className="sm:hidden">Portfolio</span>
-            <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs">
+        <TabsList className="grid w-full grid-cols-3 mb-8 h-auto">
+          <TabsTrigger
+            value="portfolio"
+            className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 p-3 sm:p-4 h-auto"
+          >
+            <div className="flex items-center gap-1 sm:gap-2">
+              <BarChart3 className="h-4 w-4 flex-shrink-0" />
+              <span className="text-xs sm:text-sm font-medium text-center sm:text-left">
+                <span className="block sm:hidden">Portfolio</span>
+                <span className="hidden sm:block">Current Portfolio & Analysis</span>
+              </span>
+            </div>
+            <Badge variant="secondary" className="bg-green-100 text-green-800 text-xs mt-1 sm:mt-0">
               Active
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="goals" className="flex items-center gap-2">
-            <Target className="h-4 w-4" />
-            <span className="hidden sm:inline">Goal & Projection Planner</span>
-            <span className="sm:hidden">Goals</span>
-            <Badge variant="outline" className="text-xs">
+
+          <TabsTrigger
+            value="goals"
+            className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 p-3 sm:p-4 h-auto"
+          >
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Target className="h-4 w-4 flex-shrink-0" />
+              <span className="text-xs sm:text-sm font-medium text-center sm:text-left">
+                <span className="block sm:hidden">Goals</span>
+                <span className="hidden sm:block">Goal & Projection Planner</span>
+              </span>
+            </div>
+            <Badge variant="outline" className="text-xs mt-1 sm:mt-0">
               Soon
             </Badge>
           </TabsTrigger>
-          <TabsTrigger value="advisory" className="flex items-center gap-2">
-            <Briefcase className="h-4 w-4" />
-            <span className="hidden sm:inline">Fund Management / Advisory</span>
-            <span className="sm:hidden">Advisory</span>
-            <Badge variant="outline" className="text-xs">
+
+          <TabsTrigger
+            value="advisory"
+            className="flex flex-col sm:flex-row items-center gap-1 sm:gap-2 p-3 sm:p-4 h-auto"
+          >
+            <div className="flex items-center gap-1 sm:gap-2">
+              <Briefcase className="h-4 w-4 flex-shrink-0" />
+              <span className="text-xs sm:text-sm font-medium text-center sm:text-left">
+                <span className="block sm:hidden">Advisory</span>
+                <span className="hidden sm:block">Fund Management / Advisory</span>
+              </span>
+            </div>
+            <Badge variant="outline" className="text-xs mt-1 sm:mt-0">
               Soon
             </Badge>
           </TabsTrigger>
