@@ -2,237 +2,213 @@
 
 import type React from "react"
 
-import { useState, useCallback } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  Upload,
-  Plus,
-  TrendingUp,
-  TrendingDown,
-  BarChart3,
-  FileText,
-  Calculator,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  X,
-  Info,
-} from "lucide-react"
-import { useDropzone } from "react-dropzone"
-import { uploadPortfolioFiles, addManualEntry } from "@/app/actions/portfolio-actions"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import { Upload, Plus, FileText, PieChart, BarChart3, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
+import { uploadPortfolioFiles } from "@/app/actions/portfolio-actions"
 import PortfolioDashboard from "@/components/portfolio-dashboard"
-
-interface UploadedFile {
-  id: string
-  name: string
-  size: number
-  type: string
-  status: "uploading" | "processing" | "completed" | "error"
-  data?: any
-  error?: string
-}
 
 interface PortfolioEntry {
   id: string
-  type: "stock" | "mutual_fund" | "bond" | "etf" | "crypto" | "other"
   name: string
-  symbol?: string
-  quantity: number
-  currentPrice: number
-  purchasePrice: number
-  purchaseDate: string
+  type: "mutual_fund" | "stock" | "bond" | "other"
+  amount: number
+  units?: number
   currentValue: number
   gainLoss: number
   gainLossPercentage: number
+  source: "upload" | "manual"
+  fileName?: string
 }
 
-interface ManualEntry {
-  type: "stock" | "mutual_fund" | "bond" | "etf" | "crypto" | "other"
+interface UploadedFile {
   name: string
-  symbol: string
-  quantity: string
-  currentPrice: string
-  purchasePrice: string
-  purchaseDate: string
+  status: "uploading" | "processing" | "completed" | "error"
+  entriesCount?: number
+  error?: string
 }
 
 export default function PortfolioAnalysis() {
-  const [activeTab, setActiveTab] = useState("upload")
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [portfolioEntries, setPortfolioEntries] = useState<PortfolioEntry[]>([])
-  const [isProcessing, setIsProcessing] = useState(false)
-  const [showDashboard, setShowDashboard] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const [activeTab, setActiveTab] = useState("upload")
 
   // Manual entry form state
-  const [manualEntry, setManualEntry] = useState<ManualEntry>({
-    type: "stock",
+  const [manualEntry, setManualEntry] = useState({
     name: "",
-    symbol: "",
-    quantity: "",
-    currentPrice: "",
-    purchasePrice: "",
-    purchaseDate: new Date().toISOString().split("T")[0],
+    type: "mutual_fund" as const,
+    amount: "",
+    units: "",
+    currentValue: "",
   })
 
-  const onDrop = useCallback(async (acceptedFiles: File[]) => {
-    const newFiles: UploadedFile[] = acceptedFiles.map((file) => ({
-      id: Math.random().toString(36).substr(2, 9),
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files
+    if (!files || files.length === 0) return
+
+    setIsUploading(true)
+    const fileArray = Array.from(files)
+
+    // Add files to uploaded files list with uploading status
+    const newUploadedFiles = fileArray.map((file) => ({
       name: file.name,
-      size: file.size,
-      type: file.type,
-      status: "uploading",
+      status: "uploading" as const,
     }))
+    setUploadedFiles((prev) => [...prev, ...newUploadedFiles])
 
-    setUploadedFiles((prev) => [...prev, ...newFiles])
+    try {
+      // Update status to processing
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          newUploadedFiles.some((nf) => nf.name === f.name) ? { ...f, status: "processing" as const } : f,
+        ),
+      )
 
-    // Process each file
-    for (const file of acceptedFiles) {
-      const fileId = newFiles.find((f) => f.name === file.name)?.id
-      if (!fileId) continue
+      const formData = new FormData()
+      fileArray.forEach((file) => {
+        formData.append("files", file)
+      })
 
-      try {
-        // Update status to processing
-        setUploadedFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "processing" } : f)))
+      const result = await uploadPortfolioFiles(formData)
 
-        const formData = new FormData()
-        formData.append("file", file)
+      if (result.success && result.portfolioData) {
+        // Add new entries to portfolio
+        const newEntries: PortfolioEntry[] = result.portfolioData.map((entry) => ({
+          ...entry,
+          source: "upload" as const,
+        }))
 
-        const result = await uploadPortfolioFiles(formData)
+        setPortfolioEntries((prev) => [...prev, ...newEntries])
 
-        if (result.success && result.data) {
-          // Update file status and add portfolio entries
-          setUploadedFiles((prev) =>
-            prev.map((f) =>
-              f.id === fileId
-                ? {
-                    ...f,
-                    status: "completed",
-                    data: result.data,
-                  }
-                : f,
-            ),
-          )
-
-          // Add parsed entries to portfolio
-          if (result.data.portfolioEntries) {
-            setPortfolioEntries((prev) => [...prev, ...result.data.portfolioEntries])
-          }
-        } else {
-          setUploadedFiles((prev) =>
-            prev.map((f) =>
-              f.id === fileId ? { ...f, status: "error", error: result.error || "Processing failed" } : f,
-            ),
-          )
-        }
-      } catch (error) {
-        console.error("File processing error:", error)
+        // Update file status to completed
         setUploadedFiles((prev) =>
-          prev.map((f) => (f.id === fileId ? { ...f, status: "error", error: "Upload failed" } : f)),
+          prev.map((f) => {
+            const matchingFile = newUploadedFiles.find((nf) => nf.name === f.name)
+            if (matchingFile) {
+              const entriesForFile = newEntries.filter((entry) => entry.fileName === f.name)
+              return {
+                ...f,
+                status: "completed" as const,
+                entriesCount: entriesForFile.length,
+              }
+            }
+            return f
+          }),
+        )
+
+        // Switch to dashboard tab if we have entries
+        if (newEntries.length > 0) {
+          setActiveTab("dashboard")
+        }
+      } else {
+        // Update status to error
+        setUploadedFiles((prev) =>
+          prev.map((f) =>
+            newUploadedFiles.some((nf) => nf.name === f.name)
+              ? { ...f, status: "error" as const, error: result.error || "Upload failed" }
+              : f,
+          ),
         )
       }
+    } catch (error) {
+      console.error("Upload error:", error)
+      setUploadedFiles((prev) =>
+        prev.map((f) =>
+          newUploadedFiles.some((nf) => nf.name === f.name)
+            ? { ...f, status: "error" as const, error: "Upload failed" }
+            : f,
+        ),
+      )
+    } finally {
+      setIsUploading(false)
+      // Clear the input
+      event.target.value = ""
     }
-  }, [])
-
-  const { getRootProps, getInputProps, isDragActive } = useDropzone({
-    onDrop,
-    accept: {
-      "application/pdf": [".pdf"],
-      "text/csv": [".csv"],
-      "application/vnd.ms-excel": [".xls"],
-      "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"],
-      "image/*": [".png", ".jpg", ".jpeg"],
-    },
-    maxSize: 10 * 1024 * 1024, // 10MB
-  })
-
-  const removeFile = (fileId: string) => {
-    const file = uploadedFiles.find((f) => f.id === fileId)
-    if (file?.data?.portfolioEntries) {
-      // Remove associated portfolio entries
-      const entryIds = file.data.portfolioEntries.map((entry: PortfolioEntry) => entry.id)
-      setPortfolioEntries((prev) => prev.filter((entry) => !entryIds.includes(entry.id)))
-    }
-    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId))
   }
 
-  const handleManualSubmit = async (e: React.FormEvent) => {
+  const removeUploadedFile = (fileName: string) => {
+    // Remove file from uploaded files
+    setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName))
+    // Remove associated portfolio entries
+    setPortfolioEntries((prev) => prev.filter((entry) => entry.fileName !== fileName))
+  }
+
+  const handleManualSubmit = (e: React.FormEvent) => {
     e.preventDefault()
 
-    if (!manualEntry.name || !manualEntry.quantity || !manualEntry.currentPrice || !manualEntry.purchasePrice) {
+    const amount = Number.parseFloat(manualEntry.amount)
+    const units = Number.parseFloat(manualEntry.units) || 0
+    const currentValue = Number.parseFloat(manualEntry.currentValue)
+
+    if (!manualEntry.name || isNaN(amount) || isNaN(currentValue)) {
       return
     }
 
-    const quantity = Number.parseFloat(manualEntry.quantity)
-    const currentPrice = Number.parseFloat(manualEntry.currentPrice)
-    const purchasePrice = Number.parseFloat(manualEntry.purchasePrice)
-    const currentValue = quantity * currentPrice
-    const gainLoss = currentValue - quantity * purchasePrice
-    const gainLossPercentage = ((currentPrice - purchasePrice) / purchasePrice) * 100
+    const gainLoss = currentValue - amount
+    const gainLossPercentage = (gainLoss / amount) * 100
 
-    const entry: PortfolioEntry = {
-      id: Math.random().toString(36).substr(2, 9),
-      type: manualEntry.type,
+    const newEntry: PortfolioEntry = {
+      id: `manual-${Date.now()}`,
       name: manualEntry.name,
-      symbol: manualEntry.symbol || undefined,
-      quantity,
-      currentPrice,
-      purchasePrice,
-      purchaseDate: manualEntry.purchaseDate,
+      type: manualEntry.type,
+      amount,
+      units: units > 0 ? units : undefined,
       currentValue,
       gainLoss,
       gainLossPercentage,
+      source: "manual",
     }
 
-    try {
-      const result = await addManualEntry(entry)
-      if (result.success) {
-        setPortfolioEntries((prev) => [...prev, entry])
-        setManualEntry({
-          type: "stock",
-          name: "",
-          symbol: "",
-          quantity: "",
-          currentPrice: "",
-          purchasePrice: "",
-          purchaseDate: new Date().toISOString().split("T")[0],
-        })
-      }
-    } catch (error) {
-      console.error("Error adding manual entry:", error)
+    setPortfolioEntries((prev) => [...prev, newEntry])
+
+    // Reset form
+    setManualEntry({
+      name: "",
+      type: "mutual_fund",
+      amount: "",
+      units: "",
+      currentValue: "",
+    })
+
+    // Switch to dashboard if this is the first entry
+    if (portfolioEntries.length === 0) {
+      setActiveTab("dashboard")
     }
   }
 
-  const generateAnalysis = async () => {
-    setIsProcessing(true)
-    await new Promise((resolve) => setTimeout(resolve, 2000))
-    setIsProcessing(false)
-    setShowDashboard(true)
+  const removePortfolioEntry = (id: string) => {
+    setPortfolioEntries((prev) => prev.filter((entry) => entry.id !== id))
   }
 
-  const hasData = uploadedFiles.some((f) => f.status === "completed") || portfolioEntries.length > 0
-  const totalValue = portfolioEntries.reduce((sum, entry) => sum + entry.currentValue, 0)
-  const totalGainLoss = portfolioEntries.reduce((sum, entry) => sum + entry.gainLoss, 0)
+  const getStatusIcon = (status: UploadedFile["status"]) => {
+    switch (status) {
+      case "uploading":
+      case "processing":
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+      case "completed":
+        return <CheckCircle className="h-4 w-4 text-green-600" />
+      case "error":
+        return <AlertCircle className="h-4 w-4 text-red-600" />
+    }
+  }
 
-  if (showDashboard) {
-    return (
-      <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold text-gray-900">Your Financial Portfolio Analysis</h2>
-          <Button variant="outline" onClick={() => setShowDashboard(false)} className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Add More Data
-          </Button>
-        </div>
-
-        <PortfolioDashboard portfolioData={portfolioEntries} />
-      </div>
-    )
+  const getStatusText = (file: UploadedFile) => {
+    switch (file.status) {
+      case "uploading":
+        return "Uploading..."
+      case "processing":
+        return "Processing..."
+      case "completed":
+        return `${file.entriesCount || 0} investments found`
+      case "error":
+        return file.error || "Error"
+    }
   }
 
   return (
@@ -241,18 +217,20 @@ export default function PortfolioAnalysis() {
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="upload" className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
-            <span className="hidden sm:inline">Upload Files</span>
-            <span className="sm:hidden">Upload</span>
+            Upload Files
           </TabsTrigger>
           <TabsTrigger value="manual" className="flex items-center gap-2">
             <Plus className="h-4 w-4" />
-            <span className="hidden sm:inline">Manual Entry</span>
-            <span className="sm:hidden">Manual</span>
+            Manual Entry
           </TabsTrigger>
           <TabsTrigger value="dashboard" className="flex items-center gap-2">
             <BarChart3 className="h-4 w-4" />
-            <span className="hidden sm:inline">Dashboard</span>
-            <span className="sm:hidden">Analytics</span>
+            Dashboard
+            {portfolioEntries.length > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {portfolioEntries.length}
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -264,75 +242,65 @@ export default function PortfolioAnalysis() {
                 <FileText className="h-5 w-5" />
                 Upload Investment Statements
               </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Upload your brokerage statements, mutual fund statements, or portfolio CSV files
-              </p>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div
-                {...getRootProps()}
-                className={`border-2 border-dashed rounded-lg p-8 text-center cursor-pointer transition-colors ${
-                  isDragActive ? "border-blue-400 bg-blue-50" : "border-gray-300 hover:border-gray-400"
-                }`}
-              >
-                <input {...getInputProps()} />
+            <CardContent className="space-y-6">
+              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
                 <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                {isDragActive ? (
-                  <p className="text-blue-600">Drop the files here...</p>
-                ) : (
-                  <div>
-                    <p className="text-gray-600 mb-2">
-                      Drag & drop your investment statements here, or click to select files
-                    </p>
-                    <p className="text-sm text-gray-500">Supports PDF, CSV, Excel files up to 10MB</p>
-                  </div>
-                )}
+                <div className="space-y-2">
+                  <p className="text-lg font-medium text-gray-900">Drop your investment statements here</p>
+                  <p className="text-sm text-gray-600">Supports Excel (.xlsx), CSV, and PDF files</p>
+                </div>
+                <div className="mt-6">
+                  <label htmlFor="file-upload" className="cursor-pointer">
+                    <Button disabled={isUploading} className="relative">
+                      {isUploading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Processing...
+                        </>
+                      ) : (
+                        <>
+                          <Upload className="h-4 w-4 mr-2" />
+                          Choose Files
+                        </>
+                      )}
+                    </Button>
+                    <input
+                      id="file-upload"
+                      type="file"
+                      multiple
+                      accept=".xlsx,.xls,.csv,.pdf"
+                      onChange={handleFileUpload}
+                      className="sr-only"
+                      disabled={isUploading}
+                    />
+                  </label>
+                </div>
               </div>
 
-              {/* Supported Platforms */}
-              <div className="grid sm:grid-cols-3 gap-4 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  Zerodha Console
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  Groww Statements
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  HDFC Securities
-                </div>
-              </div>
-
-              {/* Uploaded Files List */}
+              {/* Uploaded Files Status */}
               {uploadedFiles.length > 0 && (
                 <div className="space-y-3">
-                  <h4 className="font-medium text-gray-900">Uploaded Files:</h4>
-                  {uploadedFiles.map((file) => (
-                    <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3">
-                        <FileText className="h-5 w-5 text-gray-500" />
-                        <div>
-                          <p className="font-medium text-gray-900">{file.name}</p>
-                          <p className="text-sm text-gray-500">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
-                          {file.status === "completed" && file.data && (
-                            <p className="text-xs text-green-600">
-                              ✓ {file.data.portfolioEntries?.length || 0} investments found
-                            </p>
-                          )}
-                          {file.status === "error" && <p className="text-xs text-red-600">✗ {file.error}</p>}
+                  <h4 className="font-medium text-gray-900">Uploaded Files</h4>
+                  {uploadedFiles.map((file, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                        {getStatusIcon(file.status)}
+                        <div className="min-w-0 flex-1">
+                          <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                          <p className="text-xs text-gray-600">{getStatusText(file)}</p>
                         </div>
                       </div>
-                      <div className="flex items-center gap-2">
-                        {file.status === "uploading" && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
-                        {file.status === "processing" && <Loader2 className="h-4 w-4 animate-spin text-orange-600" />}
-                        {file.status === "completed" && <CheckCircle className="h-4 w-4 text-green-600" />}
-                        {file.status === "error" && <AlertCircle className="h-4 w-4 text-red-600" />}
-                        <Button variant="ghost" size="sm" onClick={() => removeFile(file.id)}>
+                      {file.status === "completed" || file.status === "error" ? (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeUploadedFile(file.name)}
+                          className="flex-shrink-0"
+                        >
                           <X className="h-4 w-4" />
                         </Button>
-                      </div>
+                      ) : null}
                     </div>
                   ))}
                 </div>
@@ -346,103 +314,78 @@ export default function PortfolioAnalysis() {
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Calculator className="h-5 w-5" />
-                Manual Portfolio Entry
+                <Plus className="h-5 w-5" />
+                Add Investment Manually
               </CardTitle>
-              <p className="text-sm text-muted-foreground">Add your investments manually for detailed analysis</p>
             </CardHeader>
-            <CardContent className="space-y-4">
+            <CardContent>
               <form onSubmit={handleManualSubmit} className="space-y-4">
-                <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Investment Type</Label>
-                    <select
-                      id="type"
-                      value={manualEntry.type}
-                      onChange={(e) => setManualEntry({ ...manualEntry, type: e.target.value as any })}
-                      className="w-full p-2 border border-input rounded-md bg-background"
-                    >
-                      <option value="stock">Stock</option>
-                      <option value="mutual_fund">Mutual Fund</option>
-                      <option value="etf">ETF</option>
-                      <option value="bond">Bond</option>
-                      <option value="crypto">Cryptocurrency</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
-
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
                     <Label htmlFor="name">Investment Name</Label>
                     <Input
                       id="name"
                       value={manualEntry.name}
-                      onChange={(e) => setManualEntry({ ...manualEntry, name: e.target.value })}
-                      placeholder="e.g., Reliance Industries"
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., HDFC Top 100 Fund"
                       required
                     />
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="symbol">Symbol (Optional)</Label>
-                    <Input
-                      id="symbol"
-                      value={manualEntry.symbol}
-                      onChange={(e) => setManualEntry({ ...manualEntry, symbol: e.target.value })}
-                      placeholder="e.g., RELIANCE"
-                    />
+                    <Label htmlFor="type">Type</Label>
+                    <select
+                      id="type"
+                      value={manualEntry.type}
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, type: e.target.value as any }))}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="mutual_fund">Mutual Fund</option>
+                      <option value="stock">Stock</option>
+                      <option value="bond">Bond</option>
+                      <option value="other">Other</option>
+                    </select>
                   </div>
+                </div>
 
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="quantity">Quantity</Label>
+                    <Label htmlFor="amount">Invested Amount (₹)</Label>
                     <Input
-                      id="quantity"
-                      type="number"
-                      value={manualEntry.quantity}
-                      onChange={(e) => setManualEntry({ ...manualEntry, quantity: e.target.value })}
-                      placeholder="100"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="currentPrice">Current Price (₹)</Label>
-                    <Input
-                      id="currentPrice"
+                      id="amount"
                       type="number"
                       step="0.01"
-                      value={manualEntry.currentPrice}
-                      onChange={(e) => setManualEntry({ ...manualEntry, currentPrice: e.target.value })}
-                      placeholder="2500.00"
+                      value={manualEntry.amount}
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, amount: e.target.value }))}
+                      placeholder="50000"
                       required
                     />
                   </div>
-
                   <div className="space-y-2">
-                    <Label htmlFor="purchasePrice">Purchase Price (₹)</Label>
+                    <Label htmlFor="units">Units (Optional)</Label>
                     <Input
-                      id="purchasePrice"
+                      id="units"
+                      type="number"
+                      step="0.001"
+                      value={manualEntry.units}
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, units: e.target.value }))}
+                      placeholder="1250.5"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="currentValue">Current Value (₹)</Label>
+                    <Input
+                      id="currentValue"
                       type="number"
                       step="0.01"
-                      value={manualEntry.purchasePrice}
-                      onChange={(e) => setManualEntry({ ...manualEntry, purchasePrice: e.target.value })}
-                      placeholder="2000.00"
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2 sm:col-span-2 lg:col-span-1">
-                    <Label htmlFor="purchaseDate">Purchase Date</Label>
-                    <Input
-                      id="purchaseDate"
-                      type="date"
-                      value={manualEntry.purchaseDate}
-                      onChange={(e) => setManualEntry({ ...manualEntry, purchaseDate: e.target.value })}
+                      value={manualEntry.currentValue}
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, currentValue: e.target.value }))}
+                      placeholder="55000"
                       required
                     />
                   </div>
                 </div>
 
-                <Button type="submit" className="w-full sm:w-auto">
+                <Button type="submit" className="w-full">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Investment
                 </Button>
@@ -450,57 +393,39 @@ export default function PortfolioAnalysis() {
             </CardContent>
           </Card>
 
-          {/* Portfolio Entries List */}
-          {portfolioEntries.length > 0 && (
+          {/* Manual Entries List */}
+          {portfolioEntries.filter((entry) => entry.source === "manual").length > 0 && (
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center justify-between">
-                  <span>Your Portfolio ({portfolioEntries.length} investments)</span>
-                  <div className="text-right">
-                    <div className="text-2xl font-bold">₹{totalValue.toLocaleString("en-IN")}</div>
-                    <div
-                      className={`text-sm flex items-center gap-1 ${totalGainLoss >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {totalGainLoss >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}₹
-                      {Math.abs(totalGainLoss).toLocaleString("en-IN")}
-                    </div>
-                  </div>
-                </CardTitle>
+                <CardTitle>Manual Entries</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-3">
-                  {portfolioEntries.map((entry) => (
-                    <div key={entry.id} className="flex items-center justify-between p-3 border rounded-lg">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2">
-                          <Badge variant="outline" className="text-xs">
-                            {entry.type.replace("_", " ").toUpperCase()}
-                          </Badge>
-                          <span className="font-medium">{entry.name}</span>
-                          {entry.symbol && <span className="text-sm text-muted-foreground">({entry.symbol})</span>}
+                  {portfolioEntries
+                    .filter((entry) => entry.source === "manual")
+                    .map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900 truncate">{entry.name}</p>
+                            <Badge variant="outline" className="text-xs">
+                              {entry.type.replace("_", " ")}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                            <span>Invested: ₹{entry.amount.toLocaleString()}</span>
+                            <span>Current: ₹{entry.currentValue.toLocaleString()}</span>
+                            <span className={entry.gainLoss >= 0 ? "text-green-600" : "text-red-600"}>
+                              {entry.gainLoss >= 0 ? "+" : ""}₹{entry.gainLoss.toLocaleString()}(
+                              {entry.gainLossPercentage.toFixed(2)}%)
+                            </span>
+                          </div>
                         </div>
-                        <div className="text-sm text-muted-foreground mt-1">
-                          {entry.quantity} units × ₹{entry.currentPrice} = ₹{entry.currentValue.toLocaleString("en-IN")}
-                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => removePortfolioEntry(entry.id)}>
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <div className="text-right">
-                        <div className={`font-medium ${entry.gainLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
-                          {entry.gainLoss >= 0 ? "+" : ""}₹{entry.gainLoss.toLocaleString("en-IN")}
-                        </div>
-                        <div className={`text-sm ${entry.gainLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
-                          ({entry.gainLossPercentage.toFixed(2)}%)
-                        </div>
-                      </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setPortfolioEntries((prev) => prev.filter((e) => e.id !== entry.id))}
-                        className="ml-2 text-red-600 hover:text-red-700"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
-                    </div>
-                  ))}
+                    ))}
                 </div>
               </CardContent>
             </Card>
@@ -509,48 +434,31 @@ export default function PortfolioAnalysis() {
 
         {/* Dashboard Tab */}
         <TabsContent value="dashboard" className="space-y-6">
-          <PortfolioDashboard portfolioData={portfolioEntries} />
+          {portfolioEntries.length > 0 ? (
+            <PortfolioDashboard portfolioEntries={portfolioEntries} />
+          ) : (
+            <Card>
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <PieChart className="h-16 w-16 text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Portfolio Data</h3>
+                <p className="text-gray-600 mb-6 max-w-md">
+                  Upload your investment statements or add entries manually to see your portfolio analysis.
+                </p>
+                <div className="flex gap-3">
+                  <Button onClick={() => setActiveTab("upload")} variant="default">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Files
+                  </Button>
+                  <Button onClick={() => setActiveTab("manual")} variant="outline">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Manually
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
       </Tabs>
-
-      {/* Generate Analysis Button */}
-      {hasData && !showDashboard && (
-        <Card className="border-green-200 bg-green-50">
-          <CardContent className="p-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold text-gray-900 mb-2">Ready to Generate Analysis</h3>
-                <p className="text-gray-600">
-                  You have {uploadedFiles.filter((f) => f.status === "completed").length} processed files and{" "}
-                  {portfolioEntries.length} portfolio entries
-                </p>
-              </div>
-              <Button onClick={generateAnalysis} disabled={isProcessing} className="bg-green-600 hover:bg-green-700">
-                {isProcessing ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Processing...
-                  </>
-                ) : (
-                  <>
-                    <BarChart3 className="h-4 w-4 mr-2" />
-                    Generate Analysis
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Help Section */}
-      <Alert>
-        <Info className="h-4 w-4" />
-        <AlertDescription>
-          <strong>Need help?</strong> Upload your investment statements for automatic analysis, or manually add any
-          financial data. We support most major investment platforms and banking formats.
-        </AlertDescription>
-      </Alert>
     </div>
   )
 }

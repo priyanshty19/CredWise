@@ -2,182 +2,120 @@
 
 interface PortfolioEntry {
   id: string
-  type: "stock" | "mutual_fund" | "bond" | "etf" | "crypto" | "other"
   name: string
-  symbol?: string
-  quantity: number
-  currentPrice: number
-  purchasePrice: number
-  purchaseDate: string
+  type: "mutual_fund" | "stock" | "bond" | "other"
+  amount: number
+  units?: number
   currentValue: number
   gainLoss: number
   gainLossPercentage: number
+  fileName?: string
 }
 
-export async function uploadPortfolioFiles(formData: FormData): Promise<{
-  success: boolean
-  data?: any
-  error?: string
-}> {
+export async function uploadPortfolioFiles(formData: FormData) {
   try {
-    const file = formData.get("file") as File
+    const files = formData.getAll("files") as File[]
 
-    if (!file) {
-      return { success: false, error: "No file provided" }
+    if (!files || files.length === 0) {
+      return { success: false, error: "No files provided" }
     }
 
-    console.log("📄 Processing file:", file.name, "Size:", file.size, "Type:", file.type)
+    console.log(`Processing ${files.length} files...`)
 
-    // Simulate file processing delay
+    // Simulate processing delay
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
-    // Mock portfolio data based on file name/type
-    let mockPortfolioEntries: PortfolioEntry[] = []
+    const portfolioData: PortfolioEntry[] = []
 
-    if (file.name.toLowerCase().includes("mutual")) {
-      // Mock mutual fund data
-      mockPortfolioEntries = [
-        {
-          id: `mf_${Date.now()}_1`,
-          type: "mutual_fund",
-          name: "HDFC Top 100 Fund",
-          symbol: "HDFC_TOP100",
-          quantity: 1250.5,
-          currentPrice: 850.75,
-          purchasePrice: 720.5,
-          purchaseDate: "2023-06-15",
-          currentValue: 1063551.88,
-          gainLoss: 162826.25,
-          gainLossPercentage: 18.08,
-        },
-        {
-          id: `mf_${Date.now()}_2`,
-          type: "mutual_fund",
-          name: "SBI Small Cap Fund",
-          symbol: "SBI_SMALLCAP",
-          quantity: 850.25,
-          currentPrice: 125.3,
-          purchasePrice: 98.75,
-          purchaseDate: "2023-08-20",
-          currentValue: 106576.33,
-          gainLoss: 22951.64,
-          gainLossPercentage: 26.87,
-        },
-      ]
-    } else if (file.name.toLowerCase().includes("stock")) {
-      // Mock stock data
-      mockPortfolioEntries = [
-        {
-          id: `stock_${Date.now()}_1`,
-          type: "stock",
-          name: "Reliance Industries",
-          symbol: "RELIANCE",
-          quantity: 50,
-          currentPrice: 2485.6,
-          purchasePrice: 2150.3,
-          purchaseDate: "2023-05-10",
-          currentValue: 124280.0,
-          gainLoss: 16765.0,
-          gainLossPercentage: 15.59,
-        },
-        {
-          id: `stock_${Date.now()}_2`,
-          type: "stock",
-          name: "Infosys Limited",
-          symbol: "INFY",
-          quantity: 75,
-          currentPrice: 1456.8,
-          purchasePrice: 1320.45,
-          purchaseDate: "2023-07-22",
-          currentValue: 109260.0,
-          gainLoss: 10226.25,
-          gainLossPercentage: 10.33,
-        },
-        {
-          id: `stock_${Date.now()}_3`,
-          type: "stock",
-          name: "HDFC Bank",
-          symbol: "HDFCBANK",
-          quantity: 25,
-          currentPrice: 1678.9,
-          purchasePrice: 1520.75,
-          purchaseDate: "2023-09-05",
-          currentValue: 41972.5,
-          gainLoss: 3953.75,
-          gainLossPercentage: 10.4,
-        },
-      ]
-    } else {
-      // Generic portfolio data
-      mockPortfolioEntries = [
-        {
-          id: `generic_${Date.now()}_1`,
-          type: "stock",
-          name: "Tata Consultancy Services",
-          symbol: "TCS",
-          quantity: 30,
-          currentPrice: 3456.75,
-          purchasePrice: 3120.5,
-          purchaseDate: "2023-04-15",
-          currentValue: 103702.5,
-          gainLoss: 10087.5,
-          gainLossPercentage: 10.78,
-        },
-      ]
+    for (const file of files) {
+      console.log(`Processing file: ${file.name}`)
+
+      // Generate mock data based on file name
+      const isMutualFund = file.name.toLowerCase().includes("mutual")
+      const isStock = file.name.toLowerCase().includes("stock") || file.name.toLowerCase().includes("equity")
+
+      // Generate 3-8 random entries per file
+      const entryCount = Math.floor(Math.random() * 6) + 3
+
+      for (let i = 0; i < entryCount; i++) {
+        const baseAmount = Math.floor(Math.random() * 100000) + 10000 // 10k to 110k
+        const gainLossPercent = (Math.random() - 0.4) * 30 // -12% to +18% bias toward positive
+        const currentValue = baseAmount * (1 + gainLossPercent / 100)
+
+        let investmentName: string
+        let type: "mutual_fund" | "stock" | "bond" | "other"
+
+        if (isMutualFund) {
+          const fundNames = [
+            "HDFC Top 100 Fund",
+            "SBI Bluechip Fund",
+            "ICICI Prudential Value Discovery Fund",
+            "Axis Long Term Equity Fund",
+            "Mirae Asset Large Cap Fund",
+            "Kotak Standard Multicap Fund",
+            "DSP Tax Saver Fund",
+            "Franklin India Prima Fund",
+          ]
+          investmentName = fundNames[Math.floor(Math.random() * fundNames.length)]
+          type = "mutual_fund"
+        } else if (isStock) {
+          const stockNames = [
+            "Reliance Industries Ltd",
+            "Tata Consultancy Services",
+            "HDFC Bank Ltd",
+            "Infosys Ltd",
+            "ICICI Bank Ltd",
+            "State Bank of India",
+            "Bharti Airtel Ltd",
+            "ITC Ltd",
+            "Hindustan Unilever Ltd",
+            "Bajaj Finance Ltd",
+          ]
+          investmentName = stockNames[Math.floor(Math.random() * stockNames.length)]
+          type = "stock"
+        } else {
+          // Mixed portfolio
+          const allInvestments = [
+            { name: "HDFC Top 100 Fund", type: "mutual_fund" as const },
+            { name: "SBI Bluechip Fund", type: "mutual_fund" as const },
+            { name: "Reliance Industries Ltd", type: "stock" as const },
+            { name: "TCS Ltd", type: "stock" as const },
+            { name: "Government Bond 2030", type: "bond" as const },
+            { name: "Corporate Bond AAA", type: "bond" as const },
+          ]
+          const selected = allInvestments[Math.floor(Math.random() * allInvestments.length)]
+          investmentName = selected.name
+          type = selected.type
+        }
+
+        const entry: PortfolioEntry = {
+          id: `${file.name}-${i}-${Date.now()}`,
+          name: investmentName,
+          type,
+          amount: baseAmount,
+          units: type === "mutual_fund" ? Math.floor(baseAmount / (Math.random() * 50 + 20)) : undefined,
+          currentValue: Math.round(currentValue),
+          gainLoss: Math.round(currentValue - baseAmount),
+          gainLossPercentage: gainLossPercent,
+          fileName: file.name,
+        }
+
+        portfolioData.push(entry)
+      }
     }
 
-    const mockData = {
-      fileName: file.name,
-      fileType: file.type,
-      portfolioEntries: mockPortfolioEntries,
-      summary: {
-        totalInvestments: mockPortfolioEntries.reduce((sum, entry) => sum + entry.currentValue, 0),
-        totalGainLoss: mockPortfolioEntries.reduce((sum, entry) => sum + entry.gainLoss, 0),
-        entriesCount: mockPortfolioEntries.length,
-      },
-      processedAt: new Date().toISOString(),
-    }
-
-    console.log("✅ File processed successfully:", {
-      fileName: file.name,
-      entriesFound: mockPortfolioEntries.length,
-      totalValue: mockData.summary.totalInvestments,
-    })
+    console.log(`Generated ${portfolioData.length} portfolio entries`)
 
     return {
       success: true,
-      data: mockData,
+      portfolioData,
+      message: `Successfully processed ${files.length} files and found ${portfolioData.length} investments`,
     }
   } catch (error) {
-    console.error("❌ Error processing file:", error)
+    console.error("Error processing portfolio files:", error)
     return {
       success: false,
-      error: "Failed to process file. Please check the file format and try again.",
-    }
-  }
-}
-
-export async function addManualEntry(entry: PortfolioEntry): Promise<{
-  success: boolean
-  error?: string
-}> {
-  try {
-    // Simulate saving to database
-    await new Promise((resolve) => setTimeout(resolve, 500))
-
-    console.log("📝 Manual entry added:", {
-      name: entry.name,
-      type: entry.type,
-      value: entry.currentValue,
-      gainLoss: entry.gainLoss,
-    })
-
-    return { success: true }
-  } catch (error) {
-    console.error("❌ Error adding manual entry:", error)
-    return {
-      success: false,
-      error: "Failed to add manual entry",
+      error: "Failed to process files. Please try again.",
     }
   }
 }

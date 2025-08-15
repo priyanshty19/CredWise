@@ -3,7 +3,7 @@
 import { useState } from "react"
 import { Card, CardContent } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { BarChart3, Target, Briefcase, ChevronRight } from "lucide-react"
+import { BarChart3, Target, Briefcase, ChevronRight, Construction, Sparkles } from "lucide-react"
 import PortfolioAnalysis from "@/components/portfolio-analysis"
 
 const components = [
@@ -39,7 +39,8 @@ const components = [
 export default function DeepDiveSection() {
   const [activeComponent, setActiveComponent] = useState("portfolio")
 
-  const ActiveComponent = components.find((c) => c.id === activeComponent)?.component
+  const activeComponentData = components.find((c) => c.id === activeComponent)
+  const ActiveComponent = activeComponentData?.component
 
   return (
     <div className="space-y-8">
@@ -73,7 +74,7 @@ export default function DeepDiveSection() {
               >
                 <div className="flex items-center justify-center gap-2 min-w-0">
                   <Icon className="h-4 w-4 flex-shrink-0" />
-                  
+
                   {/* Progressive text display based on screen size */}
                   <span className="truncate">
                     {/* Mobile: Short titles */}
@@ -84,16 +85,16 @@ export default function DeepDiveSection() {
 
                   {/* Status badges */}
                   {component.status === "active" && (
-                    <Badge 
-                      variant="default" 
+                    <Badge
+                      variant="default"
                       className="ml-2 flex-shrink-0 bg-green-100 text-green-800 text-xs px-2 py-0.5"
                     >
                       Active
                     </Badge>
                   )}
                   {component.status === "soon" && (
-                    <Badge 
-                      variant="secondary" 
+                    <Badge
+                      variant="secondary"
                       className="ml-2 flex-shrink-0 bg-gray-100 text-gray-600 text-xs px-2 py-0.5"
                     >
                       Soon
@@ -102,9 +103,7 @@ export default function DeepDiveSection() {
                 </div>
 
                 {/* Active indicator line */}
-                {isActive && (
-                  <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />
-                )}
+                {isActive && <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600" />}
               </button>
             )
           })}
@@ -119,17 +118,75 @@ export default function DeepDiveSection() {
           <Card className="border-dashed border-2 border-gray-300">
             <CardContent className="flex flex-col items-center justify-center py-16 text-center">
               <div className="rounded-full bg-gray-100 p-4 mb-4">
-                {components.find((c) => c.id === activeComponent)?.icon && (\
-                  <components.find((c) => c.id === activeComponent)!.icon className="h-8 w-8 text-gray-400" />
-                )}
+                {activeComponentData?.icon && <activeComponentData.icon className="h-8 w-8 text-gray-400" />}
               </div>
-              <h3 className="text-lg font-semibold text-gray-900 mb-2">
-                {components.find((c) => c.id === activeComponent)?.title}
-              </h3>
-              <p className="text-gray-600 mb-6 max-w-md">
-                {components.find((c) => c.id === activeComponent)?.description}
-              </p>
-              <div className="flex items-center gap-2 text-sm text-gray-500">
+              <h3 className="text-lg font-semibold text-gray-900 mb-2">{activeComponentData?.title}</h3>
+              <p className="text-gray-600 mb-6 max-w-md">{activeComponentData?.description}</p>
+
+              {/* Coming Soon Content */}
+              {activeComponent === "goals" && (
+                <div className="space-y-6 max-w-2xl">
+                  <div className="bg-orange-50 rounded-lg p-6 border border-orange-200">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Construction className="h-6 w-6 text-orange-600" />
+                      <h4 className="font-semibold text-orange-900">Goal & Projection Planner</h4>
+                    </div>
+                    <p className="text-sm text-orange-800 mb-4">
+                      Set your financial goals, risk preferences, and get a personalized investment roadmap!
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                      <div className="bg-white rounded p-3 border border-orange-200">
+                        <div className="font-medium text-orange-900 mb-1">Goal Setting</div>
+                        <div className="text-orange-700">Home, retirement, education funding</div>
+                      </div>
+                      <div className="bg-white rounded p-3 border border-orange-200">
+                        <div className="font-medium text-orange-900 mb-1">Smart Projections</div>
+                        <div className="text-orange-700">AI-powered investment calculations</div>
+                      </div>
+                      <div className="bg-white rounded p-3 border border-orange-200">
+                        <div className="font-medium text-orange-900 mb-1">Risk Assessment</div>
+                        <div className="text-orange-700">Personalized risk profiling</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 text-xs text-orange-700">
+                      <strong>Expected Launch:</strong> Q2 2024
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {activeComponent === "advisory" && (
+                <div className="space-y-6 max-w-2xl">
+                  <div className="bg-purple-50 rounded-lg p-6 border border-purple-200">
+                    <div className="flex items-center gap-3 mb-4">
+                      <Sparkles className="h-6 w-6 text-purple-600" />
+                      <h4 className="font-semibold text-purple-900">Fund Management & Advisory</h4>
+                    </div>
+                    <p className="text-sm text-purple-800 mb-4">
+                      Unlock advanced fund management and personalized advisory services!
+                    </p>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
+                      <div className="bg-white rounded p-3 border border-purple-200">
+                        <div className="font-medium text-purple-900 mb-1">Portfolio Management</div>
+                        <div className="text-purple-700">Professional rebalancing services</div>
+                      </div>
+                      <div className="bg-white rounded p-3 border border-purple-200">
+                        <div className="font-medium text-purple-900 mb-1">Expert Advisory</div>
+                        <div className="text-purple-700">One-on-one consultations</div>
+                      </div>
+                      <div className="bg-white rounded p-3 border border-purple-200">
+                        <div className="font-medium text-purple-900 mb-1">Automated Investing</div>
+                        <div className="text-purple-700">Set-and-forget strategies</div>
+                      </div>
+                    </div>
+                    <div className="mt-4 text-xs text-purple-700">
+                      <strong>Expected Launch:</strong> Q3 2024
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="flex items-center gap-2 text-sm text-gray-500 mt-6">
                 <span>Coming Soon</span>
                 <ChevronRight className="h-4 w-4" />
               </div>
