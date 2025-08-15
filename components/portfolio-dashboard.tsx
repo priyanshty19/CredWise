@@ -13,6 +13,9 @@ interface PortfolioDashboardProps {
 
 export default function PortfolioDashboard({ portfolioEntries, summary }: PortfolioDashboardProps) {
   const formatCurrency = (amount: number) => {
+    if (typeof amount !== "number" || isNaN(amount)) {
+      return "₹0"
+    }
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
       currency: "INR",
@@ -21,6 +24,9 @@ export default function PortfolioDashboard({ portfolioEntries, summary }: Portfo
   }
 
   const formatPercentage = (percentage: number) => {
+    if (typeof percentage !== "number" || isNaN(percentage)) {
+      return "0.00%"
+    }
     return `${percentage >= 0 ? "+" : ""}${percentage.toFixed(2)}%`
   }
 
@@ -30,8 +36,35 @@ export default function PortfolioDashboard({ portfolioEntries, summary }: Portfo
   // Get worst performing investments
   const worstPerformers = [...portfolioEntries].sort((a, b) => a.gainLossPercentage - b.gainLossPercentage).slice(0, 5)
 
+  const getTypeLabel = (type: string) => {
+    const labels = {
+      mutual_fund: "Mutual Fund",
+      stock: "Stock",
+      bond: "Bond",
+      etf: "ETF",
+    }
+    return labels[type as keyof typeof labels] || type
+  }
+
+  const getBrokerColor = (broker: string) => {
+    const colors = {
+      Zerodha: "bg-orange-100 text-orange-800",
+      Groww: "bg-green-100 text-green-800",
+      "HDFC Securities": "bg-blue-100 text-blue-800",
+      "Angel One": "bg-red-100 text-red-800",
+      "Manual Entry": "bg-gray-100 text-gray-800",
+    }
+    return colors[broker as keyof typeof colors] || "bg-purple-100 text-purple-800"
+  }
+
   return (
     <div className="space-y-6">
+      {/* Real Data Confirmation */}
+      <div className="text-xs text-green-700 bg-green-50 p-3 rounded border border-green-200">
+        ✅ <strong>Real Data Analysis:</strong> Showing analysis of {portfolioEntries.length} actual investments from
+        your uploaded files and manual entries
+      </div>
+
       {/* Portfolio Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -100,14 +133,14 @@ export default function PortfolioDashboard({ portfolioEntries, summary }: Portfo
           </CardHeader>
           <CardContent className="space-y-4">
             {Object.entries(summary.byType).map(([type, data]) => {
-              const percentage = (data.value / summary.totalValue) * 100
+              const percentage = summary.totalValue > 0 ? (data.value / summary.totalValue) * 100 : 0
               return (
                 <div key={type} className="space-y-2">
                   <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium capitalize">{type.replace("_", " ")}</span>
+                    <span className="text-sm font-medium">{getTypeLabel(type)}</span>
                     <div className="text-right">
                       <div className="text-sm font-medium">{formatCurrency(data.value)}</div>
-                      <div className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</div>
+                      <div className="text-xs text-muted-foreground">{formatPercentage(percentage)}</div>
                     </div>
                   </div>
                   <Progress value={percentage} className="h-2" />
@@ -126,14 +159,14 @@ export default function PortfolioDashboard({ portfolioEntries, summary }: Portfo
           </CardHeader>
           <CardContent className="space-y-4">
             {Object.entries(summary.byBroker).map(([broker, data]) => {
-              const percentage = (data.value / summary.totalValue) * 100
+              const percentage = summary.totalValue > 0 ? (data.value / summary.totalValue) * 100 : 0
               return (
                 <div key={broker} className="space-y-2">
                   <div className="flex justify-between items-center">
                     <span className="text-sm font-medium">{broker}</span>
                     <div className="text-right">
                       <div className="text-sm font-medium">{formatCurrency(data.value)}</div>
-                      <div className="text-xs text-muted-foreground">{percentage.toFixed(1)}%</div>
+                      <div className="text-xs text-muted-foreground">{formatPercentage(percentage)}</div>
                     </div>
                   </div>
                   <Progress value={percentage} className="h-2" />
@@ -182,23 +215,31 @@ export default function PortfolioDashboard({ portfolioEntries, summary }: Portfo
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-3">
-            {worstPerformers.map((investment) => (
-              <div key={investment.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                <div>
-                  <div className="font-medium text-sm">{investment.name}</div>
-                  <div className="text-xs text-muted-foreground">
-                    {investment.broker && `${investment.broker} • `}
-                    {formatCurrency(investment.currentValue)}
+            {worstPerformers
+              .filter((investment) => investment.gainLossPercentage < 0)
+              .map((investment) => (
+                <div key={investment.id} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                  <div>
+                    <div className="font-medium text-sm">{investment.name}</div>
+                    <div className="text-xs text-muted-foreground">
+                      {investment.broker && `${investment.broker} • `}
+                      {formatCurrency(investment.currentValue)}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="text-sm font-medium text-red-600">
+                      {formatPercentage(investment.gainLossPercentage)}
+                    </div>
+                    <div className="text-xs text-red-600">{formatCurrency(investment.gainLoss)}</div>
                   </div>
                 </div>
-                <div className="text-right">
-                  <div className="text-sm font-medium text-red-600">
-                    {formatPercentage(investment.gainLossPercentage)}
-                  </div>
-                  <div className="text-xs text-red-600">{formatCurrency(investment.gainLoss)}</div>
-                </div>
+              ))}
+            {worstPerformers.filter((investment) => investment.gainLossPercentage < 0).length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                <TrendingUp className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                <p>Great! No underperforming investments found.</p>
               </div>
-            ))}
+            )}
           </CardContent>
         </Card>
       </div>
@@ -231,9 +272,7 @@ export default function PortfolioDashboard({ portfolioEntries, summary }: Portfo
                     <td className="p-2">
                       <div>
                         <div className="font-medium">{investment.name}</div>
-                        <div className="text-xs text-muted-foreground capitalize">
-                          {investment.type.replace("_", " ")}
-                        </div>
+                        <div className="text-xs text-muted-foreground">{getTypeLabel(investment.type)}</div>
                       </div>
                     </td>
                     <td className="text-right p-2">{investment.quantity.toLocaleString()}</td>
@@ -245,7 +284,10 @@ export default function PortfolioDashboard({ portfolioEntries, summary }: Portfo
                       <div className="text-xs">{formatPercentage(investment.gainLossPercentage)}</div>
                     </td>
                     <td className="text-center p-2">
-                      <Badge variant={investment.source === "upload" ? "default" : "secondary"}>
+                      <Badge
+                        variant={investment.source === "upload" ? "default" : "secondary"}
+                        className={investment.broker ? getBrokerColor(investment.broker) : ""}
+                      >
                         {investment.broker || investment.source}
                       </Badge>
                     </td>
