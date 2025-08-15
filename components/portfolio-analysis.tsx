@@ -9,7 +9,21 @@ import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Upload, Plus, CheckCircle, X, Loader2, BarChart3, PieChart } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  Upload,
+  Plus,
+  CheckCircle,
+  X,
+  Loader2,
+  BarChart3,
+  PieChart,
+  FileText,
+  AlertCircle,
+  Info,
+  TrendingUp,
+  TrendingDown,
+} from "lucide-react"
 import { uploadPortfolioFiles } from "@/app/actions/portfolio-actions"
 import PortfolioDashboard from "@/components/portfolio-dashboard"
 
@@ -19,6 +33,15 @@ interface UploadedFile {
   status: "uploading" | "processing" | "completed" | "error"
   entriesCount?: number
   error?: string
+  broker?: string
+  fileType?: string
+  summary?: {
+    totalInvestments: number
+    totalInvested: number
+    totalCurrent: number
+    totalGainLoss: number
+    returnPercentage: number
+  }
 }
 
 interface PortfolioEntry {
@@ -32,6 +55,9 @@ interface PortfolioEntry {
   date: string
   source: "upload" | "manual"
   fileName?: string
+  broker?: string
+  folio?: string
+  isin?: string
 }
 
 export default function PortfolioAnalysis() {
@@ -86,10 +112,19 @@ export default function PortfolioAnalysis() {
         const result = await uploadPortfolioFiles(formData)
 
         if (result.success && result.data) {
-          // Update status to completed
+          // Update status to completed with detailed info
           setUploadedFiles((prev) =>
             prev.map((f) =>
-              f.id === fileId ? { ...f, status: "completed", entriesCount: result.data?.length || 0 } : f,
+              f.id === fileId
+                ? {
+                    ...f,
+                    status: "completed",
+                    entriesCount: result.data?.length || 0,
+                    broker: result.broker,
+                    fileType: result.fileType,
+                    summary: result.summary,
+                  }
+                : f,
             ),
           )
 
@@ -102,7 +137,7 @@ export default function PortfolioAnalysis() {
 
           setPortfolioEntries((prev) => [...prev, ...newEntries])
 
-          console.log("✅ Added entries to portfolio:", newEntries)
+          console.log("✅ Added real parsed entries to portfolio:", newEntries)
         } else {
           // Update status to error
           setUploadedFiles((prev) =>
@@ -113,7 +148,7 @@ export default function PortfolioAnalysis() {
 
       // Auto-switch to dashboard if we have entries
       if (portfolioEntries.length > 0 || uploadedFiles.some((f) => f.status === "completed")) {
-        setTimeout(() => setActiveTab("dashboard"), 1000)
+        setTimeout(() => setActiveTab("dashboard"), 1500)
       }
     } catch (error) {
       console.error("Upload error:", error)
@@ -181,23 +216,24 @@ export default function PortfolioAnalysis() {
   const getStatusIcon = (status: UploadedFile["status"]) => {
     switch (status) {
       case "uploading":
-      case "processing":
         return <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
+      case "processing":
+        return <Loader2 className="h-4 w-4 animate-spin text-orange-600" />
       case "completed":
         return <CheckCircle className="h-4 w-4 text-green-600" />
       case "error":
-        return <X className="h-4 w-4 text-red-600" />
+        return <AlertCircle className="h-4 w-4 text-red-600" />
     }
   }
 
   const getStatusText = (file: UploadedFile) => {
     switch (file.status) {
       case "uploading":
-        return "Uploading..."
+        return "Uploading file..."
       case "processing":
-        return "Processing..."
+        return "Parsing investment data..."
       case "completed":
-        return `${file.entriesCount} investments found`
+        return `${file.entriesCount} investments found from ${file.broker}`
       case "error":
         return file.error || "Upload failed"
     }
@@ -212,10 +248,19 @@ export default function PortfolioAnalysis() {
             Current Financial Portfolio & Analysis
           </CardTitle>
           <p className="text-gray-600">
-            Upload your investment statements or manually enter your financial data to get comprehensive insights
+            Upload your real investment statements from brokers like Zerodha, Groww, HDFC Securities, Angel One, etc.
           </p>
         </CardHeader>
       </Card>
+
+      {/* File Format Support Alert */}
+      <Alert>
+        <Info className="h-4 w-4" />
+        <AlertDescription>
+          <strong>Supported Formats:</strong> CSV files from Zerodha Console, Groww, HDFC Securities, Angel One. Excel
+          and PDF support coming soon. For best results, export your portfolio as CSV from your broker's platform.
+        </AlertDescription>
+      </Alert>
 
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
@@ -245,16 +290,16 @@ export default function PortfolioAnalysis() {
               <div className="text-center">
                 <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 hover:border-gray-400 transition-colors">
                   <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload Investment Statements</h3>
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload Real Investment Statements</h3>
                   <p className="text-gray-600 mb-4">
-                    Upload your mutual fund, stock, or other investment statements (PDF, Excel, CSV)
+                    Upload CSV files exported from your broker's platform for accurate portfolio analysis
                   </p>
 
                   <input
                     ref={fileInputRef}
                     type="file"
                     multiple
-                    accept=".pdf,.xlsx,.xls,.csv"
+                    accept=".csv,.xlsx,.xls,.pdf"
                     onChange={handleFileUpload}
                     className="hidden"
                   />
@@ -267,7 +312,7 @@ export default function PortfolioAnalysis() {
                     {isUploading ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Processing...
+                        Processing Real Data...
                       </>
                     ) : (
                       <>
@@ -277,7 +322,7 @@ export default function PortfolioAnalysis() {
                     )}
                   </Button>
 
-                  <p className="text-xs text-gray-500 mt-2">Supported formats: PDF, Excel (.xlsx, .xls), CSV</p>
+                  <p className="text-xs text-gray-500 mt-2">Best: CSV from broker platforms | Limited: Excel, PDF</p>
                 </div>
               </div>
 
@@ -289,7 +334,7 @@ export default function PortfolioAnalysis() {
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <CheckCircle className="h-4 w-4 text-green-600" />
-                  Groww Statements
+                  Groww Portfolio
                 </div>
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <CheckCircle className="h-4 w-4 text-green-600" />
@@ -301,27 +346,89 @@ export default function PortfolioAnalysis() {
                 </div>
               </div>
 
+              {/* How to Export Instructions */}
+              <div className="mt-6 p-4 bg-blue-50 rounded-lg">
+                <h4 className="font-medium text-blue-900 mb-2">How to Export Your Portfolio:</h4>
+                <div className="text-sm text-blue-800 space-y-1">
+                  <p>
+                    <strong>Zerodha:</strong> Console → Holdings → Export to CSV
+                  </p>
+                  <p>
+                    <strong>Groww:</strong> Portfolio → Export → Download CSV
+                  </p>
+                  <p>
+                    <strong>HDFC Securities:</strong> Portfolio → Holdings → Export
+                  </p>
+                  <p>
+                    <strong>Angel One:</strong> Portfolio → Holdings → Download
+                  </p>
+                </div>
+              </div>
+
               {/* Uploaded Files List */}
               {uploadedFiles.length > 0 && (
                 <div className="mt-6 space-y-3">
-                  <h4 className="font-medium text-gray-900">Uploaded Files</h4>
+                  <h4 className="font-medium text-gray-900">Processing Files</h4>
                   {uploadedFiles.map((file) => (
-                    <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
-                      <div className="flex items-center gap-3">
-                        {getStatusIcon(file.status)}
-                        <div>
-                          <p className="font-medium text-sm text-gray-900">{file.name}</p>
-                          <p className="text-xs text-gray-600">{getStatusText(file)}</p>
+                    <div key={file.id} className="p-4 bg-gray-50 rounded-lg border">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-3">
+                          {getStatusIcon(file.status)}
+                          <div>
+                            <p className="font-medium text-sm text-gray-900">{file.name}</p>
+                            <p className="text-xs text-gray-600">{getStatusText(file)}</p>
+                          </div>
                         </div>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => removeFile(file.id)}
+                          className="text-gray-400 hover:text-red-600"
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
                       </div>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => removeFile(file.id)}
-                        className="text-gray-400 hover:text-red-600"
-                      >
-                        <X className="h-4 w-4" />
-                      </Button>
+
+                      {/* File Summary */}
+                      {file.status === "completed" && file.summary && (
+                        <div className="mt-3 p-3 bg-green-50 rounded border border-green-200">
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 text-xs">
+                            <div>
+                              <p className="text-green-700">Investments</p>
+                              <p className="font-semibold text-green-900">{file.summary.totalInvestments}</p>
+                            </div>
+                            <div>
+                              <p className="text-green-700">Invested</p>
+                              <p className="font-semibold text-green-900">
+                                ₹{file.summary.totalInvested.toLocaleString("en-IN")}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-green-700">Current</p>
+                              <p className="font-semibold text-green-900">
+                                ₹{file.summary.totalCurrent.toLocaleString("en-IN")}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-green-700">Return</p>
+                              <p
+                                className={`font-semibold ${file.summary.totalGainLoss >= 0 ? "text-green-900" : "text-red-600"}`}
+                              >
+                                {file.summary.returnPercentage >= 0 ? "+" : ""}
+                                {file.summary.returnPercentage.toFixed(2)}%
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Error Details */}
+                      {file.status === "error" && (
+                        <Alert className="mt-3">
+                          <AlertCircle className="h-4 w-4" />
+                          <AlertDescription className="text-sm">{file.error}</AlertDescription>
+                        </Alert>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -330,7 +437,10 @@ export default function PortfolioAnalysis() {
               {/* Current Portfolio Summary */}
               {portfolioEntries.length > 0 && (
                 <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
-                  <h4 className="font-medium text-green-900 mb-2">Portfolio Summary</h4>
+                  <h4 className="font-medium text-green-900 mb-3 flex items-center gap-2">
+                    <PieChart className="h-4 w-4" />
+                    Live Portfolio Summary
+                  </h4>
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                     <div>
                       <p className="text-green-700">Total Investments</p>
@@ -351,12 +461,17 @@ export default function PortfolioAnalysis() {
                     <div>
                       <p className="text-green-700">Total Gain/Loss</p>
                       <p
-                        className={`font-semibold ${
+                        className={`font-semibold flex items-center gap-1 ${
                           portfolioEntries.reduce((sum, entry) => sum + (entry.current - entry.invested), 0) >= 0
                             ? "text-green-900"
                             : "text-red-600"
                         }`}
                       >
+                        {portfolioEntries.reduce((sum, entry) => sum + (entry.current - entry.invested), 0) >= 0 ? (
+                          <TrendingUp className="h-3 w-3" />
+                        ) : (
+                          <TrendingDown className="h-3 w-3" />
+                        )}
                         ₹
                         {portfolioEntries
                           .reduce((sum, entry) => sum + (entry.current - entry.invested), 0)
@@ -366,7 +481,7 @@ export default function PortfolioAnalysis() {
                   </div>
                   <Button onClick={() => setActiveTab("dashboard")} className="mt-4 bg-green-600 hover:bg-green-700">
                     <BarChart3 className="h-4 w-4 mr-2" />
-                    View Dashboard
+                    View Detailed Analysis
                   </Button>
                 </div>
               )}
@@ -379,7 +494,7 @@ export default function PortfolioAnalysis() {
           <Card>
             <CardHeader>
               <CardTitle>Add Investment Manually</CardTitle>
-              <p className="text-gray-600">Enter your investment details manually</p>
+              <p className="text-gray-600">Enter your investment details manually if file upload doesn't work</p>
             </CardHeader>
             <CardContent>
               <form onSubmit={handleManualSubmit} className="space-y-4">
@@ -390,7 +505,7 @@ export default function PortfolioAnalysis() {
                       id="name"
                       value={manualEntry.name}
                       onChange={(e) => setManualEntry((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder="e.g., SBI Blue Chip Fund"
+                      placeholder="e.g., SBI Blue Chip Fund, Reliance Industries"
                       required
                     />
                   </div>
@@ -436,7 +551,7 @@ export default function PortfolioAnalysis() {
                     />
                   </div>
                   <div className="space-y-2">
-                    <Label htmlFor="units">Units</Label>
+                    <Label htmlFor="units">Units/Quantity</Label>
                     <Input
                       id="units"
                       type="number"
@@ -515,15 +630,16 @@ export default function PortfolioAnalysis() {
           ) : (
             <Card>
               <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <PieChart className="h-16 w-16 text-gray-400 mb-4" />
+                <FileText className="h-16 w-16 text-gray-400 mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No Portfolio Data</h3>
                 <p className="text-gray-600 mb-6 max-w-md">
-                  Upload your investment statements or add entries manually to see your portfolio analysis.
+                  Upload your real investment statements or add entries manually to see comprehensive portfolio
+                  analysis.
                 </p>
                 <div className="flex gap-3">
                   <Button onClick={() => setActiveTab("upload")} variant="default">
                     <Upload className="h-4 w-4 mr-2" />
-                    Upload Files
+                    Upload Real Files
                   </Button>
                   <Button onClick={() => setActiveTab("manual")} variant="outline">
                     <Plus className="h-4 w-4 mr-2" />

@@ -8,12 +8,13 @@ import {
   TrendingDown,
   DollarSign,
   PieChart,
-  BarChart3,
   Target,
   ArrowUpRight,
   ArrowDownRight,
   Info,
   AlertTriangle,
+  Building2,
+  Calendar,
 } from "lucide-react"
 
 interface PortfolioEntry {
@@ -27,6 +28,9 @@ interface PortfolioEntry {
   date: string
   source: "upload" | "manual"
   fileName?: string
+  broker?: string
+  folio?: string
+  isin?: string
 }
 
 interface PortfolioDashboardProps {
@@ -34,7 +38,7 @@ interface PortfolioDashboardProps {
 }
 
 export default function PortfolioDashboard({ entries }: PortfolioDashboardProps) {
-  console.log("📊 Dashboard rendering with entries:", entries.length)
+  console.log("📊 Dashboard rendering with real parsed entries:", entries.length)
 
   // Calculate portfolio metrics
   const totalInvested = entries.reduce((sum, entry) => sum + entry.invested, 0)
@@ -52,6 +56,21 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
       acc[type].invested += entry.invested
       acc[type].current += entry.current
       acc[type].count += 1
+      return acc
+    },
+    {} as Record<string, { invested: number; current: number; count: number }>,
+  )
+
+  // Broker allocation
+  const brokerAllocation = entries.reduce(
+    (acc, entry) => {
+      const broker = entry.broker || entry.source === "manual" ? "Manual Entry" : "Unknown"
+      if (!acc[broker]) {
+        acc[broker] = { invested: 0, current: 0, count: 0 }
+      }
+      acc[broker].invested += entry.invested
+      acc[broker].current += entry.current
+      acc[broker].count += 1
       return acc
     },
     {} as Record<string, { invested: number; current: number; count: number }>,
@@ -111,11 +130,23 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
     return colors[type as keyof typeof colors] || "bg-gray-100 text-gray-800"
   }
 
+  const getBrokerColor = (broker: string) => {
+    const colors = {
+      Zerodha: "bg-orange-100 text-orange-800",
+      Groww: "bg-green-100 text-green-800",
+      "HDFC Securities": "bg-blue-100 text-blue-800",
+      "Angel One": "bg-red-100 text-red-800",
+      "Manual Entry": "bg-gray-100 text-gray-800",
+    }
+    return colors[broker as keyof typeof colors] || "bg-purple-100 text-purple-800"
+  }
+
   return (
     <div className="space-y-6">
-      {/* Debug Info */}
-      <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
-        Debug: Showing {entries.length} portfolio entries
+      {/* Real Data Confirmation */}
+      <div className="text-xs text-green-700 bg-green-50 p-3 rounded border border-green-200">
+        ✅ <strong>Real Data Analysis:</strong> Showing analysis of {entries.length} actual investments from your
+        uploaded files and manual entries
       </div>
 
       {/* Overview Cards */}
@@ -227,79 +258,111 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
           </CardContent>
         </Card>
 
-        {/* Performance Analysis */}
+        {/* Broker Allocation */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <BarChart3 className="h-5 w-5" />
-              Performance Analysis
+              <Building2 className="h-5 w-5" />
+              Broker Distribution
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-6">
-            {/* Top Performers */}
-            <div>
-              <h4 className="font-medium text-green-600 mb-3 flex items-center gap-2">
-                <TrendingUp className="h-4 w-4" />
-                Top Performers
-              </h4>
-              <div className="space-y-2">
-                {topPerformers.slice(0, 3).map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between p-2 bg-green-50 rounded">
-                    <div className="flex-1 min-w-0">
-                      <p className="font-medium text-sm truncate">{entry.name}</p>
-                      <div className="flex items-center gap-2">
-                        <Badge variant="outline" className={`text-xs ${getTypeBadgeColor(entry.type)}`}>
-                          {getTypeLabel(entry.type)}
-                        </Badge>
-                        {entry.source === "upload" && (
-                          <Badge variant="secondary" className="text-xs">
-                            Uploaded
-                          </Badge>
-                        )}
-                      </div>
+          <CardContent className="space-y-4">
+            {Object.entries(brokerAllocation).map(([broker, data]) => {
+              const percentage = totalCurrent > 0 ? (data.current / totalCurrent) * 100 : 0
+              return (
+                <div key={broker} className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-indigo-500" />
+                      <span className="font-medium">{broker}</span>
+                      <Badge variant="secondary" className="text-xs">
+                        {data.count}
+                      </Badge>
                     </div>
                     <div className="text-right">
-                      <p className="font-medium text-green-600">{formatPercentage(entry.returnPercentage)}</p>
-                      <p className="text-xs text-gray-600">{formatCurrency(entry.gainLoss)}</p>
+                      <p className="font-medium">{formatCurrency(data.current)}</p>
+                      <p className="text-xs text-gray-600">{percentage.toFixed(1)}%</p>
                     </div>
                   </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Underperformers */}
-            {underPerformers.some((entry) => entry.returnPercentage < 0) && (
-              <div>
-                <h4 className="font-medium text-red-600 mb-3 flex items-center gap-2">
-                  <TrendingDown className="h-4 w-4" />
-                  Needs Attention
-                </h4>
-                <div className="space-y-2">
-                  {underPerformers
-                    .filter((entry) => entry.returnPercentage < 0)
-                    .slice(0, 3)
-                    .map((entry) => (
-                      <div key={entry.id} className="flex items-center justify-between p-2 bg-red-50 rounded">
-                        <div className="flex-1 min-w-0">
-                          <p className="font-medium text-sm truncate">{entry.name}</p>
-                          <div className="flex items-center gap-2">
-                            <Badge variant="outline" className={`text-xs ${getTypeBadgeColor(entry.type)}`}>
-                              {getTypeLabel(entry.type)}
-                            </Badge>
-                            {entry.source === "upload" && (
-                              <Badge variant="secondary" className="text-xs">
-                                Uploaded
-                              </Badge>
-                            )}
-                          </div>
-                        </div>
-                        <div className="text-right">
-                          <p className="font-medium text-red-600">{formatPercentage(entry.returnPercentage)}</p>
-                          <p className="text-xs text-gray-600">{formatCurrency(entry.gainLoss)}</p>
-                        </div>
-                      </div>
-                    ))}
+                  <Progress value={percentage} className="h-2" />
                 </div>
+              )
+            })}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Performers */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-green-600">
+              <TrendingUp className="h-5 w-5" />
+              Top Performers
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {topPerformers.slice(0, 5).map((entry) => (
+              <div key={entry.id} className="flex items-center justify-between p-3 bg-green-50 rounded-lg">
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-sm truncate">{entry.name}</p>
+                  <div className="flex items-center gap-2 mt-1">
+                    <Badge variant="outline" className={`text-xs ${getTypeBadgeColor(entry.type)}`}>
+                      {getTypeLabel(entry.type)}
+                    </Badge>
+                    {entry.broker && (
+                      <Badge variant="outline" className={`text-xs ${getBrokerColor(entry.broker)}`}>
+                        {entry.broker}
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+                <div className="text-right">
+                  <p className="font-medium text-green-600">{formatPercentage(entry.returnPercentage)}</p>
+                  <p className="text-xs text-gray-600">{formatCurrency(entry.gainLoss)}</p>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+
+        {/* Underperformers */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-red-600">
+              <TrendingDown className="h-5 w-5" />
+              Needs Attention
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            {underPerformers
+              .filter((entry) => entry.returnPercentage < 0)
+              .slice(0, 5)
+              .map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between p-3 bg-red-50 rounded-lg">
+                  <div className="flex-1 min-w-0">
+                    <p className="font-medium text-sm truncate">{entry.name}</p>
+                    <div className="flex items-center gap-2 mt-1">
+                      <Badge variant="outline" className={`text-xs ${getTypeBadgeColor(entry.type)}`}>
+                        {getTypeLabel(entry.type)}
+                      </Badge>
+                      {entry.broker && (
+                        <Badge variant="outline" className={`text-xs ${getBrokerColor(entry.broker)}`}>
+                          {entry.broker}
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="font-medium text-red-600">{formatPercentage(entry.returnPercentage)}</p>
+                    <p className="text-xs text-gray-600">{formatCurrency(entry.gainLoss)}</p>
+                  </div>
+                </div>
+              ))}
+            {underPerformers.filter((entry) => entry.returnPercentage < 0).length === 0 && (
+              <div className="text-center py-8 text-gray-500">
+                <TrendingUp className="h-8 w-8 mx-auto mb-2 text-green-500" />
+                <p>Great! No underperforming investments found.</p>
               </div>
             )}
           </CardContent>
@@ -321,12 +384,13 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
                 <tr className="border-b">
                   <th className="text-left p-2">Investment</th>
                   <th className="text-left p-2">Type</th>
+                  <th className="text-left p-2">Broker</th>
                   <th className="text-right p-2">Invested</th>
                   <th className="text-right p-2">Current</th>
                   <th className="text-right p-2">Gain/Loss</th>
                   <th className="text-right p-2">Return %</th>
                   <th className="text-right p-2">Units</th>
-                  <th className="text-right p-2">NAV</th>
+                  <th className="text-right p-2">NAV/Price</th>
                 </tr>
               </thead>
               <tbody>
@@ -336,7 +400,10 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
                       <div>
                         <p className="font-medium">{entry.name}</p>
                         <div className="flex items-center gap-2 mt-1">
-                          <p className="text-xs text-gray-600">{entry.date}</p>
+                          <p className="text-xs text-gray-600 flex items-center gap-1">
+                            <Calendar className="h-3 w-3" />
+                            {entry.date}
+                          </p>
                           {entry.source === "upload" && (
                             <Badge variant="secondary" className="text-xs">
                               Uploaded
@@ -350,6 +417,15 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
                       <Badge variant="outline" className={`text-xs ${getTypeBadgeColor(entry.type)}`}>
                         {getTypeLabel(entry.type)}
                       </Badge>
+                    </td>
+                    <td className="p-2">
+                      {entry.broker ? (
+                        <Badge variant="outline" className={`text-xs ${getBrokerColor(entry.broker)}`}>
+                          {entry.broker}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-gray-500">Manual</span>
+                      )}
                     </td>
                     <td className="text-right p-2 font-medium">{formatCurrency(entry.invested)}</td>
                     <td className="text-right p-2 font-medium">{formatCurrency(entry.current)}</td>
@@ -382,7 +458,7 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Info className="h-5 w-5" />
-            Portfolio Insights
+            Portfolio Insights & Recommendations
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -409,23 +485,40 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
             <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
               <Info className="h-5 w-5 text-blue-600 mt-0.5" />
               <div>
-                <h4 className="font-medium text-blue-900">Portfolio Performance</h4>
+                <h4 className="font-medium text-blue-900">Real Portfolio Performance</h4>
                 <p className="text-sm text-blue-700 mt-1">
-                  Your portfolio has a {totalReturnPercentage >= 0 ? "positive" : "negative"} return of{" "}
+                  Based on your actual investment data, your portfolio has a{" "}
+                  {totalReturnPercentage >= 0 ? "positive" : "negative"} return of{" "}
                   {formatPercentage(totalReturnPercentage)}. This represents a {totalGainLoss >= 0 ? "gain" : "loss"} of{" "}
-                  {formatCurrency(Math.abs(totalGainLoss))}.
+                  {formatCurrency(Math.abs(totalGainLoss))} from your total investment of{" "}
+                  {formatCurrency(totalInvested)}.
                 </p>
               </div>
             </div>
+
+            {Object.keys(brokerAllocation).length > 1 && (
+              <div className="flex items-start gap-3 p-4 bg-purple-50 rounded-lg">
+                <Building2 className="h-5 w-5 text-purple-600 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-purple-900">Multi-Broker Portfolio</h4>
+                  <p className="text-sm text-purple-700 mt-1">
+                    Your investments are spread across {Object.keys(brokerAllocation).length} different platforms:{" "}
+                    {Object.keys(brokerAllocation).join(", ")}. This diversification across brokers can help reduce
+                    platform-specific risks.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {Object.keys(assetAllocation).length > 1 && (
               <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
                 <Target className="h-5 w-5 text-green-600 mt-0.5" />
                 <div>
-                  <h4 className="font-medium text-green-900">Diversification</h4>
+                  <h4 className="font-medium text-green-900">Asset Diversification</h4>
                   <p className="text-sm text-green-700 mt-1">
-                    Your portfolio is diversified across {Object.keys(assetAllocation).length} asset classes. This helps
-                    reduce risk and improve long-term returns.
+                    Your portfolio is diversified across {Object.keys(assetAllocation).length} asset classes:{" "}
+                    {Object.keys(assetAllocation).map(getTypeLabel).join(", ")}. This diversification helps reduce risk
+                    and can improve long-term returns.
                   </p>
                 </div>
               </div>
@@ -434,13 +527,18 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
             <div className="flex items-start gap-3 p-4 bg-yellow-50 rounded-lg">
               <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
               <div>
-                <h4 className="font-medium text-yellow-900">Recommendations</h4>
+                <h4 className="font-medium text-yellow-900">Actionable Recommendations</h4>
                 <ul className="text-sm text-yellow-700 mt-1 space-y-1">
-                  <li>• Review underperforming investments for potential reallocation</li>
-                  <li>• Consider rebalancing if any asset class exceeds 60% of your portfolio</li>
-                  <li>• Monitor your investments regularly and adjust based on market conditions</li>
+                  {performanceEntries.filter((e) => e.returnPercentage < -10).length > 0 && (
+                    <li>Consider reviewing investments with losses &gt; 10% for potential reallocation</li>
+                  )}
+                  {Object.values(assetAllocation).some((data) => data.current / totalCurrent > 0.6) && (
+                    <li>Consider rebalancing - one asset class represents &gt;60% of your portfolio</li>
+                  )}
+                  <li>Monitor your investments regularly and rebalance quarterly</li>
+                  <li>Keep uploading fresh statements to track performance over time</li>
                   {entries.filter((e) => e.source === "upload").length > 0 && (
-                    <li>• Keep uploading fresh statements to track performance over time</li>
+                    <li>Great job using real data! This analysis is based on your actual investments</li>
                   )}
                 </ul>
               </div>
