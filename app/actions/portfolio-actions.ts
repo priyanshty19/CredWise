@@ -2,94 +2,174 @@
 
 import { parseInvestmentFile } from "@/lib/file-parsers"
 
-interface PortfolioEntry {
+export interface PortfolioEntry {
   id: string
   name: string
-  type: "mutual_fund" | "stock" | "bond" | "etf"
-  invested: number
-  current: number
-  units: number
-  nav: number
-  date: string
+  type: "equity" | "mutual_fund" | "bond" | "other"
+  quantity: number
+  avgPrice: number
+  currentPrice: number
+  currentValue: number
+  gainLoss: number
+  gainLossPercentage: number
+  source: "upload" | "manual"
+  fileName?: string
   broker?: string
-  folio?: string
-  isin?: string
+  dateAdded: string
 }
 
-export async function uploadPortfolioFiles(formData: FormData) {
+export interface PortfolioSummary {
+  totalValue: number
+  totalInvested: number
+  totalGainLoss: number
+  totalGainLossPercentage: number
+  totalEntries: number
+  byType: Record<string, { value: number; count: number }>
+  byBroker: Record<string, { value: number; count: number }>
+}
+
+export async function parsePortfolioFile(formData: FormData) {
   try {
     const file = formData.get("file") as File
+
     if (!file) {
       return { success: false, error: "No file provided" }
     }
 
-    console.log(`📄 Processing real file: ${file.name} (${file.size} bytes)`)
+    // Check file type
+    const fileType = file.type
+    const fileName = file.name.toLowerCase()
 
-    // Parse the actual file content
+    if (!fileName.endsWith(".csv") && !fileName.endsWith(".xlsx") && !fileName.endsWith(".xls")) {
+      return {
+        success: false,
+        error: "Unsupported file format. Please upload CSV or Excel files.",
+      }
+    }
+
+    // Parse the file
     const parseResult = await parseInvestmentFile(file)
 
     if (!parseResult.success) {
-      console.error(`❌ File parsing failed:`, parseResult.error)
       return {
         success: false,
         error: parseResult.error || "Failed to parse file",
       }
     }
 
-    if (!parseResult.data || parseResult.data.length === 0) {
-      return {
-        success: false,
-        error: "No investment data found in the file. Please check the file format and content.",
-      }
-    }
-
     // Convert parsed data to portfolio entries
     const portfolioEntries: PortfolioEntry[] = parseResult.data.map((investment, index) => ({
-      id: `${parseResult.broker?.toLowerCase() || "parsed"}_${Date.now()}_${index}`,
+      id: `upload-${Date.now()}-${index}`,
       name: investment.name,
       type: investment.type,
-      invested: investment.invested,
-      current: investment.current,
-      units: investment.units,
-      nav: investment.nav,
-      date: investment.date,
+      quantity: investment.quantity,
+      avgPrice: investment.avgPrice,
+      currentPrice: investment.currentPrice,
+      currentValue: investment.currentValue,
+      gainLoss: investment.gainLoss,
+      gainLossPercentage: investment.gainLossPercentage,
+      source: "upload" as const,
+      fileName: file.name,
       broker: investment.broker,
-      folio: investment.folio,
-      isin: investment.isin,
+      dateAdded: new Date().toISOString(),
     }))
-
-    console.log(
-      `✅ Successfully parsed ${portfolioEntries.length} investments from ${parseResult.broker} ${parseResult.fileType}:`,
-    )
-    portfolioEntries.forEach((entry, i) => {
-      console.log(
-        `  ${i + 1}. ${entry.name} - ₹${entry.invested.toLocaleString()} invested, ₹${entry.current.toLocaleString()} current`,
-      )
-    })
-
-    const totalInvested = portfolioEntries.reduce((sum, entry) => sum + entry.invested, 0)
-    const totalCurrent = portfolioEntries.reduce((sum, entry) => sum + entry.current, 0)
-    const totalGainLoss = totalCurrent - totalInvested
 
     return {
       success: true,
       data: portfolioEntries,
-      message: `Successfully parsed ${file.name} from ${parseResult.broker}. Found ${portfolioEntries.length} investments worth ₹${totalCurrent.toLocaleString()} (${totalGainLoss >= 0 ? "+" : ""}₹${totalGainLoss.toLocaleString()} gain/loss)`,
-      broker: parseResult.broker,
-      fileType: parseResult.fileType,
       summary: {
-        totalInvestments: portfolioEntries.length,
-        totalInvested,
-        totalCurrent,
-        totalGainLoss,
-        returnPercentage: totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0,
+        totalInvestments: parseResult.totalInvestments,
+        totalValue: parseResult.totalValue,
+        totalGainLoss: parseResult.totalGainLoss,
+        broker: parseResult.broker,
+        fileName: file.name,
       },
     }
   } catch (error) {
-    console.error("❌ Error processing file:", error)
+    console.error("Portfolio parsing error:", error)
     return {
       success: false,
-      error: `Failed to process file: ${error instanceof Error ? error.message : "Unknown error"}. Please check the file format and try again.`,
+      error: error instanceof Error ? error.message : "Unknown error occurred",
     }
+  }
+}
+
+export async function addManualEntry(formData: FormData) {
+  try {
+    const name = formData.get("name") as string
+    const type = formData.get("type") as PortfolioEntry["type"]
+    const quantity = Number.parseFloat(formData.get("quantity") as string)
+    const avgPrice = Number.parseFloat(formData.get("avgPrice") as string)
+    const currentPrice = Number.parseFloat(formData.get("currentPrice") as string)
+
+    if (!name || !type || !quantity || !avgPrice || !currentPrice) {
+      return { success: false, error: "All fields are required" }
+    }
+
+    const currentValue = quantity * currentPrice
+    const investedValue = quantity * avgPrice
+    const gainLoss = currentValue - investedValue
+    const gainLossPercentage = investedValue > 0 ? (gainLoss / investedValue) * 100 : 0
+
+    const entry: PortfolioEntry = {
+      id: `manual-${Date.now()}`,
+      name,
+      type,
+      quantity,
+      avgPrice,
+      currentPrice,
+      currentValue,
+      gainLoss,
+      gainLossPercentage,
+      source: "manual",
+      dateAdded: new Date().toISOString(),
+    }
+
+    return {
+      success: true,
+      data: entry,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to add entry",
+    }
+  }
+}
+
+export function calculatePortfolioSummary(entries: PortfolioEntry[]): PortfolioSummary {
+  const totalValue = entries.reduce((sum, entry) => sum + entry.currentValue, 0)
+  const totalInvested = entries.reduce((sum, entry) => sum + entry.quantity * entry.avgPrice, 0)
+  const totalGainLoss = totalValue - totalInvested
+  const totalGainLossPercentage = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0
+
+  const byType: Record<string, { value: number; count: number }> = {}
+  const byBroker: Record<string, { value: number; count: number }> = {}
+
+  entries.forEach((entry) => {
+    // By type
+    if (!byType[entry.type]) {
+      byType[entry.type] = { value: 0, count: 0 }
+    }
+    byType[entry.type].value += entry.currentValue
+    byType[entry.type].count += 1
+
+    // By broker
+    const broker = entry.broker || "Manual Entry"
+    if (!byBroker[broker]) {
+      byBroker[broker] = { value: 0, count: 0 }
+    }
+    byBroker[broker].value += entry.currentValue
+    byBroker[broker].count += 1
+  })
+
+  return {
+    totalValue,
+    totalInvested,
+    totalGainLoss,
+    totalGainLossPercentage,
+    totalEntries: entries.length,
+    byType,
+    byBroker,
   }
 }
