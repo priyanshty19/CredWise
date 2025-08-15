@@ -12,6 +12,8 @@ import {
   Target,
   ArrowUpRight,
   ArrowDownRight,
+  Info,
+  AlertTriangle,
 } from "lucide-react"
 
 interface PortfolioEntry {
@@ -23,6 +25,8 @@ interface PortfolioEntry {
   units: number
   nav: number
   date: string
+  source: "upload" | "manual"
+  fileName?: string
 }
 
 interface PortfolioDashboardProps {
@@ -30,6 +34,8 @@ interface PortfolioDashboardProps {
 }
 
 export default function PortfolioDashboard({ entries }: PortfolioDashboardProps) {
+  console.log("📊 Dashboard rendering with entries:", entries.length)
+
   // Calculate portfolio metrics
   const totalInvested = entries.reduce((sum, entry) => sum + entry.invested, 0)
   const totalCurrent = entries.reduce((sum, entry) => sum + entry.current, 0)
@@ -51,7 +57,7 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
     {} as Record<string, { invested: number; current: number; count: number }>,
   )
 
-  // Top performers
+  // Performance analysis
   const performanceEntries = entries
     .map((entry) => ({
       ...entry,
@@ -60,8 +66,8 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
     }))
     .sort((a, b) => b.returnPercentage - a.returnPercentage)
 
-  const topPerformers = performanceEntries.slice(0, 3)
-  const underPerformers = performanceEntries.slice(-3).reverse()
+  const topPerformers = performanceEntries.slice(0, 5)
+  const underPerformers = performanceEntries.slice(-5).reverse()
 
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
@@ -95,8 +101,23 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
     return colors[type as keyof typeof colors] || "bg-gray-500"
   }
 
+  const getTypeBadgeColor = (type: string) => {
+    const colors = {
+      mutual_fund: "bg-blue-100 text-blue-800",
+      stock: "bg-green-100 text-green-800",
+      bond: "bg-yellow-100 text-yellow-800",
+      etf: "bg-purple-100 text-purple-800",
+    }
+    return colors[type as keyof typeof colors] || "bg-gray-100 text-gray-800"
+  }
+
   return (
     <div className="space-y-6">
+      {/* Debug Info */}
+      <div className="text-xs text-gray-500 bg-gray-50 p-2 rounded">
+        Debug: Showing {entries.length} portfolio entries
+      </div>
+
       {/* Overview Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
@@ -105,6 +126,7 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Invested</p>
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalInvested)}</p>
+                <p className="text-xs text-gray-500 mt-1">{entries.length} investments</p>
               </div>
               <div className="bg-blue-100 p-2 rounded-full">
                 <DollarSign className="h-5 w-5 text-blue-600" />
@@ -119,6 +141,7 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
               <div>
                 <p className="text-sm font-medium text-gray-600">Current Value</p>
                 <p className="text-2xl font-bold text-gray-900">{formatCurrency(totalCurrent)}</p>
+                <p className="text-xs text-gray-500 mt-1">Portfolio value</p>
               </div>
               <div className="bg-green-100 p-2 rounded-full">
                 <TrendingUp className="h-5 w-5 text-green-600" />
@@ -135,6 +158,7 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
                 <p className={`text-2xl font-bold ${totalGainLoss >= 0 ? "text-green-600" : "text-red-600"}`}>
                   {formatCurrency(totalGainLoss)}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">Absolute change</p>
               </div>
               <div className={`p-2 rounded-full ${totalGainLoss >= 0 ? "bg-green-100" : "bg-red-100"}`}>
                 {totalGainLoss >= 0 ? (
@@ -155,6 +179,7 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
                 <p className={`text-2xl font-bold ${totalReturnPercentage >= 0 ? "text-green-600" : "text-red-600"}`}>
                   {formatPercentage(totalReturnPercentage)}
                 </p>
+                <p className="text-xs text-gray-500 mt-1">Overall return</p>
               </div>
               <div className={`p-2 rounded-full ${totalReturnPercentage >= 0 ? "bg-green-100" : "bg-red-100"}`}>
                 {totalReturnPercentage >= 0 ? (
@@ -220,9 +245,18 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
               <div className="space-y-2">
                 {topPerformers.slice(0, 3).map((entry) => (
                   <div key={entry.id} className="flex items-center justify-between p-2 bg-green-50 rounded">
-                    <div>
-                      <p className="font-medium text-sm">{entry.name}</p>
-                      <p className="text-xs text-gray-600">{getTypeLabel(entry.type)}</p>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-medium text-sm truncate">{entry.name}</p>
+                      <div className="flex items-center gap-2">
+                        <Badge variant="outline" className={`text-xs ${getTypeBadgeColor(entry.type)}`}>
+                          {getTypeLabel(entry.type)}
+                        </Badge>
+                        {entry.source === "upload" && (
+                          <Badge variant="secondary" className="text-xs">
+                            Uploaded
+                          </Badge>
+                        )}
+                      </div>
                     </div>
                     <div className="text-right">
                       <p className="font-medium text-green-600">{formatPercentage(entry.returnPercentage)}</p>
@@ -246,9 +280,18 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
                     .slice(0, 3)
                     .map((entry) => (
                       <div key={entry.id} className="flex items-center justify-between p-2 bg-red-50 rounded">
-                        <div>
-                          <p className="font-medium text-sm">{entry.name}</p>
-                          <p className="text-xs text-gray-600">{getTypeLabel(entry.type)}</p>
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium text-sm truncate">{entry.name}</p>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className={`text-xs ${getTypeBadgeColor(entry.type)}`}>
+                              {getTypeLabel(entry.type)}
+                            </Badge>
+                            {entry.source === "upload" && (
+                              <Badge variant="secondary" className="text-xs">
+                                Uploaded
+                              </Badge>
+                            )}
+                          </div>
                         </div>
                         <div className="text-right">
                           <p className="font-medium text-red-600">{formatPercentage(entry.returnPercentage)}</p>
@@ -268,7 +311,7 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5" />
-            Detailed Holdings
+            Detailed Holdings ({entries.length})
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -283,6 +326,7 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
                   <th className="text-right p-2">Gain/Loss</th>
                   <th className="text-right p-2">Return %</th>
                   <th className="text-right p-2">Units</th>
+                  <th className="text-right p-2">NAV</th>
                 </tr>
               </thead>
               <tbody>
@@ -291,11 +335,19 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
                     <td className="p-2">
                       <div>
                         <p className="font-medium">{entry.name}</p>
-                        <p className="text-xs text-gray-600">{entry.date}</p>
+                        <div className="flex items-center gap-2 mt-1">
+                          <p className="text-xs text-gray-600">{entry.date}</p>
+                          {entry.source === "upload" && (
+                            <Badge variant="secondary" className="text-xs">
+                              Uploaded
+                            </Badge>
+                          )}
+                          {entry.fileName && <p className="text-xs text-gray-500">from {entry.fileName}</p>}
+                        </div>
                       </div>
                     </td>
                     <td className="p-2">
-                      <Badge variant="outline" className="text-xs">
+                      <Badge variant="outline" className={`text-xs ${getTypeBadgeColor(entry.type)}`}>
                         {getTypeLabel(entry.type)}
                       </Badge>
                     </td>
@@ -315,11 +367,84 @@ export default function PortfolioDashboard({ entries }: PortfolioDashboardProps)
                     >
                       {formatPercentage(entry.returnPercentage)}
                     </td>
-                    <td className="text-right p-2">{entry.units.toLocaleString()}</td>
+                    <td className="text-right p-2">{entry.units.toLocaleString("en-IN")}</td>
+                    <td className="text-right p-2">₹{entry.nav.toFixed(2)}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Portfolio Insights */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Info className="h-5 w-5" />
+            Portfolio Insights
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="text-center p-4 bg-blue-50 rounded-lg">
+              <p className="text-2xl font-bold text-blue-600">{entries.length}</p>
+              <p className="text-sm text-blue-800">Total Investments</p>
+            </div>
+            <div className="text-center p-4 bg-green-50 rounded-lg">
+              <p className="text-2xl font-bold text-green-600">
+                {performanceEntries.filter((e) => e.returnPercentage > 0).length}
+              </p>
+              <p className="text-sm text-green-800">Profitable Investments</p>
+            </div>
+            <div className="text-center p-4 bg-red-50 rounded-lg">
+              <p className="text-2xl font-bold text-red-600">
+                {performanceEntries.filter((e) => e.returnPercentage < 0).length}
+              </p>
+              <p className="text-sm text-red-800">Loss-making Investments</p>
+            </div>
+          </div>
+
+          <div className="space-y-4">
+            <div className="flex items-start gap-3 p-4 bg-blue-50 rounded-lg">
+              <Info className="h-5 w-5 text-blue-600 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-blue-900">Portfolio Performance</h4>
+                <p className="text-sm text-blue-700 mt-1">
+                  Your portfolio has a {totalReturnPercentage >= 0 ? "positive" : "negative"} return of{" "}
+                  {formatPercentage(totalReturnPercentage)}. This represents a {totalGainLoss >= 0 ? "gain" : "loss"} of{" "}
+                  {formatCurrency(Math.abs(totalGainLoss))}.
+                </p>
+              </div>
+            </div>
+
+            {Object.keys(assetAllocation).length > 1 && (
+              <div className="flex items-start gap-3 p-4 bg-green-50 rounded-lg">
+                <Target className="h-5 w-5 text-green-600 mt-0.5" />
+                <div>
+                  <h4 className="font-medium text-green-900">Diversification</h4>
+                  <p className="text-sm text-green-700 mt-1">
+                    Your portfolio is diversified across {Object.keys(assetAllocation).length} asset classes. This helps
+                    reduce risk and improve long-term returns.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <div className="flex items-start gap-3 p-4 bg-yellow-50 rounded-lg">
+              <AlertTriangle className="h-5 w-5 text-yellow-600 mt-0.5" />
+              <div>
+                <h4 className="font-medium text-yellow-900">Recommendations</h4>
+                <ul className="text-sm text-yellow-700 mt-1 space-y-1">
+                  <li>• Review underperforming investments for potential reallocation</li>
+                  <li>• Consider rebalancing if any asset class exceeds 60% of your portfolio</li>
+                  <li>• Monitor your investments regularly and adjust based on market conditions</li>
+                  {entries.filter((e) => e.source === "upload").length > 0 && (
+                    <li>• Keep uploading fresh statements to track performance over time</li>
+                  )}
+                </ul>
+              </div>
+            </div>
           </div>
         </CardContent>
       </Card>

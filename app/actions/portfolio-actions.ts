@@ -18,7 +18,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
       return { success: false, error: "No file provided" }
     }
 
-    console.log(`Processing file: ${file.name}`)
+    console.log(`📄 Processing file: ${file.name}`)
 
     // Simulate processing time
     await new Promise((resolve) => setTimeout(resolve, 2000))
@@ -30,7 +30,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
       // Mock mutual fund data
       mockData.push(
         {
-          id: Math.random().toString(36).substr(2, 9),
+          id: `mf_${Date.now()}_1`,
           name: "SBI Blue Chip Fund - Direct Growth",
           type: "mutual_fund",
           invested: 50000,
@@ -40,7 +40,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
           date: "2024-01-15",
         },
         {
-          id: Math.random().toString(36).substr(2, 9),
+          id: `mf_${Date.now()}_2`,
           name: "HDFC Top 100 Fund - Direct Growth",
           type: "mutual_fund",
           invested: 75000,
@@ -50,7 +50,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
           date: "2024-02-10",
         },
         {
-          id: Math.random().toString(36).substr(2, 9),
+          id: `mf_${Date.now()}_3`,
           name: "Axis Small Cap Fund - Direct Growth",
           type: "mutual_fund",
           invested: 30000,
@@ -64,7 +64,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
       // Mock stock data
       mockData.push(
         {
-          id: Math.random().toString(36).substr(2, 9),
+          id: `stock_${Date.now()}_1`,
           name: "Reliance Industries Ltd",
           type: "stock",
           invested: 100000,
@@ -74,7 +74,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
           date: "2024-01-20",
         },
         {
-          id: Math.random().toString(36).substr(2, 9),
+          id: `stock_${Date.now()}_2`,
           name: "Tata Consultancy Services",
           type: "stock",
           invested: 80000,
@@ -84,7 +84,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
           date: "2024-02-15",
         },
         {
-          id: Math.random().toString(36).substr(2, 9),
+          id: `stock_${Date.now()}_3`,
           name: "HDFC Bank Ltd",
           type: "stock",
           invested: 60000,
@@ -98,7 +98,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
       // Generic mixed portfolio
       mockData.push(
         {
-          id: Math.random().toString(36).substr(2, 9),
+          id: `generic_${Date.now()}_1`,
           name: "ICICI Prudential Bluechip Fund",
           type: "mutual_fund",
           invested: 45000,
@@ -108,7 +108,7 @@ export async function uploadPortfolioFiles(formData: FormData) {
           date: "2024-01-10",
         },
         {
-          id: Math.random().toString(36).substr(2, 9),
+          id: `generic_${Date.now()}_2`,
           name: "Infosys Ltd",
           type: "stock",
           invested: 70000,
@@ -117,8 +117,23 @@ export async function uploadPortfolioFiles(formData: FormData) {
           nav: 1560,
           date: "2024-02-05",
         },
+        {
+          id: `generic_${Date.now()}_3`,
+          name: "Wipro Ltd",
+          type: "stock",
+          invested: 40000,
+          current: 38500,
+          units: 100,
+          nav: 385,
+          date: "2024-03-15",
+        },
       )
     }
+
+    console.log(
+      `✅ Generated ${mockData.length} portfolio entries:`,
+      mockData.map((d) => d.name),
+    )
 
     return {
       success: true,
@@ -126,10 +141,10 @@ export async function uploadPortfolioFiles(formData: FormData) {
       message: `Successfully processed ${file.name} and found ${mockData.length} investments`,
     }
   } catch (error) {
-    console.error("Error processing file:", error)
+    console.error("❌ Error processing file:", error)
     return {
       success: false,
-      error: "Failed to process file",
+      error: "Failed to process file. Please check the file format and try again.",
     }
   }
 }

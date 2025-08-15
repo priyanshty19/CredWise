@@ -5,9 +5,11 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Upload, Plus, FileText, CheckCircle, X, Loader2 } from "lucide-react"
+import { Upload, Plus, CheckCircle, X, Loader2, BarChart3, PieChart } from "lucide-react"
 import { uploadPortfolioFiles } from "@/app/actions/portfolio-actions"
 import PortfolioDashboard from "@/components/portfolio-dashboard"
 
@@ -28,6 +30,8 @@ interface PortfolioEntry {
   units: number
   nav: number
   date: string
+  source: "upload" | "manual"
+  fileName?: string
 }
 
 export default function PortfolioAnalysis() {
@@ -36,6 +40,16 @@ export default function PortfolioAnalysis() {
   const [portfolioEntries, setPortfolioEntries] = useState<PortfolioEntry[]>([])
   const [isUploading, setIsUploading] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
+
+  // Manual entry form state
+  const [manualEntry, setManualEntry] = useState({
+    name: "",
+    type: "mutual_fund" as const,
+    invested: "",
+    current: "",
+    units: "",
+    date: new Date().toISOString().split("T")[0],
+  })
 
   const handleFileButtonClick = () => {
     fileInputRef.current?.click()
@@ -79,8 +93,16 @@ export default function PortfolioAnalysis() {
             ),
           )
 
-          // Add entries to portfolio
-          setPortfolioEntries((prev) => [...prev, ...result.data])
+          // Add entries to portfolio with source and fileName
+          const newEntries: PortfolioEntry[] = result.data.map((entry) => ({
+            ...entry,
+            source: "upload" as const,
+            fileName: file.name,
+          }))
+
+          setPortfolioEntries((prev) => [...prev, ...newEntries])
+
+          console.log("✅ Added entries to portfolio:", newEntries)
         } else {
           // Update status to error
           setUploadedFiles((prev) =>
@@ -90,7 +112,7 @@ export default function PortfolioAnalysis() {
       }
 
       // Auto-switch to dashboard if we have entries
-      if (portfolioEntries.length > 0) {
+      if (portfolioEntries.length > 0 || uploadedFiles.some((f) => f.status === "completed")) {
         setTimeout(() => setActiveTab("dashboard"), 1000)
       }
     } catch (error) {
@@ -106,11 +128,54 @@ export default function PortfolioAnalysis() {
 
   const removeFile = (fileId: string) => {
     const file = uploadedFiles.find((f) => f.id === fileId)
-    if (file && file.entriesCount) {
-      // Remove associated portfolio entries (simplified - in real app, you'd track which entries came from which file)
-      setPortfolioEntries((prev) => prev.slice(0, -file.entriesCount!))
+    if (file) {
+      // Remove associated portfolio entries
+      setPortfolioEntries((prev) => prev.filter((entry) => entry.fileName !== file.name))
     }
     setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId))
+  }
+
+  const handleManualSubmit = (e: React.FormEvent) => {
+    e.preventDefault()
+
+    const invested = Number.parseFloat(manualEntry.invested)
+    const current = Number.parseFloat(manualEntry.current)
+    const units = Number.parseFloat(manualEntry.units)
+
+    if (!manualEntry.name || isNaN(invested) || isNaN(current) || isNaN(units)) {
+      return
+    }
+
+    const newEntry: PortfolioEntry = {
+      id: `manual-${Date.now()}`,
+      name: manualEntry.name,
+      type: manualEntry.type,
+      invested,
+      current,
+      units,
+      nav: current / units,
+      date: manualEntry.date,
+      source: "manual",
+    }
+
+    setPortfolioEntries((prev) => [...prev, newEntry])
+
+    // Reset form
+    setManualEntry({
+      name: "",
+      type: "mutual_fund",
+      invested: "",
+      current: "",
+      units: "",
+      date: new Date().toISOString().split("T")[0],
+    })
+
+    // Switch to dashboard
+    setActiveTab("dashboard")
+  }
+
+  const removePortfolioEntry = (id: string) => {
+    setPortfolioEntries((prev) => prev.filter((entry) => entry.id !== id))
   }
 
   const getStatusIcon = (status: UploadedFile["status"]) => {
@@ -162,8 +227,8 @@ export default function PortfolioAnalysis() {
             <Plus className="h-4 w-4" />
             Manual Entry
           </TabsTrigger>
-          <TabsTrigger value="dashboard" className="flex items-center gap-2" disabled={portfolioEntries.length === 0}>
-            <FileText className="h-4 w-4" />
+          <TabsTrigger value="dashboard" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
             Dashboard
             {portfolioEntries.length > 0 && (
               <Badge variant="secondary" className="ml-1 text-xs">
@@ -216,6 +281,26 @@ export default function PortfolioAnalysis() {
                 </div>
               </div>
 
+              {/* Supported Platforms */}
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm mt-6">
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Zerodha Console
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Groww Statements
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  HDFC Securities
+                </div>
+                <div className="flex items-center gap-2 text-muted-foreground">
+                  <CheckCircle className="h-4 w-4 text-green-600" />
+                  Angel One
+                </div>
+              </div>
+
               {/* Uploaded Files List */}
               {uploadedFiles.length > 0 && (
                 <div className="mt-6 space-y-3">
@@ -241,6 +326,50 @@ export default function PortfolioAnalysis() {
                   ))}
                 </div>
               )}
+
+              {/* Current Portfolio Summary */}
+              {portfolioEntries.length > 0 && (
+                <div className="mt-6 p-4 bg-green-50 rounded-lg border border-green-200">
+                  <h4 className="font-medium text-green-900 mb-2">Portfolio Summary</h4>
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                    <div>
+                      <p className="text-green-700">Total Investments</p>
+                      <p className="font-semibold text-green-900">{portfolioEntries.length}</p>
+                    </div>
+                    <div>
+                      <p className="text-green-700">Total Invested</p>
+                      <p className="font-semibold text-green-900">
+                        ₹{portfolioEntries.reduce((sum, entry) => sum + entry.invested, 0).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-green-700">Current Value</p>
+                      <p className="font-semibold text-green-900">
+                        ₹{portfolioEntries.reduce((sum, entry) => sum + entry.current, 0).toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-green-700">Total Gain/Loss</p>
+                      <p
+                        className={`font-semibold ${
+                          portfolioEntries.reduce((sum, entry) => sum + (entry.current - entry.invested), 0) >= 0
+                            ? "text-green-900"
+                            : "text-red-600"
+                        }`}
+                      >
+                        ₹
+                        {portfolioEntries
+                          .reduce((sum, entry) => sum + (entry.current - entry.invested), 0)
+                          .toLocaleString("en-IN")}
+                      </p>
+                    </div>
+                  </div>
+                  <Button onClick={() => setActiveTab("dashboard")} className="mt-4 bg-green-600 hover:bg-green-700">
+                    <BarChart3 className="h-4 w-4 mr-2" />
+                    View Dashboard
+                  </Button>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -253,66 +382,130 @@ export default function PortfolioAnalysis() {
               <p className="text-gray-600">Enter your investment details manually</p>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Investment Name</label>
-                  <input
-                    type="text"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="e.g., SBI Blue Chip Fund"
-                  />
+              <form onSubmit={handleManualSubmit} className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Investment Name</Label>
+                    <Input
+                      id="name"
+                      value={manualEntry.name}
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, name: e.target.value }))}
+                      placeholder="e.g., SBI Blue Chip Fund"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Type</Label>
+                    <select
+                      id="type"
+                      value={manualEntry.type}
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, type: e.target.value as any }))}
+                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                    >
+                      <option value="mutual_fund">Mutual Fund</option>
+                      <option value="stock">Stock</option>
+                      <option value="bond">Bond</option>
+                      <option value="etf">ETF</option>
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
-                  <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
-                    <option value="">Select type</option>
-                    <option value="mutual_fund">Mutual Fund</option>
-                    <option value="stock">Stock</option>
-                    <option value="bond">Bond</option>
-                    <option value="etf">ETF</option>
-                  </select>
+
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="invested">Invested Amount (₹)</Label>
+                    <Input
+                      id="invested"
+                      type="number"
+                      step="0.01"
+                      value={manualEntry.invested}
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, invested: e.target.value }))}
+                      placeholder="50000"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="current">Current Value (₹)</Label>
+                    <Input
+                      id="current"
+                      type="number"
+                      step="0.01"
+                      value={manualEntry.current}
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, current: e.target.value }))}
+                      placeholder="55000"
+                      required
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="units">Units</Label>
+                    <Input
+                      id="units"
+                      type="number"
+                      step="0.001"
+                      value={manualEntry.units}
+                      onChange={(e) => setManualEntry((prev) => ({ ...prev, units: e.target.value }))}
+                      placeholder="1000.50"
+                      required
+                    />
+                  </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Invested Amount (₹)</label>
-                  <input
-                    type="number"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="50000"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Value (₹)</label>
-                  <input
-                    type="number"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="55000"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Units</label>
-                  <input
-                    type="number"
-                    step="0.001"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
-                    placeholder="1000.50"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Date</label>
-                  <input
+
+                <div className="space-y-2">
+                  <Label htmlFor="date">Purchase Date</Label>
+                  <Input
+                    id="date"
                     type="date"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    value={manualEntry.date}
+                    onChange={(e) => setManualEntry((prev) => ({ ...prev, date: e.target.value }))}
+                    required
                   />
                 </div>
-              </div>
-              <div className="mt-6">
-                <Button className="bg-blue-600 hover:bg-blue-700">
+
+                <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-700">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Investment
                 </Button>
-              </div>
+              </form>
             </CardContent>
           </Card>
+
+          {/* Manual Entries List */}
+          {portfolioEntries.filter((entry) => entry.source === "manual").length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle>Manual Entries</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {portfolioEntries
+                    .filter((entry) => entry.source === "manual")
+                    .map((entry) => (
+                      <div key={entry.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-medium text-gray-900 truncate">{entry.name}</p>
+                            <Badge variant="outline" className="text-xs">
+                              {entry.type.replace("_", " ")}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
+                            <span>Invested: ₹{entry.invested.toLocaleString("en-IN")}</span>
+                            <span>Current: ₹{entry.current.toLocaleString("en-IN")}</span>
+                            <span className={entry.current - entry.invested >= 0 ? "text-green-600" : "text-red-600"}>
+                              {entry.current - entry.invested >= 0 ? "+" : ""}₹
+                              {(entry.current - entry.invested).toLocaleString("en-IN")} (
+                              {(((entry.current - entry.invested) / entry.invested) * 100).toFixed(2)}%)
+                            </span>
+                          </div>
+                        </div>
+                        <Button variant="ghost" size="sm" onClick={() => removePortfolioEntry(entry.id)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         {/* Dashboard Tab */}
@@ -321,17 +514,19 @@ export default function PortfolioAnalysis() {
             <PortfolioDashboard entries={portfolioEntries} />
           ) : (
             <Card>
-              <CardContent className="p-12 text-center">
-                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <PieChart className="h-16 w-16 text-gray-400 mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No Portfolio Data</h3>
-                <p className="text-gray-600 mb-4">
-                  Upload your investment statements or add entries manually to see your portfolio dashboard
+                <p className="text-gray-600 mb-6 max-w-md">
+                  Upload your investment statements or add entries manually to see your portfolio analysis.
                 </p>
-                <div className="flex gap-3 justify-center">
-                  <Button onClick={() => setActiveTab("upload")} variant="outline">
+                <div className="flex gap-3">
+                  <Button onClick={() => setActiveTab("upload")} variant="default">
+                    <Upload className="h-4 w-4 mr-2" />
                     Upload Files
                   </Button>
-                  <Button onClick={() => setActiveTab("manual")} className="bg-blue-600 hover:bg-blue-700">
+                  <Button onClick={() => setActiveTab("manual")} variant="outline">
+                    <Plus className="h-4 w-4 mr-2" />
                     Add Manually
                   </Button>
                 </div>
