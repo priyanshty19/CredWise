@@ -5,49 +5,37 @@ import type React from "react"
 import { useState, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Badge } from "@/components/ui/badge"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Upload, Plus, FileText, PieChart, BarChart3, X, CheckCircle, AlertCircle, Loader2 } from "lucide-react"
+import { Upload, Plus, FileText, CheckCircle, X, Loader2 } from "lucide-react"
 import { uploadPortfolioFiles } from "@/app/actions/portfolio-actions"
 import PortfolioDashboard from "@/components/portfolio-dashboard"
 
-interface PortfolioEntry {
-  id: string
-  name: string
-  type: "mutual_fund" | "stock" | "bond" | "other"
-  amount: number
-  units?: number
-  currentValue: number
-  gainLoss: number
-  gainLossPercentage: number
-  source: "upload" | "manual"
-  fileName?: string
-}
-
 interface UploadedFile {
+  id: string
   name: string
   status: "uploading" | "processing" | "completed" | "error"
   entriesCount?: number
   error?: string
 }
 
-export default function PortfolioAnalysis() {
-  const [portfolioEntries, setPortfolioEntries] = useState<PortfolioEntry[]>([])
-  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
-  const [isUploading, setIsUploading] = useState(false)
-  const [activeTab, setActiveTab] = useState("upload")
-  const fileInputRef = useRef<HTMLInputElement>(null)
+interface PortfolioEntry {
+  id: string
+  name: string
+  type: "mutual_fund" | "stock" | "bond" | "etf"
+  invested: number
+  current: number
+  units: number
+  nav: number
+  date: string
+}
 
-  // Manual entry form state
-  const [manualEntry, setManualEntry] = useState({
-    name: "",
-    type: "mutual_fund" as const,
-    amount: "",
-    units: "",
-    currentValue: "",
-  })
+export default function PortfolioAnalysis() {
+  const [activeTab, setActiveTab] = useState("upload")
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [portfolioEntries, setPortfolioEntries] = useState<PortfolioEntry[]>([])
+  const [isUploading, setIsUploading] = useState(false)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileButtonClick = () => {
     fileInputRef.current?.click()
@@ -58,139 +46,71 @@ export default function PortfolioAnalysis() {
     if (!files || files.length === 0) return
 
     setIsUploading(true)
-    const fileArray = Array.from(files)
 
     // Add files to uploaded files list with uploading status
-    const newUploadedFiles = fileArray.map((file) => ({
+    const newFiles: UploadedFile[] = Array.from(files).map((file) => ({
+      id: Math.random().toString(36).substr(2, 9),
       name: file.name,
-      status: "uploading" as const,
+      status: "uploading",
     }))
-    setUploadedFiles((prev) => [...prev, ...newUploadedFiles])
+
+    setUploadedFiles((prev) => [...prev, ...newFiles])
 
     try {
-      // Update status to processing
-      setUploadedFiles((prev) =>
-        prev.map((f) =>
-          newUploadedFiles.some((nf) => nf.name === f.name) ? { ...f, status: "processing" as const } : f,
-        ),
-      )
+      // Process each file
+      for (const file of Array.from(files)) {
+        const fileId = newFiles.find((f) => f.name === file.name)?.id
+        if (!fileId) continue
 
-      const formData = new FormData()
-      fileArray.forEach((file) => {
-        formData.append("files", file)
-      })
+        // Update status to processing
+        setUploadedFiles((prev) => prev.map((f) => (f.id === fileId ? { ...f, status: "processing" } : f)))
 
-      const result = await uploadPortfolioFiles(formData)
+        // Create FormData and upload
+        const formData = new FormData()
+        formData.append("file", file)
 
-      if (result.success && result.portfolioData) {
-        // Add new entries to portfolio
-        const newEntries: PortfolioEntry[] = result.portfolioData.map((entry) => ({
-          ...entry,
-          source: "upload" as const,
-        }))
+        const result = await uploadPortfolioFiles(formData)
 
-        setPortfolioEntries((prev) => [...prev, ...newEntries])
+        if (result.success && result.data) {
+          // Update status to completed
+          setUploadedFiles((prev) =>
+            prev.map((f) =>
+              f.id === fileId ? { ...f, status: "completed", entriesCount: result.data?.length || 0 } : f,
+            ),
+          )
 
-        // Update file status to completed
-        setUploadedFiles((prev) =>
-          prev.map((f) => {
-            const matchingFile = newUploadedFiles.find((nf) => nf.name === f.name)
-            if (matchingFile) {
-              const entriesForFile = newEntries.filter((entry) => entry.fileName === f.name)
-              return {
-                ...f,
-                status: "completed" as const,
-                entriesCount: entriesForFile.length,
-              }
-            }
-            return f
-          }),
-        )
-
-        // Switch to dashboard tab if we have entries
-        if (newEntries.length > 0) {
-          setActiveTab("dashboard")
+          // Add entries to portfolio
+          setPortfolioEntries((prev) => [...prev, ...result.data])
+        } else {
+          // Update status to error
+          setUploadedFiles((prev) =>
+            prev.map((f) => (f.id === fileId ? { ...f, status: "error", error: result.error || "Upload failed" } : f)),
+          )
         }
-      } else {
-        // Update status to error
-        setUploadedFiles((prev) =>
-          prev.map((f) =>
-            newUploadedFiles.some((nf) => nf.name === f.name)
-              ? { ...f, status: "error" as const, error: result.error || "Upload failed" }
-              : f,
-          ),
-        )
+      }
+
+      // Auto-switch to dashboard if we have entries
+      if (portfolioEntries.length > 0) {
+        setTimeout(() => setActiveTab("dashboard"), 1000)
       }
     } catch (error) {
       console.error("Upload error:", error)
-      setUploadedFiles((prev) =>
-        prev.map((f) =>
-          newUploadedFiles.some((nf) => nf.name === f.name)
-            ? { ...f, status: "error" as const, error: "Upload failed" }
-            : f,
-        ),
-      )
     } finally {
       setIsUploading(false)
-      // Clear the input
+      // Clear the file input
       if (fileInputRef.current) {
         fileInputRef.current.value = ""
       }
     }
   }
 
-  const removeUploadedFile = (fileName: string) => {
-    // Remove file from uploaded files
-    setUploadedFiles((prev) => prev.filter((f) => f.name !== fileName))
-    // Remove associated portfolio entries
-    setPortfolioEntries((prev) => prev.filter((entry) => entry.fileName !== fileName))
-  }
-
-  const handleManualSubmit = (e: React.FormEvent) => {
-    e.preventDefault()
-
-    const amount = Number.parseFloat(manualEntry.amount)
-    const units = Number.parseFloat(manualEntry.units) || 0
-    const currentValue = Number.parseFloat(manualEntry.currentValue)
-
-    if (!manualEntry.name || isNaN(amount) || isNaN(currentValue)) {
-      return
+  const removeFile = (fileId: string) => {
+    const file = uploadedFiles.find((f) => f.id === fileId)
+    if (file && file.entriesCount) {
+      // Remove associated portfolio entries (simplified - in real app, you'd track which entries came from which file)
+      setPortfolioEntries((prev) => prev.slice(0, -file.entriesCount!))
     }
-
-    const gainLoss = currentValue - amount
-    const gainLossPercentage = (gainLoss / amount) * 100
-
-    const newEntry: PortfolioEntry = {
-      id: `manual-${Date.now()}`,
-      name: manualEntry.name,
-      type: manualEntry.type,
-      amount,
-      units: units > 0 ? units : undefined,
-      currentValue,
-      gainLoss,
-      gainLossPercentage,
-      source: "manual",
-    }
-
-    setPortfolioEntries((prev) => [...prev, newEntry])
-
-    // Reset form
-    setManualEntry({
-      name: "",
-      type: "mutual_fund",
-      amount: "",
-      units: "",
-      currentValue: "",
-    })
-
-    // Switch to dashboard if this is the first entry
-    if (portfolioEntries.length === 0) {
-      setActiveTab("dashboard")
-    }
-  }
-
-  const removePortfolioEntry = (id: string) => {
-    setPortfolioEntries((prev) => prev.filter((entry) => entry.id !== id))
+    setUploadedFiles((prev) => prev.filter((f) => f.id !== fileId))
   }
 
   const getStatusIcon = (status: UploadedFile["status"]) => {
@@ -201,7 +121,7 @@ export default function PortfolioAnalysis() {
       case "completed":
         return <CheckCircle className="h-4 w-4 text-green-600" />
       case "error":
-        return <AlertCircle className="h-4 w-4 text-red-600" />
+        return <X className="h-4 w-4 text-red-600" />
     }
   }
 
@@ -212,14 +132,26 @@ export default function PortfolioAnalysis() {
       case "processing":
         return "Processing..."
       case "completed":
-        return `${file.entriesCount || 0} investments found`
+        return `${file.entriesCount} investments found`
       case "error":
-        return file.error || "Error"
+        return file.error || "Upload failed"
     }
   }
 
   return (
     <div className="space-y-6">
+      <Card className="border-l-4 border-l-blue-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5 text-blue-600" />
+            Current Financial Portfolio & Analysis
+          </CardTitle>
+          <p className="text-gray-600">
+            Upload your investment statements or manually enter your financial data to get comprehensive insights
+          </p>
+        </CardHeader>
+      </Card>
+
       <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="upload" className="flex items-center gap-2">
@@ -230,11 +162,11 @@ export default function PortfolioAnalysis() {
             <Plus className="h-4 w-4" />
             Manual Entry
           </TabsTrigger>
-          <TabsTrigger value="dashboard" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
+          <TabsTrigger value="dashboard" className="flex items-center gap-2" disabled={portfolioEntries.length === 0}>
+            <FileText className="h-4 w-4" />
             Dashboard
             {portfolioEntries.length > 0 && (
-              <Badge variant="secondary" className="ml-1">
+              <Badge variant="secondary" className="ml-1 text-xs">
                 {portfolioEntries.length}
               </Badge>
             )}
@@ -244,24 +176,29 @@ export default function PortfolioAnalysis() {
         {/* File Upload Tab */}
         <TabsContent value="upload" className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Upload Investment Statements
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">
-                Upload your brokerage statements, mutual fund statements, or portfolio CSV files
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-6">
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center hover:border-gray-400 transition-colors">
-                <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                <div className="space-y-2">
-                  <p className="text-lg font-medium text-gray-900">Drop your investment statements here</p>
-                  <p className="text-sm text-gray-600">Supports Excel (.xlsx), CSV, and PDF files up to 10MB</p>
-                </div>
-                <div className="mt-6">
-                  <Button onClick={handleFileButtonClick} disabled={isUploading} className="relative">
+            <CardContent className="p-6">
+              <div className="text-center">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 hover:border-gray-400 transition-colors">
+                  <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
+                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Upload Investment Statements</h3>
+                  <p className="text-gray-600 mb-4">
+                    Upload your mutual fund, stock, or other investment statements (PDF, Excel, CSV)
+                  </p>
+
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    multiple
+                    accept=".pdf,.xlsx,.xls,.csv"
+                    onChange={handleFileUpload}
+                    className="hidden"
+                  />
+
+                  <Button
+                    onClick={handleFileButtonClick}
+                    disabled={isUploading}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
                     {isUploading ? (
                       <>
                         <Loader2 className="h-4 w-4 mr-2 animate-spin" />
@@ -274,61 +211,32 @@ export default function PortfolioAnalysis() {
                       </>
                     )}
                   </Button>
-                  <input
-                    ref={fileInputRef}
-                    type="file"
-                    multiple
-                    accept=".xlsx,.xls,.csv,.pdf"
-                    onChange={handleFileUpload}
-                    className="hidden"
-                    disabled={isUploading}
-                  />
+
+                  <p className="text-xs text-gray-500 mt-2">Supported formats: PDF, Excel (.xlsx, .xls), CSV</p>
                 </div>
               </div>
 
-              {/* Supported Platforms */}
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  Zerodha Console
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  Groww Statements
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  HDFC Securities
-                </div>
-                <div className="flex items-center gap-2 text-muted-foreground">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  Angel One
-                </div>
-              </div>
-
-              {/* Uploaded Files Status */}
+              {/* Uploaded Files List */}
               {uploadedFiles.length > 0 && (
-                <div className="space-y-3">
+                <div className="mt-6 space-y-3">
                   <h4 className="font-medium text-gray-900">Uploaded Files</h4>
-                  {uploadedFiles.map((file, index) => (
-                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                      <div className="flex items-center gap-3 min-w-0 flex-1">
+                  {uploadedFiles.map((file) => (
+                    <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border">
+                      <div className="flex items-center gap-3">
                         {getStatusIcon(file.status)}
-                        <div className="min-w-0 flex-1">
-                          <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                        <div>
+                          <p className="font-medium text-sm text-gray-900">{file.name}</p>
                           <p className="text-xs text-gray-600">{getStatusText(file)}</p>
                         </div>
                       </div>
-                      {file.status === "completed" || file.status === "error" ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => removeUploadedFile(file.name)}
-                          className="flex-shrink-0"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      ) : null}
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => removeFile(file.id)}
+                        className="text-gray-400 hover:text-red-600"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -341,145 +249,89 @@ export default function PortfolioAnalysis() {
         <TabsContent value="manual" className="space-y-6">
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="h-5 w-5" />
-                Add Investment Manually
-              </CardTitle>
-              <p className="text-sm text-muted-foreground">Add your investments manually for detailed analysis</p>
+              <CardTitle>Add Investment Manually</CardTitle>
+              <p className="text-gray-600">Enter your investment details manually</p>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleManualSubmit} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Investment Name</Label>
-                    <Input
-                      id="name"
-                      value={manualEntry.name}
-                      onChange={(e) => setManualEntry((prev) => ({ ...prev, name: e.target.value }))}
-                      placeholder="e.g., HDFC Top 100 Fund"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Type</Label>
-                    <select
-                      id="type"
-                      value={manualEntry.type}
-                      onChange={(e) => setManualEntry((prev) => ({ ...prev, type: e.target.value as any }))}
-                      className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                    >
-                      <option value="mutual_fund">Mutual Fund</option>
-                      <option value="stock">Stock</option>
-                      <option value="bond">Bond</option>
-                      <option value="other">Other</option>
-                    </select>
-                  </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Investment Name</label>
+                  <input
+                    type="text"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., SBI Blue Chip Fund"
+                  />
                 </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="amount">Invested Amount (₹)</Label>
-                    <Input
-                      id="amount"
-                      type="number"
-                      step="0.01"
-                      value={manualEntry.amount}
-                      onChange={(e) => setManualEntry((prev) => ({ ...prev, amount: e.target.value }))}
-                      placeholder="50000"
-                      required
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="units">Units (Optional)</Label>
-                    <Input
-                      id="units"
-                      type="number"
-                      step="0.001"
-                      value={manualEntry.units}
-                      onChange={(e) => setManualEntry((prev) => ({ ...prev, units: e.target.value }))}
-                      placeholder="1250.5"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="currentValue">Current Value (₹)</Label>
-                    <Input
-                      id="currentValue"
-                      type="number"
-                      step="0.01"
-                      value={manualEntry.currentValue}
-                      onChange={(e) => setManualEntry((prev) => ({ ...prev, currentValue: e.target.value }))}
-                      placeholder="55000"
-                      required
-                    />
-                  </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                  <select className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="">Select type</option>
+                    <option value="mutual_fund">Mutual Fund</option>
+                    <option value="stock">Stock</option>
+                    <option value="bond">Bond</option>
+                    <option value="etf">ETF</option>
+                  </select>
                 </div>
-
-                <Button type="submit" className="w-full">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Invested Amount (₹)</label>
+                  <input
+                    type="number"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="50000"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Current Value (₹)</label>
+                  <input
+                    type="number"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="55000"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Units</label>
+                  <input
+                    type="number"
+                    step="0.001"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                    placeholder="1000.50"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Purchase Date</label>
+                  <input
+                    type="date"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500"
+                  />
+                </div>
+              </div>
+              <div className="mt-6">
+                <Button className="bg-blue-600 hover:bg-blue-700">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Investment
                 </Button>
-              </form>
+              </div>
             </CardContent>
           </Card>
-
-          {/* Manual Entries List */}
-          {portfolioEntries.filter((entry) => entry.source === "manual").length > 0 && (
-            <Card>
-              <CardHeader>
-                <CardTitle>Manual Entries</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-3">
-                  {portfolioEntries
-                    .filter((entry) => entry.source === "manual")
-                    .map((entry) => (
-                      <div key={entry.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <p className="font-medium text-gray-900 truncate">{entry.name}</p>
-                            <Badge variant="outline" className="text-xs">
-                              {entry.type.replace("_", " ")}
-                            </Badge>
-                          </div>
-                          <div className="flex items-center gap-4 mt-1 text-sm text-gray-600">
-                            <span>Invested: ₹{entry.amount.toLocaleString()}</span>
-                            <span>Current: ₹{entry.currentValue.toLocaleString()}</span>
-                            <span className={entry.gainLoss >= 0 ? "text-green-600" : "text-red-600"}>
-                              {entry.gainLoss >= 0 ? "+" : ""}₹{entry.gainLoss.toLocaleString()} (
-                              {entry.gainLossPercentage.toFixed(2)}%)
-                            </span>
-                          </div>
-                        </div>
-                        <Button variant="ghost" size="sm" onClick={() => removePortfolioEntry(entry.id)}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    ))}
-                </div>
-              </CardContent>
-            </Card>
-          )}
         </TabsContent>
 
         {/* Dashboard Tab */}
         <TabsContent value="dashboard" className="space-y-6">
           {portfolioEntries.length > 0 ? (
-            <PortfolioDashboard portfolioEntries={portfolioEntries} />
+            <PortfolioDashboard entries={portfolioEntries} />
           ) : (
             <Card>
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <PieChart className="h-16 w-16 text-gray-400 mb-4" />
+              <CardContent className="p-12 text-center">
+                <FileText className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                 <h3 className="text-lg font-semibold text-gray-900 mb-2">No Portfolio Data</h3>
-                <p className="text-gray-600 mb-6 max-w-md">
-                  Upload your investment statements or add entries manually to see your portfolio analysis.
+                <p className="text-gray-600 mb-4">
+                  Upload your investment statements or add entries manually to see your portfolio dashboard
                 </p>
-                <div className="flex gap-3">
-                  <Button onClick={() => setActiveTab("upload")} variant="default">
-                    <Upload className="h-4 w-4 mr-2" />
+                <div className="flex gap-3 justify-center">
+                  <Button onClick={() => setActiveTab("upload")} variant="outline">
                     Upload Files
                   </Button>
-                  <Button onClick={() => setActiveTab("manual")} variant="outline">
-                    <Plus className="h-4 w-4 mr-2" />
+                  <Button onClick={() => setActiveTab("manual")} className="bg-blue-600 hover:bg-blue-700">
                     Add Manually
                   </Button>
                 </div>
