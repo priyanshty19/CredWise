@@ -28,7 +28,8 @@ import {
   Filter,
   RotateCcw,
 } from "lucide-react"
-import { getCardRecommendations } from "@/app/actions/card-recommendation"
+import { getCardRecommendationsForForm } from "@/app/actions/card-recommendation"
+import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
 
 interface CardRecommendation {
   name: string
@@ -132,7 +133,27 @@ export default function EnhancedPersonalization() {
 
     startTransition(async () => {
       try {
-        const result = await getCardRecommendations(formData)
+        // Submit form data to Google Sheets
+        try {
+          await submitEnhancedFormData({
+            timestamp: new Date().toISOString(),
+            monthlyIncome: Number.parseInt(formData.monthlyIncome),
+            monthlySpending: Number.parseInt(formData.monthlySpending),
+            creditScoreRange: formData.creditScore,
+            currentCards: formData.currentCards,
+            spendingCategories: formData.spendingCategories,
+            preferredBanks: formData.preferredBanks,
+            joiningFeePreference: formData.joiningFeePreference,
+            submissionType: "enhanced_form",
+            userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+          })
+          console.log("✅ Enhanced form data submitted to Google Sheets")
+        } catch (submissionError) {
+          console.error("⚠️ Failed to submit form data to Google Sheets:", submissionError)
+          // Don't fail the recommendation request if submission fails
+        }
+
+        const result = await getCardRecommendationsForForm(formData)
 
         if (result.success) {
           setRecommendations(result.recommendations)
@@ -206,7 +227,7 @@ export default function EnhancedPersonalization() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="monthlySpending">Monthly Spending (₹) *</Label>
+              <Label htmlFor="monthlySpending">Monthly Credit Card Spending (₹) *</Label>
               <Input
                 id="monthlySpending"
                 type="number"
@@ -216,7 +237,7 @@ export default function EnhancedPersonalization() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="creditScore">Credit Score *</Label>
+              <Label htmlFor="creditScore">Credit Score Range *</Label>
               <Select value={formData.creditScore} onValueChange={(value) => handleInputChange("creditScore", value)}>
                 <SelectTrigger>
                   <SelectValue placeholder="Select range" />
@@ -229,6 +250,22 @@ export default function EnhancedPersonalization() {
                 </SelectContent>
               </Select>
             </div>
+          </div>
+
+          {/* Current Cards */}
+          <div className="space-y-2">
+            <Label htmlFor="currentCards">How many credit cards do you currently have?</Label>
+            <Select value={formData.currentCards} onValueChange={(value) => handleInputChange("currentCards", value)}>
+              <SelectTrigger>
+                <SelectValue placeholder="Select number of cards" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">No credit cards</SelectItem>
+                <SelectItem value="1">1 credit card</SelectItem>
+                <SelectItem value="2">2 credit cards</SelectItem>
+                <SelectItem value="3">3 or more credit cards</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Spending Categories */}
@@ -260,41 +297,21 @@ export default function EnhancedPersonalization() {
             <div className="space-y-4 border-t pt-6">
               <h4 className="font-medium text-gray-900">Advanced Preferences</h4>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="currentCards">Current Cards Count</Label>
-                  <Select
-                    value={formData.currentCards}
-                    onValueChange={(value) => handleInputChange("currentCards", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select count" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="0">No cards</SelectItem>
-                      <SelectItem value="1">1 card</SelectItem>
-                      <SelectItem value="2">2 cards</SelectItem>
-                      <SelectItem value="3">3+ cards</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="joiningFee">Joining Fee Preference</Label>
-                  <Select
-                    value={formData.joiningFeePreference}
-                    onValueChange={(value) => handleInputChange("joiningFeePreference", value)}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select preference" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="no_fee">No joining fee</SelectItem>
-                      <SelectItem value="low_fee">Low fee (₹0-1000)</SelectItem>
-                      <SelectItem value="any_amount">Any amount</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="joiningFee">Joining Fee Preference</Label>
+                <Select
+                  value={formData.joiningFeePreference}
+                  onValueChange={(value) => handleInputChange("joiningFeePreference", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select preference" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no_fee">No joining fee</SelectItem>
+                    <SelectItem value="low_fee">Low fee (₹0-1000)</SelectItem>
+                    <SelectItem value="any_amount">Any amount</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
 
               {/* Preferred Banks */}

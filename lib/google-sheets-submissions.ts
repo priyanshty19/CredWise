@@ -11,6 +11,19 @@ interface UserSubmission {
   submissionType: "basic" | "enhanced"
 }
 
+interface EnhancedUserSubmission {
+  timestamp: string
+  monthlyIncome: number
+  monthlySpending: number
+  creditScoreRange: string
+  currentCards: string
+  spendingCategories: string[]
+  preferredBanks: string[]
+  joiningFeePreference: string
+  userAgent?: string
+  submissionType: "enhanced_form"
+}
+
 // Google Sheets configuration for submissions
 const SUBMISSIONS_SHEET_ID = "1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw"
 const SUBMISSIONS_TAB_NAME = "Sheet1"
@@ -150,6 +163,72 @@ export async function submitUserDataToGoogleSheets(submission: UserSubmission): 
     }
 
     throw error
+  }
+}
+
+// NEW: Enhanced form submission function
+export async function submitEnhancedFormData(submission: EnhancedUserSubmission): Promise<boolean> {
+  try {
+    console.log("📝 Submitting enhanced form data via Google Apps Script...")
+    console.log("📊 Enhanced submission data:", submission)
+
+    if (!APPS_SCRIPT_URL) {
+      throw new Error(
+        "Google Apps Script URL not configured. Please add NEXT_PUBLIC_APPS_SCRIPT_URL to your environment variables.",
+      )
+    }
+
+    // Prepare the enhanced payload
+    const payload = {
+      timestamp: submission.timestamp,
+      monthlyIncome: submission.monthlyIncome,
+      monthlySpending: submission.monthlySpending,
+      creditScoreRange: submission.creditScoreRange,
+      currentCards: submission.currentCards,
+      spendingCategories: submission.spendingCategories.join(", "), // Convert array to comma-separated string
+      preferredBanks: submission.preferredBanks.join(", "), // Convert array to comma-separated string
+      joiningFeePreference: submission.joiningFeePreference,
+      submissionType: submission.submissionType,
+      userAgent: submission.userAgent || "Unknown",
+    }
+
+    console.log("📦 Enhanced payload being sent:", payload)
+
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      redirect: "follow",
+    })
+
+    console.log("📡 Enhanced form response status:", response.status)
+
+    const responseText = await response.text()
+    console.log("📄 Enhanced form response:", responseText)
+
+    if (response.ok) {
+      try {
+        const result = JSON.parse(responseText)
+        if (result.success) {
+          console.log("✅ Enhanced form data submitted successfully")
+          return true
+        }
+      } catch (parseError) {
+        // If we can't parse JSON but got 200, assume success
+        if (response.status === 200) {
+          console.log("✅ Enhanced form data submitted (non-JSON response)")
+          return true
+        }
+      }
+    }
+
+    console.warn("⚠️ Enhanced form submission may have failed")
+    return false
+  } catch (error) {
+    console.error("❌ Error submitting enhanced form data:", error)
+    return false
   }
 }
 
