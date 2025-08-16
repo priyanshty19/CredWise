@@ -14,14 +14,17 @@ Configure Google Sheets to work for **any user/device** without requiring Google
    - Click the "Share" button (top right corner)
    - Click "Change to anyone with the link"
    - Set permission to "Viewer" (not Editor)
-   - Click "Done"
+   - Click "Copy link"
 
-3. **Verify Public Access**
-   - Copy the sheet URL
-   - Open an incognito/private browser window
-   - Paste the URL - you should be able to view the sheet without logging in
+### 2. Extract Sheet ID
+From the copied link, extract the Sheet ID:
+\`\`\`
+https://docs.google.com/spreadsheets/d/SHEET_ID_HERE/edit#gid=0
+\`\`\`
 
-### 2. Google Cloud Console Setup
+The SHEET_ID_HERE part is what you need.
+
+### 3. Google Cloud Console Setup
 
 1. **Enable Google Sheets API**
    - Go to [Google Cloud Console](https://console.cloud.google.com/)
@@ -43,16 +46,17 @@ Configure Google Sheets to work for **any user/device** without requiring Google
      - Leave unrestricted for maximum compatibility
      - Or add your domain for security
 
-### 3. Environment Variables
+### 4. Environment Variables
 
 Add to your `.env.local`:
 \`\`\`
-NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY=your_api_key_here
+NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY=your_api_key
+NEXT_PUBLIC_SHEET_ID=your_sheet_id
 \`\`\`
 
 **Note:** We use `NEXT_PUBLIC_` because this runs in the browser for all users.
 
-### 4. Sheet Structure Requirements
+### 5. Sheet Structure Requirements
 
 Your sheet must have:
 - **Tab name:** "Card-Data" (exact match)
@@ -78,6 +82,11 @@ Expected columns:
 4. Verify recommendations load properly
 
 ### Test 3: API Test
+Try accessing this URL in an incognito window:
+\`\`\`
+https://sheets.googleapis.com/v4/spreadsheets/YOUR_SHEET_ID/values/Sheet1!A1:O100?key=YOUR_API_KEY
+\`\`\`
+
 Use the built-in test component in the CredWise app to verify:
 - ✅ Public access working
 - ✅ No authentication required
@@ -98,6 +107,9 @@ Use the built-in test component in the CredWise app to verify:
 - Wrong tab name → Must be "Card-Data"
 - Sheet deleted → Restore or recreate
 
+**400 Bad Request Error:**
+- Check the range format (Sheet1!A1:O100)
+
 **Empty Data:**
 - Wrong range → Should be "Card-Data!A:K"
 - No data in sheet → Add sample data
@@ -115,9 +127,11 @@ Your setup is correct when:
 ## 🔒 Security Notes
 
 - **Public sheets are read-only** for viewers
-- **API key is visible** in browser (this is normal for public data)
+- **API keys in NEXT_PUBLIC_ are visible** in browser (this is normal for public data)
 - **No sensitive data** should be in public sheets
 - **Rate limits apply** to API key usage
+- Consider using server-side API calls for production
+- Restrict API key to specific domains in Google Cloud Console
 
 ## 📞 Support
 

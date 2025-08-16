@@ -1,48 +1,53 @@
-interface UserSubmission {
-  creditScore: number
+export interface SubmissionData {
   monthlyIncome: number
+  spendingCategories: string[]
+  preferredBanks: string[]
+  maxAnnualFee: number
   cardType: string
-  preferredBrand?: string
-  maxJoiningFee?: number
-  topN: number
-  timestamp: string
+  topRecommendation: string
+  totalRecommendations: number
   userAgent?: string
-  submissionType: "basic" | "enhanced"
 }
 
-// Google Apps Script URL - you'll create this
-const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL
-
-export async function submitViaAppsScript(submission: UserSubmission): Promise<boolean> {
+export async function submitToGoogleSheets(data: SubmissionData): Promise<{
+  success: boolean
+  error?: string
+}> {
   try {
-    console.log("📝 Submitting via Google Apps Script...")
-    console.log("📊 Submission data:", submission)
+    const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL
 
-    if (!APPS_SCRIPT_URL) {
-      throw new Error(
-        "Google Apps Script URL not configured. Please add NEXT_PUBLIC_APPS_SCRIPT_URL to your environment variables.",
-      )
+    if (!appsScriptUrl) {
+      throw new Error("Apps Script URL not configured")
     }
 
-    const response = await fetch(APPS_SCRIPT_URL, {
+    const response = await fetch(appsScriptUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(submission),
+      body: JSON.stringify({
+        ...data,
+        userAgent: navigator.userAgent,
+        timestamp: new Date().toISOString(),
+      }),
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Apps Script submission failed: ${response.status} - ${errorText}`)
+      throw new Error(`HTTP error! status: ${response.status}`)
     }
 
     const result = await response.json()
-    console.log("✅ Apps Script submission successful:", result)
 
-    return result.success || false
+    if (!result.success) {
+      throw new Error(result.error || "Submission failed")
+    }
+
+    return { success: true }
   } catch (error) {
-    console.error("❌ Apps Script submission failed:", error)
-    throw error
+    console.error("Error submitting to Google Sheets:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Unknown error",
+    }
   }
 }

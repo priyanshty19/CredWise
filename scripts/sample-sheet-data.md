@@ -1,43 +1,56 @@
 # Sample Google Sheets Data
 
-## Sheet Structure
-Create a Google Sheet with the following columns (A-K):
+Copy this data into your Google Sheet:
 
-| A | B | C | D | E | F | G | H | I | J | K |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Card Name | Bank | Card Type | Joining Fee | Annual Fee | Credit Score Requirement | Income Requirement | Rewards Rate | Sign Up Bonus | Features | Description |
+## Row 2 (HDFC Regalia Gold)
+- Card Name: HDFC Regalia Gold
+- Bank: HDFC Bank
+- Card Type: Premium
+- Annual Fee: 2500
+- Joining Fee: 2500
+- Reward Rate: 4 points per ₹150
+- Welcome Bonus: 10000 bonus points
+- Min Income: 300000
+- Max Income: 1000000
+- Spending Categories: Travel,Dining,Shopping
+- Key Features: Airport lounge access,Dining privileges,Fuel surcharge waiver
+- Best For: Travel,Dining,Premium lifestyle
+- Rating: 4.5
+- Status: Active
+- Last Updated: 2024-01-15
 
-## Sample Data Rows
+## Row 3 (SBI Cashback Card)
+- Card Name: SBI Cashback Card
+- Bank: State Bank of India
+- Card Type: Cashback
+- Annual Fee: 999
+- Joining Fee: 999
+- Reward Rate: 5% cashback online
+- Welcome Bonus: ₹2000 cashback
+- Min Income: 200000
+- Max Income: 800000
+- Spending Categories: Online Shopping,Digital Payments
+- Key Features: 5% online cashback,No capping,Fuel surcharge waiver
+- Best For: Online shopping,Digital payments
+- Rating: 4.3
+- Status: Active
+- Last Updated: 2024-01-15
 
-\`\`\`
-HDFC Millennia Credit Card,HDFC Bank,Cashback,0,1000,650,300000,2.5,2000,"5% cashback on online shopping,2.5% on online food delivery,Airport lounge access,Zero forex markup","Great for online spenders with excellent cashback rates and international usage benefits"
+## Row 4 (ICICI Amazon Pay)
+- Card Name: ICICI Amazon Pay
+- Bank: ICICI Bank
+- Card Type: Co-branded
+- Annual Fee: 0
+- Joining Fee: 0
+- Reward Rate: 5% on Amazon
+- Welcome Bonus: ₹1000 Amazon voucher
+- Min Income: 150000
+- Max Income: 600000
+- Spending Categories: Amazon,Bill Payments,Online Shopping
+- Key Features: 5% Amazon cashback,2% bill payments,No annual fee
+- Best For: Amazon shopping,Bill payments
+- Rating: 4.2
+- Status: Active
+- Last Updated: 2024-01-15
 
-SBI Simply Click Credit Card,SBI Card,Cashback,499,499,600,200000,5,500,"10X reward points on online shopping,5X on dining and movies,Fuel surcharge waiver,Welcome gift voucher","Perfect starter card with excellent online rewards and dining benefits"
-
-ICICI Amazon Pay Credit Card,ICICI Bank,Cashback,0,0,650,0,5,2000,"5% unlimited cashback on Amazon,2% on bill payments,1% on other spends,No annual fee","Best for Amazon shoppers with unlimited cashback and no fees"
-
-HDFC Diners Club Black,HDFC Bank,Travel,10000,10000,750,2500000,3.33,10000,"Unlimited airport lounge access,Golf privileges,Concierge services,Travel insurance,Priority customer service","Premium travel card for high-income individuals with luxury benefits"
-
-SBI Card PRIME,SBI Card,Rewards,2999,2999,700,500000,2,5000,"5X reward points on dining and movies,2X on all other spends,Airport lounge access,Milestone benefits","Excellent rewards card for dining and entertainment enthusiasts"
-
-ICICI Bank Student Travel Card,ICICI Bank,Student,0,0,0,0,1,1000,"No annual fee,Student-friendly features,Travel benefits,Easy approval,Cashback on education expenses","Designed specifically for students with easy approval and education benefits"
-
-American Express Business Gold,American Express,Business,4500,4500,700,1000000,2,15000,"Business expense tracking,Airport lounge access,Flexible payment terms,Business insurance,Dedicated support","Premium business card with comprehensive expense management tools"
-\`\`\`
-
-## Setup Instructions
-
-1. **Create a new Google Sheet**
-2. **Add the header row** (Row 1) with column names
-3. **Add the sample data** starting from Row 2
-4. **Make the sheet public**: Share → Anyone with the link can view
-5. **Copy the sheet ID** from the URL
-6. **Test the connection** using the test component
-
-## Important Notes
-
-- Ensure all numeric fields contain valid numbers (use 0 for "not applicable")
-- Features should be comma-separated
-- Card types must match exactly: Cashback, Travel, Rewards, Student, Business
-- Income requirement of 0 means no minimum income required
-- Credit score requirement of 0 means no minimum credit score required
+Continue adding more cards following this pattern...

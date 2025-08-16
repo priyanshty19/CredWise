@@ -1,3 +1,5 @@
+import { submitToGoogleSheets, type SubmissionData } from "./google-apps-script-submission"
+
 interface UserSubmission {
   creditScore: number
   monthlyIncome: number
@@ -17,141 +19,30 @@ const SUBMISSIONS_TAB_NAME = "Sheet1"
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
 const APPS_SCRIPT_URL = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL
 
-export async function submitUserDataToGoogleSheets(submission: UserSubmission): Promise<boolean> {
-  try {
-    console.log("📝 Submitting user data via Google Apps Script...")
-    console.log("📊 Submission data:", submission)
-    console.log("🔗 Apps Script URL:", APPS_SCRIPT_URL)
-
-    if (!APPS_SCRIPT_URL) {
-      throw new Error(
-        "Google Apps Script URL not configured. Please add NEXT_PUBLIC_APPS_SCRIPT_URL to your environment variables.",
-      )
-    }
-
-    // Prepare the payload
-    const payload = {
-      timestamp: submission.timestamp,
-      creditScore: submission.creditScore,
-      monthlyIncome: submission.monthlyIncome,
-      cardType: submission.cardType,
-      preferredBrand: submission.preferredBrand || "Any",
-      maxJoiningFee: submission.maxJoiningFee?.toString() || "Any",
-      topN: submission.topN,
-      submissionType: submission.submissionType,
-      userAgent: submission.userAgent || "Unknown",
-    }
-
-    console.log("📦 Payload being sent:", payload)
-
-    // Submit via Google Apps Script with enhanced error handling
-    const response = await fetch(APPS_SCRIPT_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(payload),
-      redirect: "follow",
-    })
-
-    console.log("📡 Apps Script response status:", response.status)
-    console.log("📡 Apps Script response URL:", response.url)
-    console.log("📡 Apps Script response headers:", Object.fromEntries(response.headers.entries()))
-
-    // Check if we got redirected (common Apps Script issue)
-    const wasRedirected = response.url !== APPS_SCRIPT_URL
-    if (wasRedirected) {
-      console.warn("⚠️ Apps Script URL redirected from:", APPS_SCRIPT_URL)
-      console.warn("⚠️ Apps Script URL redirected to:", response.url)
-    }
-
-    const responseText = await response.text()
-    console.log("📄 Raw Apps Script response:", responseText)
-
-    // Handle different response scenarios
-    if (response.ok) {
-      // Try to parse as JSON first
-      try {
-        const result = JSON.parse(responseText)
-        console.log("✅ Apps Script JSON response:", result)
-
-        if (result.success) {
-          console.log("✅ Data submitted successfully via Apps Script")
-          console.log("📊 New row added at:", result.row)
-          return true
-        } else {
-          console.warn("⚠️ Apps Script returned success=false:", result.error)
-          // Even if success=false, if we got a valid JSON response, the data might still be there
-          // Let's verify by checking the sheet
-          return await verifySubmissionInSheet(submission)
-        }
-      } catch (parseError) {
-        console.warn("⚠️ Apps Script response is not JSON:", parseError)
-        console.log("📄 Response text:", responseText)
-
-        // If response is not JSON but status is OK, the data might still be submitted
-        // This is common when Apps Script doesn't return proper JSON
-        if (response.status === 200 || response.status === 302) {
-          console.log("🔍 Verifying if data was actually submitted to sheet...")
-          return await verifySubmissionInSheet(submission)
-        }
-
-        throw new Error(`Apps Script returned non-JSON response: ${responseText.substring(0, 200)}...`)
-      }
-    } else {
-      // Handle error responses
-      if (responseText.includes("Moved Temporarily") || responseText.includes("302")) {
-        console.warn("⚠️ Apps Script redirect detected, but checking if data was submitted anyway...")
-
-        // Even with redirect errors, data might still be submitted
-        // This is a common Apps Script behavior
-        const dataSubmitted = await verifySubmissionInSheet(submission)
-        if (dataSubmitted) {
-          console.log("✅ Data was successfully submitted despite redirect error!")
-          return true
-        }
-
-        throw new Error(
-          `Apps Script URL redirect detected. This usually means:\n` +
-            `1. Your Apps Script deployment URL has changed\n` +
-            `2. The script needs to be redeployed\n` +
-            `3. Check your NEXT_PUBLIC_APPS_SCRIPT_URL environment variable\n\n` +
-            `Current URL: ${APPS_SCRIPT_URL}\n` +
-            `Redirected to: ${response.url}`,
-        )
-      }
-
-      if (responseText.includes("Authorization required") || responseText.includes("permission")) {
-        throw new Error(
-          `Apps Script authorization issue:\n` +
-            `1. Make sure your Apps Script is deployed as a web app\n` +
-            `2. Set "Execute as" to "Me"\n` +
-            `3. Set "Who has access" to "Anyone"\n` +
-            `4. Redeploy the script if you made changes`,
-        )
-      }
-
-      throw new Error(`Apps Script submission failed: ${response.status} - ${responseText}`)
-    }
-  } catch (error) {
-    console.error("❌ Error submitting user data via Apps Script:", error)
-
-    // Before throwing the error, let's check if the data was actually submitted
-    // This handles cases where the submission works but the response is malformed
+export class SubmissionTracker {
+  async trackRecommendation(data: SubmissionData): Promise<boolean> {
     try {
-      console.log("🔍 Final check: Verifying if data was submitted despite error...")
-      const dataSubmitted = await verifySubmissionInSheet(submission)
-      if (dataSubmitted) {
-        console.log("✅ Data was successfully submitted despite the error!")
-        return true
-      }
-    } catch (verifyError) {
-      console.warn("⚠️ Could not verify submission in sheet:", verifyError)
+      const result = await submitToGoogleSheets(data)
+      return result.success
+    } catch (error) {
+      console.error("Failed to track recommendation:", error)
+      return false
     }
+  }
 
-    throw error
+  async getSubmissionStats(): Promise<{
+    totalSubmissions: number
+    avgIncome: number
+    popularCategories: Record<string, number>
+    popularBanks: Record<string, number>
+  } | null> {
+    // This would fetch from your Google Sheets or database
+    // For now, return null to indicate no data available
+    return null
   }
 }
+
+export const submissionTracker = new SubmissionTracker()
 
 // New function to verify if the submission actually made it to the sheet
 async function verifySubmissionInSheet(submission: UserSubmission): Promise<boolean> {

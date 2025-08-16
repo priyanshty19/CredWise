@@ -1,7 +1,7 @@
 import { Suspense } from "react"
 import Navigation from "@/components/navigation"
-import CardRecommendationForm from "@/components/card-recommendation-form"
 import GoogleSheetsStatus from "@/components/google-sheets-status"
+import EnhancedRecommendations from "@/components/enhanced-recommendations"
 
 export default function CardPage() {
   return (
@@ -26,7 +26,7 @@ export default function CardPage() {
           {/* <AppsScriptDebugger /> */}
 
           <Suspense fallback={<div className="animate-pulse bg-gray-200 h-96 rounded-lg"></div>}>
-            <CardRecommendationForm />
+            <EnhancedRecommendations />
           </Suspense>
         </div>
       </main>

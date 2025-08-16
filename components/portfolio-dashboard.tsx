@@ -55,18 +55,33 @@ export default function PortfolioDashboard({ portfolioEntries, summary }: Portfo
   const topPerformers = sortedByPerformance.slice(0, 5)
   const topLosers = sortedByPerformance.slice(-5).reverse()
 
-  // Calculate allocation percentages
-  const typeAllocations = Object.entries(summary.byType).map(([type, data]) => ({
+  // Calculate allocation percentages with null checks
+  const typeAllocations = Object.entries(summary?.byType || {}).map(([type, data]) => ({
     type,
-    percentage: summary.totalValue > 0 ? (data.value / summary.totalValue) * 100 : 0,
+    percentage: summary?.totalValue > 0 ? (data.value / summary.totalValue) * 100 : 0,
     ...data,
   }))
 
-  const brokerAllocations = Object.entries(summary.byBroker).map(([broker, data]) => ({
+  const brokerAllocations = Object.entries(summary?.byBroker || {}).map(([broker, data]) => ({
     broker,
-    percentage: summary.totalValue > 0 ? (data.value / summary.totalValue) * 100 : 0,
+    percentage: summary?.totalValue > 0 ? (data.value / summary.totalValue) * 100 : 0,
     ...data,
   }))
+
+  // Handle case where summary might be null
+  if (!summary) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-12">
+          <PieChart className="h-16 w-16 text-gray-300 mb-4" />
+          <h3 className="text-xl font-semibold text-gray-600 mb-2">No Portfolio Data</h3>
+          <p className="text-gray-500 text-center max-w-md">
+            Unable to generate portfolio summary. Please check your data and try again.
+          </p>
+        </CardContent>
+      </Card>
+    )
+  }
 
   return (
     <div className="space-y-6">

@@ -1,55 +1,49 @@
-interface UserSubmission {
-  creditScore: number
+export interface WebhookSubmissionData {
   monthlyIncome: number
+  spendingCategories: string[]
+  preferredBanks: string[]
+  maxAnnualFee: number
   cardType: string
-  preferredBrand?: string
-  maxJoiningFee?: number
-  topN: number
+  recommendations: Array<{
+    cardName: string
+    bank: string
+    matchScore: number
+  }>
   timestamp: string
   userAgent?: string
-  submissionType: "basic" | "enhanced"
 }
 
-// Webhook URL from Zapier, Make.com, or similar service
-const WEBHOOK_URL = process.env.NEXT_PUBLIC_WEBHOOK_URL
-
-export async function submitViaWebhook(submission: UserSubmission): Promise<boolean> {
+export async function submitViaWebhook(data: WebhookSubmissionData): Promise<{
+  success: boolean
+  error?: string
+}> {
   try {
-    console.log("📝 Submitting via webhook...")
-    console.log("📊 Submission data:", submission)
+    // This would be your webhook endpoint
+    const webhookUrl = process.env.NEXT_PUBLIC_WEBHOOK_URL
 
-    if (!WEBHOOK_URL) {
-      throw new Error("Webhook URL not configured. Please add NEXT_PUBLIC_WEBHOOK_URL to your environment variables.")
+    if (!webhookUrl) {
+      throw new Error("Webhook URL not configured")
     }
 
-    const response = await fetch(WEBHOOK_URL, {
+    const response = await fetch(webhookUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.WEBHOOK_SECRET}`,
       },
-      body: JSON.stringify({
-        // Format data for the webhook service
-        timestamp: submission.timestamp,
-        creditScore: submission.creditScore,
-        monthlyIncome: submission.monthlyIncome,
-        cardType: submission.cardType,
-        preferredBrand: submission.preferredBrand || "Any",
-        maxJoiningFee: submission.maxJoiningFee?.toString() || "Any",
-        topN: submission.topN,
-        submissionType: submission.submissionType,
-        userAgent: submission.userAgent || "Unknown",
-      }),
+      body: JSON.stringify(data),
     })
 
     if (!response.ok) {
-      const errorText = await response.text()
-      throw new Error(`Webhook submission failed: ${response.status} - ${errorText}`)
+      throw new Error(`Webhook failed: ${response.status}`)
     }
 
-    console.log("✅ Webhook submission successful")
-    return true
+    return { success: true }
   } catch (error) {
-    console.error("❌ Webhook submission failed:", error)
-    throw error
+    console.error("Webhook submission error:", error)
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Webhook failed",
+    }
   }
 }

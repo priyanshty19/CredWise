@@ -20,6 +20,77 @@ interface UserSubmission {
   timestamp: string
 }
 
+export interface CardData {
+  cardName: string
+  bank: string
+  cardType: string
+  annualFee: number
+  joiningFee: number
+  rewardRate: string
+  welcomeBonus: string
+  minIncome: number
+  maxIncome: number
+  spendingCategories: string[]
+  keyFeatures: string[]
+  bestFor: string[]
+  rating: number
+  status: string
+}
+
+export class GoogleSheetsAPI {
+  private apiKey: string
+  private sheetId: string
+
+  constructor() {
+    this.apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY || ""
+    this.sheetId = process.env.NEXT_PUBLIC_SHEET_ID || ""
+  }
+
+  async getCardData(): Promise<CardData[]> {
+    if (!this.apiKey || !this.sheetId) {
+      throw new Error("Missing Google Sheets API key or Sheet ID")
+    }
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.sheetId}/values/Sheet1!A1:O1000?key=${this.apiKey}`
+
+    const response = await fetch(url)
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const data = await response.json()
+
+    if (!data.values || data.values.length < 2) {
+      return []
+    }
+
+    // Skip header row and parse data
+    const rows = data.values.slice(1)
+
+    return rows
+      .filter((row: string[]) => row[0] && row[13] === "Active") // Filter active cards
+      .map(
+        (row: string[]): CardData => ({
+          cardName: row[0] || "",
+          bank: row[1] || "",
+          cardType: row[2] || "",
+          annualFee: Number.parseInt(row[3]) || 0,
+          joiningFee: Number.parseInt(row[4]) || 0,
+          rewardRate: row[5] || "",
+          welcomeBonus: row[6] || "",
+          minIncome: Number.parseInt(row[7]) || 0,
+          maxIncome: Number.parseInt(row[8]) || 0,
+          spendingCategories: row[9] ? row[9].split(",").map((s) => s.trim()) : [],
+          keyFeatures: row[10] ? row[10].split(",").map((s) => s.trim()) : [],
+          bestFor: row[11] ? row[11].split(",").map((s) => s.trim()) : [],
+          rating: Number.parseFloat(row[12]) || 0,
+          status: row[13] || "",
+        }),
+      )
+  }
+}
+
 // Google Sheets configuration - Updated for public access
 const SHEET_ID = "1rHR5xzCmZZAlIjahAcpXrxwgYMcItVPckTCiOCSZfSo"
 const CARDS_RANGE = "Card-Data!A:K" // Fetch all rows in columns A through K
