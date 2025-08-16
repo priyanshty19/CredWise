@@ -24,7 +24,7 @@ import {
   Loader2,
   ExternalLink,
 } from "lucide-react"
-import { getCardRecommendations } from "@/app/actions/card-recommendation"
+import { getCardRecommendationsForForm } from "@/app/actions/card-recommendation"
 
 interface CardRecommendation {
   name: string
@@ -92,7 +92,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
 
     startTransition(async () => {
       try {
-        const result: RecommendationResult = await getCardRecommendations(formData)
+        const result: RecommendationResult = await getCardRecommendationsForForm(formData)
 
         if (result.success) {
           setRecommendations(result.recommendations)

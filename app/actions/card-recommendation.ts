@@ -1,219 +1,252 @@
 "use server"
 
-interface CardData {
-  name: string
-  bank: string
-  type: string
-  annualFee: number
-  joiningFee: number
-  rewardRate: string
-  welcomeBonus: string
-  keyFeatures: string[]
-  bestFor: string[]
-  minIncome: number
-  minCreditScore: number
-  status: string
-}
+import { fetchCreditCards, filterAndRankCards, filterAndRankCardsByRewards } from "@/lib/google-sheets"
+import { submitUserDataToGoogleSheets } from "@/lib/google-sheets-submissions"
 
-interface UserProfile {
-  monthlyIncome: number
-  spendingCategories: string[]
-  monthlySpending: number
-  currentCards: string
+interface CardSubmission {
   creditScore: number
-  preferredBanks: string[]
-  joiningFeePreference: string
+  monthlyIncome: number
+  cardType: string
+  timestamp: string
+  topN?: number
+  userAgent?: string
 }
 
-interface CardRecommendation extends CardData {
-  score: number
-  reasoning: string
+interface RecommendationResult {
+  success: boolean
+  recommendations?: any[]
+  filterCriteria?: string
+  scoringLogic?: string
+  error?: string
+  totalCardsConsidered?: number
+  eligibleCardsFound?: number
+  scoreEligibleCardsFound?: number // NEW: Cards that meet ≥25.0 score threshold
 }
 
-// Fetch cards from Google Sheets
-async function fetchCardsFromSheet(): Promise<CardData[]> {
+export async function getCardRecommendations(data: CardSubmission): Promise<RecommendationResult> {
   try {
-    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
-    const sheetId = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms" // Replace with your actual sheet ID
+    // Fetch live data from Google Sheets
+    const allCards = await fetchCreditCards()
 
-    if (!apiKey) {
-      throw new Error("Google Sheets API key not configured")
+    if (allCards.length === 0) {
+      return {
+        success: false,
+        error: "No credit card data available. Please try again later.",
+      }
     }
 
-    const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A1:L1000?key=${apiKey}`,
-      { next: { revalidate: 300 } }, // Cache for 5 minutes
+    // Apply rule-based filtering and ranking with configurable top N
+    const topN = data.topN || 3
+    const recommendations = filterAndRankCards(
+      allCards,
+      {
+        creditScore: data.creditScore,
+        monthlyIncome: data.monthlyIncome,
+        cardType: data.cardType,
+      },
+      topN,
     )
 
-    if (!response.ok) {
-      throw new Error(`Failed to fetch data: ${response.status}`)
+    // Calculate score-eligible cards count for reward-based logic
+    // We need to replicate the filtering logic to get the count
+    const basicEligibleCards = allCards.filter((card) => {
+      const meetsCredit = card.creditScoreRequirement === 0 || data.creditScore >= card.creditScoreRequirement
+      const meetsIncome = card.monthlyIncomeRequirement === 0 || data.monthlyIncome >= card.monthlyIncomeRequirement
+      const matchesType = card.cardType === data.cardType
+      return meetsCredit && meetsIncome && matchesType
+    })
+
+    // Calculate composite scores for basic eligible cards
+    const scoredCards = basicEligibleCards.map((card) => {
+      let score = 0
+
+      const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
+      const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
+      const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
+      const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
+
+      const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
+      const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
+      const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
+      const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
+
+      score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
+      const compositeScore = Math.round(score * 100) / 100
+
+      return {
+        ...card,
+        compositeScore,
+      }
+    })
+
+    // Count cards that meet the ≥25.0 score threshold
+    const scoreEligibleCards = scoredCards.filter((card) => card.compositeScore >= 25.0)
+    const scoreEligibleCount = scoreEligibleCards.length
+
+    console.log(`📊 ELIGIBILITY SUMMARY:`)
+    console.log(`- Total cards in database: ${allCards.length}`)
+    console.log(`- Basic eligible cards: ${basicEligibleCards.length}`)
+    console.log(`- Score-eligible cards (≥25.0): ${scoreEligibleCount}`)
+    console.log(`- Cards shown (Top ${topN}): ${recommendations.length}`)
+    console.log(`- Additional cards available for reward-based: ${Math.max(0, scoreEligibleCount - topN)}`)
+
+    // Submit user data to Google Sheets (not Supabase)
+    try {
+      await submitUserDataToGoogleSheets({
+        creditScore: data.creditScore,
+        monthlyIncome: data.monthlyIncome,
+        cardType: data.cardType,
+        topN: topN,
+        timestamp: data.timestamp,
+        userAgent: data.userAgent,
+        submissionType: "basic",
+      })
+      console.log("✅ User data submitted to Google Sheets successfully")
+    } catch (submissionError) {
+      console.error("⚠️ Failed to submit user data to Google Sheets:", submissionError)
+      // Don't fail the recommendation request if submission fails
     }
 
-    const data = await response.json()
-    const rows = data.values || []
+    // Generate explanation text
+    const filterCriteria = `Filtered for cards matching: Credit Score ≥ ${data.creditScore}, Monthly Income ≥ ₹${data.monthlyIncome.toLocaleString()}, Card Type: ${data.cardType}, Composite Score ≥ 25.0`
 
-    if (rows.length < 2) {
-      throw new Error("No data found in sheet")
+    const scoringLogic =
+      "Ranked by composite score considering: Low joining fees (25%), Low annual fees (25%), High rewards rate (25%), High sign-up bonus (25%). Only cards with composite score ≥25.0 are considered eligible."
+
+    return {
+      success: true,
+      recommendations: recommendations.map((card) => ({
+        cardName: card.cardName,
+        bank: card.bank,
+        features: card.features,
+        reason: `Score: ${card.compositeScore}/100. ${card.description || "Selected based on optimal balance of low fees and high rewards for your profile."}`,
+        rating: Math.min(5, Math.max(1, Math.round(card.compositeScore / 20))),
+        joiningFee: card.joiningFee,
+        annualFee: card.annualFee,
+        rewardsRate: card.rewardsRate,
+        signUpBonus: card.signUpBonus,
+        compositeScore: card.compositeScore,
+        monthlyIncomeRequirement: card.monthlyIncomeRequirement,
+      })),
+      filterCriteria,
+      scoringLogic,
+      totalCardsConsidered: allCards.length,
+      eligibleCardsFound: basicEligibleCards.length,
+      scoreEligibleCardsFound: scoreEligibleCount, // NEW: This is what we'll use for reward-based logic
     }
-
-    // Skip header row and parse data
-    const cards: CardData[] = rows.slice(1).map((row: string[]) => ({
-      name: row[0] || "",
-      bank: row[1] || "",
-      type: row[2] || "",
-      annualFee: Number.parseInt(row[3]) || 0,
-      joiningFee: Number.parseInt(row[4]) || 0,
-      rewardRate: row[5] || "",
-      welcomeBonus: row[6] || "",
-      keyFeatures: row[7] ? row[7].split(";").map((f) => f.trim()) : [],
-      bestFor: row[8] ? row[8].split(";").map((b) => b.trim()) : [],
-      minIncome: Number.parseInt(row[9]) || 0,
-      minCreditScore: Number.parseInt(row[10]) || 0,
-      status: row[11] || "Active",
-    }))
-
-    return cards.filter((card) => card.name && card.status === "Active")
   } catch (error) {
-    console.error("Error fetching cards:", error)
-    // Return fallback data
-    return getFallbackCards()
+    console.error("Error getting card recommendations:", error)
+    return {
+      success: false,
+      error: "Failed to fetch recommendations. Please check your internet connection and try again.",
+    }
   }
 }
 
-// Fallback cards data
-function getFallbackCards(): CardData[] {
-  return [
-    {
-      name: "HDFC Regalia Gold",
-      bank: "HDFC Bank",
-      type: "Premium",
-      annualFee: 2500,
-      joiningFee: 2500,
-      rewardRate: "2-4% on dining & travel",
-      welcomeBonus: "10,000 reward points",
-      keyFeatures: ["Airport lounge access", "Dining offers", "Travel insurance", "Reward points"],
-      bestFor: ["Dining", "Travel", "Premium lifestyle"],
-      minIncome: 500000,
-      minCreditScore: 750,
-      status: "Active",
-    },
-    {
-      name: "SBI Cashback",
-      bank: "SBI",
-      type: "Cashback",
-      annualFee: 999,
-      joiningFee: 999,
-      rewardRate: "5% on online shopping",
-      welcomeBonus: "₹2,000 cashback",
-      keyFeatures: ["High cashback rates", "No reward point hassle", "Online shopping benefits"],
-      bestFor: ["Shopping", "Online purchases", "Cashback"],
-      minIncome: 300000,
-      minCreditScore: 700,
-      status: "Active",
-    },
-    {
-      name: "ICICI Amazon Pay",
-      bank: "ICICI Bank",
-      type: "Co-branded",
-      annualFee: 500,
-      joiningFee: 500,
-      rewardRate: "2-5% on Amazon",
-      welcomeBonus: "₹2,000 Amazon Pay balance",
-      keyFeatures: ["Amazon Prime membership", "High Amazon rewards", "Fuel surcharge waiver"],
-      bestFor: ["Shopping", "Amazon", "E-commerce"],
-      minIncome: 250000,
-      minCreditScore: 650,
-      status: "Active",
-    },
-  ]
-}
+export async function getEnhancedCardRecommendations(
+  data: CardSubmission & {
+    preferredBrand?: string
+    maxJoiningFee?: number
+  },
+): Promise<RecommendationResult> {
+  try {
+    const allCards = await fetchCreditCards()
 
-// Calculate card score based on user profile
-function calculateCardScore(card: CardData, profile: UserProfile): number {
-  let score = 0
+    if (allCards.length === 0) {
+      return {
+        success: false,
+        error: "No credit card data available. Please try again later.",
+      }
+    }
 
-  // Income compatibility (30 points)
-  if (profile.monthlyIncome * 12 >= card.minIncome) {
-    score += 30
-  } else {
-    const incomeRatio = (profile.monthlyIncome * 12) / card.minIncome
-    score += Math.max(0, incomeRatio * 30)
-  }
+    // Use REWARD-BASED filtering instead of composite scoring
+    const topN = data.topN || 3
 
-  // Credit score compatibility (25 points)
-  if (profile.creditScore >= card.minCreditScore) {
-    score += 25
-  } else {
-    const creditRatio = profile.creditScore / card.minCreditScore
-    score += Math.max(0, creditRatio * 25)
-  }
+    // Handle the "any" value for maxJoiningFee - convert to undefined for no filtering
+    const processedMaxJoiningFee =
+      data.maxJoiningFee === undefined || data.maxJoiningFee.toString() === "any" ? undefined : data.maxJoiningFee
 
-  // Spending category match (25 points)
-  const categoryMatches = profile.spendingCategories.filter((category) =>
-    card.bestFor.some((cardCategory) => cardCategory.toLowerCase().includes(category.toLowerCase())),
-  ).length
+    // Handle the "Any" value for preferredBrand - convert to undefined for no filtering
+    const processedPreferredBrand =
+      data.preferredBrand === undefined || data.preferredBrand === "Any" ? undefined : data.preferredBrand
 
-  if (categoryMatches > 0) {
-    score += Math.min(25, (categoryMatches / profile.spendingCategories.length) * 25)
-  }
+    const recommendations = filterAndRankCardsByRewards(
+      allCards,
+      {
+        creditScore: data.creditScore,
+        monthlyIncome: data.monthlyIncome,
+        cardType: data.cardType,
+        preferredBrand: processedPreferredBrand,
+        maxJoiningFee: processedMaxJoiningFee,
+      },
+      topN,
+    )
 
-  // Bank preference (10 points)
-  if (profile.preferredBanks.includes(card.bank)) {
-    score += 10
-  }
+    // Submit enhanced user data to Google Sheets (not Supabase)
+    try {
+      await submitUserDataToGoogleSheets({
+        creditScore: data.creditScore,
+        monthlyIncome: data.monthlyIncome,
+        cardType: data.cardType,
+        preferredBrand: processedPreferredBrand,
+        maxJoiningFee: processedMaxJoiningFee,
+        topN: topN,
+        timestamp: data.timestamp,
+        userAgent: data.userAgent,
+        submissionType: "enhanced",
+      })
+      console.log("✅ Enhanced user data submitted to Google Sheets successfully")
+    } catch (submissionError) {
+      console.error("⚠️ Failed to submit enhanced user data to Google Sheets:", submissionError)
+      // Don't fail the recommendation request if submission fails
+    }
 
-  // Joining fee preference (10 points)
-  if (profile.joiningFeePreference === "no_fee" && card.joiningFee === 0) {
-    score += 10
-  } else if (profile.joiningFeePreference === "low_fee" && card.joiningFee <= 1000) {
-    score += 8
-  } else if (profile.joiningFeePreference === "any_amount") {
-    score += 5
-  }
+    // Enhanced filter criteria description
+    let filterCriteria = `Filtered for cards matching: Credit Score ≥ ${data.creditScore}, Monthly Income ≥ ₹${data.monthlyIncome.toLocaleString()}, Card Type: ${data.cardType}, Composite Score ≥ 25.0`
 
-  return Math.min(100, Math.round(score))
-}
+    if (processedPreferredBrand) {
+      filterCriteria += `, Preferred Bank: ${processedPreferredBrand}`
+    }
 
-// Generate reasoning for recommendation
-function generateReasoning(card: CardData, profile: UserProfile, score: number): string {
-  const reasons = []
+    if (processedMaxJoiningFee !== undefined) {
+      filterCriteria += `, Max Joining Fee: ₹${processedMaxJoiningFee.toLocaleString()}`
+    }
 
-  if (profile.monthlyIncome * 12 >= card.minIncome) {
-    reasons.push("meets income requirements")
-  }
+    // Updated scoring logic description for reward-based approach
+    const scoringLogic =
+      "Ranked PURELY by highest reward rates (no composite scoring) - cards with highest cashback/rewards percentage appear first. Only cards with composite score ≥25.0 are considered eligible."
 
-  if (profile.creditScore >= card.minCreditScore) {
-    reasons.push("matches credit score criteria")
-  }
-
-  const categoryMatches = profile.spendingCategories.filter((category) =>
-    card.bestFor.some((cardCategory) => cardCategory.toLowerCase().includes(category.toLowerCase())),
-  )
-
-  if (categoryMatches.length > 0) {
-    reasons.push(`excellent for ${categoryMatches.join(" and ")} spending`)
-  }
-
-  if (profile.preferredBanks.includes(card.bank)) {
-    reasons.push("from your preferred bank")
-  }
-
-  if (card.joiningFee === 0) {
-    reasons.push("no joining fee")
-  }
-
-  const baseReason = `This card scores ${score}/100 for your profile because it ${reasons.join(", ")}.`
-
-  if (score >= 80) {
-    return `${baseReason} This is an excellent match for your spending patterns and financial profile.`
-  } else if (score >= 60) {
-    return `${baseReason} This card offers good value for your needs.`
-  } else {
-    return `${baseReason} While not a perfect match, it still offers some benefits for your profile.`
+    return {
+      success: true,
+      recommendations: recommendations.map((card) => ({
+        cardName: card.cardName,
+        bank: card.bank,
+        features: card.features,
+        reason: `Reward Rate: ${card.rewardsRate}%. ${card.description || "Selected for having one of the highest reward rates in your category."}`,
+        rating: Math.min(5, Math.max(1, Math.round(card.rewardsRate))), // Rating based on reward rate
+        joiningFee: card.joiningFee,
+        annualFee: card.annualFee,
+        rewardsRate: card.rewardsRate,
+        signUpBonus: card.signUpBonus,
+        compositeScore: card.compositeScore, // Keep the actual composite score
+        monthlyIncomeRequirement: card.monthlyIncomeRequirement,
+      })),
+      filterCriteria,
+      scoringLogic,
+      totalCardsConsidered: allCards.length,
+      eligibleCardsFound: recommendations.length,
+    }
+  } catch (error) {
+    console.error("Error getting enhanced card recommendations:", error)
+    return {
+      success: false,
+      error: "Failed to fetch recommendations. Please check your internet connection and try again.",
+    }
   }
 }
 
-export async function getCardRecommendations(formData: {
+// New function for the enhanced recommendations component
+export async function getCardRecommendationsForForm(formData: {
   monthlyIncome: string
   spendingCategories: string[]
   monthlySpending: string
@@ -223,50 +256,78 @@ export async function getCardRecommendations(formData: {
   joiningFeePreference: string
 }) {
   try {
-    // Parse user profile
-    const profile: UserProfile = {
-      monthlyIncome: Number.parseInt(formData.monthlyIncome) || 0,
-      spendingCategories: formData.spendingCategories || [],
-      monthlySpending: Number.parseInt(formData.monthlySpending) || 0,
-      currentCards: formData.currentCards || "",
-      creditScore: Number.parseInt(formData.creditScore) || 0,
-      preferredBanks: formData.preferredBanks || [],
-      joiningFeePreference: formData.joiningFeePreference || "any_amount",
+    // Convert form data to the format expected by our existing functions
+    const creditScore = Number.parseInt(formData.creditScore) || 650
+    const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 50000
+
+    // Determine card type based on spending categories
+    let cardType = "Cashback" // Default
+    if (formData.spendingCategories.includes("travel")) {
+      cardType = "Travel"
+    } else if (formData.spendingCategories.includes("dining") || formData.spendingCategories.includes("shopping")) {
+      cardType = "Rewards"
     }
 
-    // Fetch cards from Google Sheets
-    const allCards = await fetchCardsFromSheet()
+    const cardSubmission: CardSubmission = {
+      creditScore,
+      monthlyIncome,
+      cardType,
+      timestamp: new Date().toISOString(),
+      topN: 7, // Get top 7 recommendations
+    }
 
-    // Calculate scores and create recommendations
-    const recommendations: CardRecommendation[] = allCards
-      .map((card) => {
-        const score = calculateCardScore(card, profile)
-        const reasoning = generateReasoning(card, profile, score)
+    const result = await getCardRecommendations(cardSubmission)
 
-        return {
-          ...card,
-          score,
-          reasoning,
-        }
-      })
-      .filter((card) => card.score >= 25) // Only show cards with reasonable scores
-      .sort((a, b) => b.score - a.score) // Sort by score descending
-      .slice(0, 7) // Top 7 recommendations
+    if (!result.success) {
+      return {
+        success: false,
+        error: result.error,
+        recommendations: [],
+        totalCards: 0,
+        userProfile: null,
+      }
+    }
+
+    // Transform the recommendations to match the expected format
+    const transformedRecommendations =
+      result.recommendations?.map((card) => ({
+        name: card.cardName,
+        bank: card.bank,
+        type: cardType.toLowerCase(),
+        annualFee: card.annualFee,
+        joiningFee: card.joiningFee,
+        rewardRate: `${card.rewardsRate}% rewards`,
+        welcomeBonus: card.signUpBonus > 0 ? `₹${card.signUpBonus.toLocaleString()} welcome bonus` : "",
+        keyFeatures: card.features || [
+          "Reward points on purchases",
+          "Online transaction benefits",
+          "Fuel surcharge waiver",
+          "Welcome bonus offer",
+        ],
+        bestFor: formData.spendingCategories.slice(0, 3),
+        score: Math.round(card.compositeScore),
+        reasoning: card.reason,
+      })) || []
 
     return {
       success: true,
-      recommendations,
-      totalCards: allCards.length,
-      userProfile: profile,
+      recommendations: transformedRecommendations,
+      totalCards: result.totalCardsConsidered || 0,
+      userProfile: {
+        monthlyIncome,
+        monthlySpending: Number.parseInt(formData.monthlySpending) || 25000,
+        creditScore,
+        spendingCategories: formData.spendingCategories,
+      },
     }
   } catch (error) {
-    console.error("Error generating recommendations:", error)
+    console.error("Error in getCardRecommendationsForForm:", error)
     return {
       success: false,
+      error: "Failed to generate recommendations. Please try again.",
       recommendations: [],
       totalCards: 0,
       userProfile: null,
-      error: error instanceof Error ? error.message : "Failed to generate recommendations",
     }
   }
 }
