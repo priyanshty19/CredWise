@@ -766,6 +766,22 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
   }
 }
 
+// Helper function to convert credit score range to numeric value
+function getCreditScoreValue(range: string): number {
+  switch (range) {
+    case "300-549":
+      return 425
+    case "550-649":
+      return 600
+    case "650-749":
+      return 700
+    case "750-850":
+      return 800
+    default:
+      return 700
+  }
+}
+
 // Enhanced function for the form with spending categories and new refined scoring
 export async function getCardRecommendationsForForm(formData: {
   monthlyIncome: string
@@ -895,21 +911,3 @@ export async function getCardRecommendationsForForm(formData: {
     }
   }
 }
-
-// Helper function to convert credit score range to numeric value
-function getCreditScoreValue(range: string): number {
-  switch (range) {
-    case "300-549":
-      return 425
-    case "550-649":
-      return 600
-    case "650-749":
-      return 700
-    case "750-850":
-      return 800
-    default:
-      return 700
-  }
-}
-
-// Explicit export to ensure the function is available for import;
