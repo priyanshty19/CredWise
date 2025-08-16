@@ -1414,7 +1414,7 @@ export async function getCardRecommendationsForForm(formData: {
     console.log("🔄 Processing form data with refined scoring algorithm:", formData)
 
     // Convert form data to the format expected by our existing functions
-    const creditScore = Number.parseInt(formData.creditScore) || 650
+    const creditScore = getCreditScoreValue(formData.creditScore) || 650
     const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 50000
 
     // Determine card type based on spending categories
@@ -1560,3 +1560,20 @@ export async function getCardRecommendationsForForm(formData: {
     }
   }
 }
+
+function getCreditScoreValue(range: string): number {
+  switch (range) {
+    case "300-549":
+      return 425
+    case "550-649":
+      return 600
+    case "650-749":
+      return 700
+    case "750-850":
+      return 800
+    default:
+      return 700
+  }
+}
+
+// Explicit export for getCardRecommendationsForForm
