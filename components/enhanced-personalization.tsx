@@ -1231,7 +1231,7 @@ const COMPLETE_CARD_DATA = [
     minCreditScore: 750,
     minIncome: 100000,
     tags: ["travel", "luxury", "concierge"],
-    description: "Ultra-premium card with luxury benefits",
+    description: "Ultra-premium card with exclusive privileges",
     applyUrl: "https://www.sc.com/in/credit-cards/ultimate-credit-card/",
   },
 
@@ -1724,7 +1724,7 @@ const COMPLETE_CARD_DATA = [
   {
     id: "oriental-platinum",
     name: "Oriental Bank of Commerce Platinum Credit Card",
-    bank: "Oriental Bank of Commerce",
+    bank: "Oriental Bank",
     cardType: "Rewards",
     joiningFee: 500,
     annualFee: 500,
@@ -2198,7 +2198,7 @@ const COMPLETE_CARD_DATA = [
     minIncome: 25000,
     tags: ["rewards", "small_finance", "fuel"],
     description: "Small finance bank rewards card",
-    applyUrl: "https://www.equitasbank.com/credit-cards/platinum",
+    applyUrl: "https://www.equitasbank.com/credit-card/platinum",
   },
   {
     id: "ujjivan-platinum",
@@ -3038,8 +3038,19 @@ export default function EnhancedPersonalization() {
       // Sort by score (highest first) and take top 7
       const topRecommendations = eligibleCards.sort((a, b) => b.score - a.score).slice(0, 7)
 
+      // Prioritize cards from preferred banks
+      const preferredBankCards = scoredCards.filter((card) =>
+        formData.preferredBanks.some((bank) => card.card.bank.toLowerCase().includes(bank.toLowerCase())),
+      )
+      const otherCards = scoredCards.filter(
+        (card) => !formData.preferredBanks.some((bank) => card.card.bank.toLowerCase().includes(bank.toLowerCase())),
+      )
+
+      // Ensure preferred bank cards are included, even if they don't meet the score threshold
+      const combinedRecommendations = [...preferredBankCards, ...topRecommendations].slice(0, 7)
+
       setAllScoredCards(scoredCards)
-      setRecommendations(topRecommendations)
+      setRecommendations(combinedRecommendations)
 
       // Submit to Google Sheets
       const submissionData = {
