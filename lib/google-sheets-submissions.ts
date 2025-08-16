@@ -24,6 +24,20 @@ interface EnhancedUserSubmission {
   submissionType: "enhanced_form"
 }
 
+// NEW: Card Application Click Tracking
+interface CardApplicationClick {
+  timestamp: string
+  cardName: string
+  bankName: string
+  cardType: string
+  joiningFee: number
+  annualFee: number
+  rewardRate: string
+  userAgent?: string
+  sessionId?: string
+  submissionType: "card_application_click"
+}
+
 // Google Sheets configuration for submissions
 const SUBMISSIONS_SHEET_ID = "1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw"
 const SUBMISSIONS_TAB_NAME = "Sheet1"
@@ -166,7 +180,7 @@ export async function submitUserDataToGoogleSheets(submission: UserSubmission): 
   }
 }
 
-// NEW: Enhanced form submission function
+// Enhanced form submission function
 export async function submitEnhancedFormData(submission: EnhancedUserSubmission): Promise<boolean> {
   try {
     console.log("📝 Submitting enhanced form data via Google Apps Script...")
@@ -230,6 +244,76 @@ export async function submitEnhancedFormData(submission: EnhancedUserSubmission)
     console.error("❌ Error submitting enhanced form data:", error)
     return false
   }
+}
+
+// NEW: Card Application Click Tracking Function
+export async function trackCardApplicationClick(clickData: CardApplicationClick): Promise<boolean> {
+  try {
+    console.log("🎯 Tracking card application click via Google Apps Script...")
+    console.log("📊 Click data:", clickData)
+
+    if (!APPS_SCRIPT_URL) {
+      console.error("❌ Apps Script URL not configured for click tracking")
+      return false
+    }
+
+    // Prepare the click tracking payload
+    const payload = {
+      timestamp: clickData.timestamp,
+      cardName: clickData.cardName,
+      bankName: clickData.bankName,
+      cardType: clickData.cardType,
+      joiningFee: clickData.joiningFee,
+      annualFee: clickData.annualFee,
+      rewardRate: clickData.rewardRate,
+      submissionType: clickData.submissionType,
+      userAgent: clickData.userAgent || "Unknown",
+      sessionId: clickData.sessionId || generateSessionId(),
+    }
+
+    console.log("📦 Click tracking payload:", payload)
+
+    const response = await fetch(APPS_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(payload),
+      redirect: "follow",
+    })
+
+    console.log("📡 Click tracking response status:", response.status)
+
+    const responseText = await response.text()
+    console.log("📄 Click tracking response:", responseText)
+
+    if (response.ok) {
+      try {
+        const result = JSON.parse(responseText)
+        if (result.success) {
+          console.log("✅ Card application click tracked successfully")
+          return true
+        }
+      } catch (parseError) {
+        // If we can't parse JSON but got 200, assume success
+        if (response.status === 200) {
+          console.log("✅ Card application click tracked (non-JSON response)")
+          return true
+        }
+      }
+    }
+
+    console.warn("⚠️ Card application click tracking may have failed")
+    return false
+  } catch (error) {
+    console.error("❌ Error tracking card application click:", error)
+    return false
+  }
+}
+
+// Helper function to generate a simple session ID
+function generateSessionId(): string {
+  return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
 // New function to verify if the submission actually made it to the sheet
@@ -313,6 +397,8 @@ export async function getSubmissionAnalytics(): Promise<{
   avgCreditScore: number
   avgIncome: number
   recentSubmissions: any[]
+  cardApplicationClicks?: number
+  topClickedCards?: Array<{ cardName: string; clicks: number }>
 }> {
   try {
     console.log("📊 Fetching submission analytics from Google Sheets...")
@@ -324,7 +410,7 @@ export async function getSubmissionAnalytics(): Promise<{
     }
 
     // Fetch all submission data (read operations work with API keys)
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SUBMISSIONS_SHEET_ID}/values/${SUBMISSIONS_TAB_NAME}!A:I?key=${API_KEY}`
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SUBMISSIONS_SHEET_ID}/values/${SUBMISSIONS_TAB_NAME}!A:K?key=${API_KEY}`
 
     console.log("🔗 Fetching analytics from:", url)
 
@@ -355,6 +441,8 @@ export async function getSubmissionAnalytics(): Promise<{
         avgCreditScore: 0,
         avgIncome: 0,
         recentSubmissions: [],
+        cardApplicationClicks: 0,
+        topClickedCards: [],
       }
     }
 
@@ -362,8 +450,22 @@ export async function getSubmissionAnalytics(): Promise<{
     console.log("📋 Analytics headers:", headers)
     console.log("📊 Total data rows:", rows.length)
 
-    // Parse the data with better error handling
-    const submissions = rows
+    // Separate form submissions from card application clicks
+    const formSubmissions = rows.filter((row) => {
+      const submissionType = row[8] || row[7] // Check both possible positions
+      return submissionType !== "card_application_click"
+    })
+
+    const cardClicks = rows.filter((row) => {
+      const submissionType = row[8] || row[7] // Check both possible positions
+      return submissionType === "card_application_click"
+    })
+
+    console.log("📊 Form submissions:", formSubmissions.length)
+    console.log("🎯 Card application clicks:", cardClicks.length)
+
+    // Parse the form submission data with better error handling
+    const submissions = formSubmissions
       .map((row: any[], index: number) => {
         try {
           return {
@@ -378,13 +480,36 @@ export async function getSubmissionAnalytics(): Promise<{
             userAgent: row[8] || "",
           }
         } catch (error) {
-          console.warn(`⚠️ Error parsing row ${index + 2}:`, error, row)
+          console.warn(`⚠️ Error parsing form submission row ${index + 2}:`, error, row)
           return null
         }
       })
       .filter((sub): sub is NonNullable<typeof sub> => sub !== null && sub.creditScore > 0)
 
-    console.log("📊 Parsed submissions:", submissions.length)
+    // Parse card click data
+    const clickAnalytics = cardClicks
+      .map((row: any[], index: number) => {
+        try {
+          return {
+            timestamp: row[0] || "",
+            cardName: row[1] || "",
+            bankName: row[2] || "",
+            cardType: row[3] || "",
+            joiningFee: Number.parseInt(row[4]) || 0,
+            annualFee: Number.parseInt(row[5]) || 0,
+            rewardRate: row[6] || "",
+            submissionType: row[7] || "",
+            userAgent: row[8] || "",
+          }
+        } catch (error) {
+          console.warn(`⚠️ Error parsing card click row ${index + 2}:`, error, row)
+          return null
+        }
+      })
+      .filter((click): click is NonNullable<typeof click> => click !== null && click.cardName)
+
+    console.log("📊 Parsed form submissions:", submissions.length)
+    console.log("🎯 Parsed card clicks:", clickAnalytics.length)
 
     const totalSubmissions = submissions.length
 
@@ -412,12 +537,25 @@ export async function getSubmissionAnalytics(): Promise<{
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
       .slice(0, 5)
 
+    // Calculate top clicked cards
+    const cardClickCounts = clickAnalytics.reduce((acc: Record<string, number>, click) => {
+      acc[click.cardName] = (acc[click.cardName] || 0) + 1
+      return acc
+    }, {})
+
+    const topClickedCards = Object.entries(cardClickCounts)
+      .map(([cardName, clicks]) => ({ cardName, clicks }))
+      .sort((a, b) => b.clicks - a.clicks)
+      .slice(0, 10)
+
     const analyticsResult = {
       totalSubmissions,
       cardTypeDistribution,
       avgCreditScore,
       avgIncome,
       recentSubmissions,
+      cardApplicationClicks: clickAnalytics.length,
+      topClickedCards,
     }
 
     console.log("📊 Analytics calculated:", analyticsResult)
@@ -428,3 +566,6 @@ export async function getSubmissionAnalytics(): Promise<{
     throw error
   }
 }
+
+// Export the new interface for use in components
+export type { CardApplicationClick }

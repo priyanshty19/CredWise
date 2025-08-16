@@ -29,7 +29,11 @@ import {
   RotateCcw,
 } from "lucide-react"
 import { getCardRecommendationsForForm } from "@/app/actions/card-recommendation"
-import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
+import {
+  submitEnhancedFormData,
+  trackCardApplicationClick,
+  type CardApplicationClick,
+} from "@/lib/google-sheets-submissions"
 
 interface CardRecommendation {
   name: string
@@ -85,6 +89,7 @@ export default function EnhancedPersonalization() {
   const [error, setError] = useState<string | null>(null)
   const [showFilters, setShowFilters] = useState(false)
   const [isPending, startTransition] = useTransition()
+  const [clickingCard, setClickingCard] = useState<string | null>(null)
 
   const handleInputChange = (field: string, value: string | string[]) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -120,6 +125,53 @@ export default function EnhancedPersonalization() {
     })
     setRecommendations([])
     setError(null)
+  }
+
+  // NEW: Handle card application click tracking
+  const handleCardApplicationClick = async (card: CardRecommendation) => {
+    setClickingCard(card.name)
+
+    try {
+      // Track the click in Google Sheets
+      const clickData: CardApplicationClick = {
+        timestamp: new Date().toISOString(),
+        cardName: card.name,
+        bankName: card.bank,
+        cardType: card.type,
+        joiningFee: card.joiningFee,
+        annualFee: card.annualFee,
+        rewardRate: card.rewardRate,
+        submissionType: "card_application_click",
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+        sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      }
+
+      console.log("🎯 Tracking card application click:", clickData)
+
+      // Track the click (don't wait for response to avoid blocking user)
+      trackCardApplicationClick(clickData).then((success) => {
+        if (success) {
+          console.log("✅ Card application click tracked successfully")
+        } else {
+          console.warn("⚠️ Failed to track card application click")
+        }
+      })
+
+      // Simulate redirect to bank's application page
+      // In a real implementation, you would redirect to the actual bank URL
+      console.log(`🔗 Redirecting to application page for ${card.name}`)
+
+      // For demo purposes, we'll just show an alert
+      alert(`Redirecting to ${card.bank} application page for ${card.name}...`)
+
+      // In production, you would do:
+      // window.open(card.applyUrl || `https://${card.bank.toLowerCase().replace(' ', '')}.com/apply`, '_blank')
+    } catch (error) {
+      console.error("❌ Error tracking card application click:", error)
+      // Still allow the user to proceed even if tracking fails
+    } finally {
+      setClickingCard(null)
+    }
   }
 
   const fetchRecommendations = async () => {
@@ -199,7 +251,7 @@ export default function EnhancedPersonalization() {
           <CardTitle className="flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Shield className="h-5 w-5 text-blue-600" />
-              Enhanced Personalization
+              Enhanced Personalization with Click Tracking
             </div>
             <div className="flex gap-2">
               <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
@@ -363,7 +415,7 @@ export default function EnhancedPersonalization() {
         </Alert>
       )}
 
-      {/* Recommendations Display */}
+      {/* Recommendations Display with Click Tracking */}
       {recommendations.length > 0 && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
@@ -465,10 +517,24 @@ export default function EnhancedPersonalization() {
                     <p className="text-blue-800 text-sm">{card.reasoning}</p>
                   </div>
 
-                  {/* Apply Button */}
-                  <Button className="w-full" size="lg">
-                    <ExternalLink className="h-4 w-4 mr-2" />
-                    Apply for {card.name}
+                  {/* Apply Button with Click Tracking */}
+                  <Button
+                    className="w-full"
+                    size="lg"
+                    onClick={() => handleCardApplicationClick(card)}
+                    disabled={clickingCard === card.name}
+                  >
+                    {clickingCard === card.name ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Tracking Click...
+                      </>
+                    ) : (
+                      <>
+                        <ExternalLink className="h-4 w-4 mr-2" />
+                        Apply for {card.name}
+                      </>
+                    )}
                   </Button>
                 </CardContent>
               </Card>

@@ -25,6 +25,7 @@ import {
   ExternalLink,
 } from "lucide-react"
 import { getCardRecommendationsForForm } from "@/app/actions/card-recommendation"
+import { trackCardApplicationClick, type CardApplicationClick } from "@/lib/google-sheets-submissions"
 
 interface CardRecommendation {
   name: string
@@ -85,6 +86,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
   const [userProfile, setUserProfile] = useState<any>(null)
   const [totalCards, setTotalCards] = useState(0)
   const [isPending, startTransition] = useTransition()
+  const [clickingCard, setClickingCard] = useState<string | null>(null)
 
   const fetchRecommendations = async () => {
     setIsLoading(true)
@@ -108,6 +110,53 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
         setIsLoading(false)
       }
     })
+  }
+
+  // NEW: Handle card application click tracking
+  const handleCardApplicationClick = async (card: CardRecommendation) => {
+    setClickingCard(card.name)
+
+    try {
+      // Track the click in Google Sheets
+      const clickData: CardApplicationClick = {
+        timestamp: new Date().toISOString(),
+        cardName: card.name,
+        bankName: card.bank,
+        cardType: card.type,
+        joiningFee: card.joiningFee,
+        annualFee: card.annualFee,
+        rewardRate: card.rewardRate,
+        submissionType: "card_application_click",
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
+        sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+      }
+
+      console.log("🎯 Tracking card application click:", clickData)
+
+      // Track the click (don't wait for response to avoid blocking user)
+      trackCardApplicationClick(clickData).then((success) => {
+        if (success) {
+          console.log("✅ Card application click tracked successfully")
+        } else {
+          console.warn("⚠️ Failed to track card application click")
+        }
+      })
+
+      // Simulate redirect to bank's application page
+      // In a real implementation, you would redirect to the actual bank URL
+      console.log(`🔗 Redirecting to application page for ${card.name}`)
+
+      // For demo purposes, we'll just show an alert
+      alert(`Redirecting to ${card.bank} application page for ${card.name}...`)
+
+      // In production, you would do:
+      // window.open(card.applyUrl || `https://${card.bank.toLowerCase().replace(' ', '')}.com/apply`, '_blank')
+    } catch (error) {
+      console.error("❌ Error tracking card application click:", error)
+      // Still allow the user to proceed even if tracking fails
+    } finally {
+      setClickingCard(null)
+    }
   }
 
   const formatCurrency = (amount: number) => {
@@ -333,11 +382,25 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
                     <p className="text-blue-800 text-sm">{card.reasoning}</p>
                   </div>
 
-                  {/* Apply Button */}
+                  {/* Apply Button with Click Tracking */}
                   <div className="pt-2">
-                    <Button className="w-full" size="lg">
-                      <ExternalLink className="h-4 w-4 mr-2" />
-                      Apply for {card.name}
+                    <Button
+                      className="w-full"
+                      size="lg"
+                      onClick={() => handleCardApplicationClick(card)}
+                      disabled={clickingCard === card.name}
+                    >
+                      {clickingCard === card.name ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Tracking Click...
+                        </>
+                      ) : (
+                        <>
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Apply for {card.name}
+                        </>
+                      )}
                     </Button>
                   </div>
                 </CardContent>
