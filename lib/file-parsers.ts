@@ -474,6 +474,21 @@ function findNumericValue(row: any, possibleNames: string[]): number {
   return isNaN(numValue) ? 0 : numValue
 }
 
+function isValidEntry(name: string, units: number, value: number): boolean {
+  // More strict validation to prevent invalid entries
+  return (
+    name &&
+    name.trim().length > 0 &&
+    name.toLowerCase() !== "total" &&
+    name.toLowerCase() !== "grand total" &&
+    !name.toLowerCase().includes("summary") &&
+    units > 0 &&
+    value > 0 &&
+    !isNaN(units) &&
+    !isNaN(value)
+  )
+}
+
 function parseZerodhaData(data: any[], fileName: string): ParsedPortfolioEntry[] {
   return data
     .map((row, index) => {
@@ -482,7 +497,7 @@ function parseZerodhaData(data: any[], fileName: string): ParsedPortfolioEntry[]
       const ltp = findNumericValue(row, ["ltp", "last_traded_price", "current_price", "market_price"])
       const name = findColumnValue(row, ["tradingsymbol", "trading_symbol", "symbol", "scrip", "instrument"])
 
-      if (quantity <= 0 || avgPrice <= 0 || !name) return null
+      if (!isValidEntry(name, quantity, avgPrice)) return null
 
       const invested = quantity * avgPrice
       const current = quantity * ltp
@@ -523,7 +538,7 @@ function parseGrowwData(data: any[], fileName: string): ParsedPortfolioEntry[] {
         const folioNo = findColumnValue(row, ["folio_no", "folio_number", "folio"])
         const source = findColumnValue(row, ["source"])
 
-        if (units <= 0 || investedValue <= 0 || !schemeName) return null
+        if (!isValidEntry(schemeName, units, investedValue)) return null
 
         const nav = currentValue > 0 && units > 0 ? currentValue / units : investedValue / units
 
@@ -550,7 +565,7 @@ function parseGrowwData(data: any[], fileName: string): ParsedPortfolioEntry[] {
         const closingValue = findNumericValue(row, ["closing_value", "closingvalue", "current_value"])
         const isin = findColumnValue(row, ["isin", "ISIN"])
 
-        if (quantity <= 0 || averageBuyPrice <= 0 || !stockName) return null
+        if (!isValidEntry(stockName, quantity, averageBuyPrice)) return null
 
         const invested = buyValue || quantity * averageBuyPrice
         const current = closingValue || quantity * closingPrice
@@ -584,7 +599,7 @@ function parseHDFCData(data: any[], fileName: string): ParsedPortfolioEntry[] {
       const marketValue = findNumericValue(row, ["market_value", "current_value"])
       const name = findColumnValue(row, ["scrip_name", "scrip", "symbol", "security_name"])
 
-      if (quantity <= 0 || rate <= 0 || !name) return null
+      if (!isValidEntry(name, quantity, rate)) return null
 
       const invested = quantity * rate
       const current = marketValue || invested
@@ -614,7 +629,7 @@ function parseAngelData(data: any[], fileName: string): ParsedPortfolioEntry[] {
       const ltp = findNumericValue(row, ["ltp", "last_price", "current_price", "market_price"])
       const name = findColumnValue(row, ["symbol", "scrip", "security_name"])
 
-      if (qty <= 0 || avgPrice <= 0 || !name) return null
+      if (!isValidEntry(name, qty, avgPrice)) return null
 
       const invested = qty * avgPrice
       const current = qty * ltp
@@ -644,7 +659,7 @@ function parseKuveraData(data: any[], fileName: string): ParsedPortfolioEntry[] 
       const value = findNumericValue(row, ["value", "current_value", "market_value"])
       const name = findColumnValue(row, ["scheme", "fund_name", "scheme_name"])
 
-      if (units <= 0 || nav <= 0 || !name) return null
+      if (!isValidEntry(name, units, nav)) return null
 
       const invested = units * nav
       const current = value || invested
@@ -676,7 +691,7 @@ function parseCoinData(data: any[], fileName: string): ParsedPortfolioEntry[] {
       const investedValue = findNumericValue(row, ["invested_value", "purchase_value"])
       const name = findColumnValue(row, ["fund_name", "scheme_name", "scheme"])
 
-      if (units <= 0 || nav <= 0 || !name) return null
+      if (!isValidEntry(name, units, nav)) return null
 
       const invested = investedValue || units * nav
       const current = currentValue || units * nav
@@ -731,7 +746,7 @@ function parseGenericData(data: any[], fileName: string): ParsedPortfolioEntry[]
       const units = findNumericValue(row, [unitsKey || "units"])
       const price = findNumericValue(row, [priceKey || "price"])
 
-      if (units <= 0 || price <= 0 || !name) return null
+      if (!isValidEntry(name, units, price)) return null
 
       const invested = units * price
       const current = invested
