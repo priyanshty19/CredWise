@@ -911,3 +911,5 @@ function getCreditScoreValue(range: string): number {
       return 700
   }
 }
+
+// At the very end of the file, add this explicit export to ensure it's available
