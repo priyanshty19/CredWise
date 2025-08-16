@@ -15,137 +15,196 @@ const SPREADSHEET_ID = "1rHR5xzCmZZAlIjahAcpXrxwgYMcItVPckTCiOCSZfSo" // Your Go
 const SHEET_NAME = "Form-Submissions" // Sheet tab name
 
 // Declare necessary variables
+const SpreadsheetApp = SpreadsheetApp
 const ContentService = SpreadsheetApp.newContentService()
 const Utilities = SpreadsheetApp.newUtilities()
 const HtmlService = SpreadsheetApp.newHtmlService()
-const SpreadsheetApp = SpreadsheetApp
 
 /**
  * Main function to handle POST requests
  */
 function doPost(e) {
   try {
-    console.log("📨 Received POST request")
+    console.log("📥 Received POST request:", e.postData.contents)
 
-    // Parse the request data
-    let data
-    try {
-      data = JSON.parse(e.postData.contents)
-      console.log("📋 Parsed data:", JSON.stringify(data, null, 2))
-    } catch (parseError) {
-      console.error("❌ Error parsing JSON:", parseError)
-      return ContentService.createTextOutput(
-        JSON.stringify({
-          success: false,
-          error: "Invalid JSON format",
-          details: parseError.toString(),
-        }),
-      ).setMimeType(ContentService.MimeType.JSON)
-    }
+    const requestData = JSON.parse(e.postData.contents)
+    const action = requestData.action
+    const data = requestData.data
 
-    // Validate required fields
-    if (!data.timestamp || !data.submissionType) {
-      console.error("❌ Missing required fields")
-      return ContentService.createTextOutput(
-        JSON.stringify({
-          success: false,
-          error: "Missing required fields: timestamp and submissionType",
-        }),
-      ).setMimeType(ContentService.MimeType.JSON)
-    }
+    console.log("🎯 Action:", action)
+    console.log("📊 Data:", data)
 
-    // Get or create the spreadsheet and sheet
-    const result = setupSheetIfNeeded()
-    if (!result.success) {
-      console.error("❌ Sheet setup failed:", result.error)
-      return ContentService.createTextOutput(
-        JSON.stringify({
-          success: false,
-          error: "Sheet setup failed: " + result.error,
-        }),
-      ).setMimeType(ContentService.MimeType.JSON)
-    }
+    let result
 
-    const sheet = result.sheet
-
-    // Prepare row data for 18-column structure
-    const rowData = new Array(18).fill("") // Initialize with empty strings
-
-    // Fill in the data based on column mapping
-    rowData[0] = data.timestamp || ""
-    rowData[1] = data.monthlyIncome || ""
-    rowData[2] = data.monthlySpending || ""
-    rowData[3] = data.creditScoreRange || ""
-    rowData[4] = data.currentCards || ""
-    rowData[5] = data.spendingCategories || ""
-    rowData[6] = data.preferredBanks || ""
-    rowData[7] = data.joiningFeePreference || ""
-    rowData[8] = data.submissionType || ""
-    rowData[9] = data.userAgent || ""
-    rowData[10] = data.cardName || ""
-    rowData[11] = data.bankName || ""
-    rowData[12] = data.cardType || ""
-    rowData[13] = data.joiningFee || ""
-    rowData[14] = data.annualFee || ""
-    rowData[15] = data.rewardRate || ""
-    rowData[16] = data.sessionId || ""
-    rowData[17] = data.additionalData || ""
-
-    console.log("📝 Prepared row data:", rowData)
-
-    // Add the row to the sheet with retry logic
-    let success = false
-    let lastError = null
-
-    for (let attempt = 1; attempt <= 3; attempt++) {
-      try {
-        console.log(`📤 Attempt ${attempt} to append row`)
-        sheet.appendRow(rowData)
-        console.log("✅ Row appended successfully")
-        success = true
+    switch (action) {
+      case "submitEnhancedForm":
+        result = handleEnhancedFormSubmission(data)
         break
-      } catch (error) {
-        console.error(`❌ Attempt ${attempt} failed:`, error)
-        lastError = error
-        if (attempt < 3) {
-          Utilities.sleep(1000) // Wait 1 second before retry
-        }
-      }
+      case "trackCardClick":
+        result = handleCardClickTracking(data)
+        break
+      default:
+        throw new Error(`Unknown action: ${action}`)
     }
 
-    if (!success) {
-      console.error("❌ All append attempts failed")
-      return ContentService.createTextOutput(
-        JSON.stringify({
-          success: false,
-          error: "Failed to append data after 3 attempts",
-          details: lastError ? lastError.toString() : "Unknown error",
-        }),
-      ).setMimeType(ContentService.MimeType.JSON)
-    }
-
-    // Return success response
-    const response = {
-      success: true,
-      message: "Data submitted successfully",
-      timestamp: new Date().toISOString(),
-      submissionType: data.submissionType,
-      rowsInSheet: sheet.getLastRow(),
-    }
-
-    console.log("✅ Success response:", response)
-
-    return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON)
+    return ContentService.createTextOutput(JSON.stringify({ success: true, result: result })).setMimeType(
+      ContentService.MimeType.JSON,
+    )
   } catch (error) {
-    console.error("❌ Unexpected error in doPost:", error)
+    console.error("❌ Error in doPost:", error)
     return ContentService.createTextOutput(
       JSON.stringify({
         success: false,
-        error: "Unexpected server error",
-        details: error.toString(),
-        stack: error.stack,
+        error: error.toString(),
+        timestamp: new Date().toISOString(),
       }),
     ).setMimeType(ContentService.MimeType.JSON)
+  }
+}
+
+function handleEnhancedFormSubmission(data) {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+    let sheet = spreadsheet.getSheetByName("Enhanced-Form-Submissions")
+
+    // Create sheet if it doesn't exist
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet("Enhanced-Form-Submissions")
+
+      // Set up headers
+      const headers = [
+        "Timestamp",
+        "Monthly Income",
+        "Monthly Spending",
+        "Credit Score Range",
+        "Current Cards",
+        "Spending Categories",
+        "Preferred Banks",
+        "Joining Fee Preference",
+        "Submission Type",
+        "User Agent",
+        "Session ID",
+        "IP Address",
+        "Referrer",
+        "Device Type",
+        "Browser",
+        "OS",
+        "Screen Resolution",
+        "Additional Data",
+      ]
+
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold")
+      sheet.setFrozenRows(1)
+    }
+
+    // Prepare row data
+    const rowData = [
+      data.timestamp || new Date().toISOString(),
+      data.monthlyIncome || "",
+      data.monthlySpending || "",
+      data.creditScoreRange || "",
+      data.currentCards || "",
+      data.spendingCategories || "",
+      data.preferredBanks || "",
+      data.joiningFeePreference || "",
+      data.submissionType || "enhanced_form",
+      data.userAgent || "",
+      `session_${Date.now()}`,
+      "", // IP Address (not available in Apps Script)
+      "", // Referrer
+      "", // Device Type
+      "", // Browser
+      "", // OS
+      "", // Screen Resolution
+      JSON.stringify(data), // Additional Data
+    ]
+
+    // Add the row
+    sheet.appendRow(rowData)
+
+    console.log("✅ Enhanced form submission recorded")
+    return {
+      success: true,
+      message: "Enhanced form submission recorded successfully",
+      rowsAdded: 1,
+    }
+  } catch (error) {
+    console.error("❌ Error handling enhanced form submission:", error)
+    throw error
+  }
+}
+
+function handleCardClickTracking(data) {
+  try {
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+    let sheet = spreadsheet.getSheetByName("Card-Click-Tracking")
+
+    // Create sheet if it doesn't exist
+    if (!sheet) {
+      sheet = spreadsheet.insertSheet("Card-Click-Tracking")
+
+      // Set up headers
+      const headers = [
+        "Timestamp",
+        "Card Name",
+        "Bank Name",
+        "Card Type",
+        "Joining Fee",
+        "Annual Fee",
+        "Reward Rate",
+        "Submission Type",
+        "User Agent",
+        "Session ID",
+        "IP Address",
+        "Referrer",
+        "Device Type",
+        "Browser",
+        "OS",
+        "Screen Resolution",
+        "Click Source",
+        "Additional Data",
+      ]
+
+      sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+      sheet.getRange(1, 1, 1, headers.length).setFontWeight("bold")
+      sheet.setFrozenRows(1)
+    }
+
+    // Prepare row data
+    const rowData = [
+      data.timestamp || new Date().toISOString(),
+      data.cardName || "",
+      data.bankName || "",
+      data.cardType || "",
+      data.joiningFee || 0,
+      data.annualFee || 0,
+      data.rewardRate || "",
+      data.submissionType || "card_application_click",
+      data.userAgent || "",
+      data.sessionId || `session_${Date.now()}`,
+      "", // IP Address
+      "", // Referrer
+      "", // Device Type
+      "", // Browser
+      "", // OS
+      "", // Screen Resolution
+      "recommendation_page", // Click Source
+      JSON.stringify(data), // Additional Data
+    ]
+
+    // Add the row
+    sheet.appendRow(rowData)
+
+    console.log("✅ Card click tracking recorded")
+    return {
+      success: true,
+      message: "Card click tracking recorded successfully",
+      rowsAdded: 1,
+    }
+  } catch (error) {
+    console.error("❌ Error handling card click tracking:", error)
+    throw error
   }
 }
 
@@ -199,116 +258,146 @@ function setupSheetIfNeeded() {
 }
 
 /**
- * Set up the complete 18-column structure
+ * Set up the complete column structure
  * Run this function once manually to initialize the sheet
  */
 function setupCompleteColumnStructure() {
   try {
-    console.log("🚀 Setting up complete 18-column structure...")
+    console.log("🔧 Setting up complete column structure...")
 
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID)
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
 
-    // Set up Form-Submissions sheet
-    let formSheet = spreadsheet.getSheetByName(SHEET_NAME)
-    if (!formSheet) {
-      formSheet = spreadsheet.insertSheet(SHEET_NAME)
+    // Setup Enhanced Form Submissions sheet
+    let enhancedSheet = spreadsheet.getSheetByName("Enhanced-Form-Submissions")
+    if (!enhancedSheet) {
+      enhancedSheet = spreadsheet.insertSheet("Enhanced-Form-Submissions")
     }
 
-    // Clear existing content and set up headers
-    formSheet.clear()
-    setupFormSubmissionsHeaders(formSheet)
+    const enhancedHeaders = [
+      "Timestamp",
+      "Monthly Income",
+      "Monthly Spending",
+      "Credit Score Range",
+      "Current Cards",
+      "Spending Categories",
+      "Preferred Banks",
+      "Joining Fee Preference",
+      "Submission Type",
+      "User Agent",
+      "Session ID",
+      "IP Address",
+      "Referrer",
+      "Device Type",
+      "Browser",
+      "OS",
+      "Screen Resolution",
+      "Additional Data",
+    ]
 
-    console.log("✅ Complete column structure set up successfully!")
-    console.log("📋 Sheet structure:")
-    console.log("   - Form-Submissions: 18 columns (A-R)")
-    console.log("   - Supports both form submissions and card clicks")
-    console.log("   - Ready for refined scoring algorithm data")
+    enhancedSheet.clear()
+    enhancedSheet.getRange(1, 1, 1, enhancedHeaders.length).setValues([enhancedHeaders])
+    enhancedSheet.getRange(1, 1, 1, enhancedHeaders.length).setFontWeight("bold")
+    enhancedSheet.setFrozenRows(1)
 
+    // Setup Card Click Tracking sheet
+    let clickSheet = spreadsheet.getSheetByName("Card-Click-Tracking")
+    if (!clickSheet) {
+      clickSheet = spreadsheet.insertSheet("Card-Click-Tracking")
+    }
+
+    const clickHeaders = [
+      "Timestamp",
+      "Card Name",
+      "Bank Name",
+      "Card Type",
+      "Joining Fee",
+      "Annual Fee",
+      "Reward Rate",
+      "Submission Type",
+      "User Agent",
+      "Session ID",
+      "IP Address",
+      "Referrer",
+      "Device Type",
+      "Browser",
+      "OS",
+      "Screen Resolution",
+      "Click Source",
+      "Additional Data",
+    ]
+
+    clickSheet.clear()
+    clickSheet.getRange(1, 1, 1, clickHeaders.length).setValues([clickHeaders])
+    clickSheet.getRange(1, 1, 1, clickHeaders.length).setFontWeight("bold")
+    clickSheet.setFrozenRows(1)
+
+    console.log("✅ Complete column structure setup completed")
     return {
       success: true,
-      message: "Complete column structure set up successfully",
-      sheetsCreated: [SHEET_NAME],
-      columnsSetup: 18,
+      message: "Complete column structure setup completed",
+      enhancedSheetColumns: enhancedHeaders.length,
+      clickSheetColumns: clickHeaders.length,
     }
   } catch (error) {
     console.error("❌ Error setting up column structure:", error)
-    return {
-      success: false,
-      error: "Failed to set up column structure: " + error.message,
-    }
+    throw error
   }
-}
-
-/**
- * Set up headers for the Form-Submissions sheet (18 columns)
- */
-function setupFormSubmissionsHeaders(sheet) {
-  const headers = [
-    "Timestamp", // A
-    "Monthly Income", // B
-    "Monthly Spending", // C
-    "Credit Score Range", // D
-    "Current Cards", // E
-    "Spending Categories", // F
-    "Preferred Banks", // G
-    "Joining Fee Preference", // H
-    "Submission Type", // I
-    "User Agent", // J
-    "Card Name", // K
-    "Bank Name", // L
-    "Card Type", // M
-    "Joining Fee", // N
-    "Annual Fee", // O
-    "Reward Rate", // P
-    "Session ID", // Q
-    "Additional Data", // R
-  ]
-
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers])
-
-  // Format headers
-  const headerRange = sheet.getRange(1, 1, 1, headers.length)
-  headerRange.setFontWeight("bold")
-  headerRange.setBackground("#4285f4")
-  headerRange.setFontColor("white")
-
-  // Auto-resize columns
-  sheet.autoResizeColumns(1, headers.length)
-
-  console.log("✅ Form-Submissions headers set up with 18 columns")
 }
 
 /**
  * Test function to verify the script works
  */
 function testScriptDirectly() {
-  console.log("🧪 Testing script directly")
+  try {
+    console.log("🧪 Testing script directly...")
 
-  const testData = {
-    timestamp: new Date().toISOString(),
-    monthlyIncome: 100000,
-    monthlySpending: 25000,
-    creditScoreRange: "750-850",
-    currentCards: "3",
-    spendingCategories: "dining, shopping, fuel",
-    preferredBanks: "SBI, HDFC Bank",
-    joiningFeePreference: "any_amount",
-    submissionType: "direct_test",
-    userAgent: "Test Agent",
-    sessionId: "test_session_" + Date.now(),
-    additionalData: JSON.stringify({ testRun: true }),
+    // Test enhanced form submission
+    const testFormData = {
+      timestamp: new Date().toISOString(),
+      monthlyIncome: 100000,
+      monthlySpending: 25000,
+      creditScoreRange: "750-850",
+      currentCards: "2",
+      spendingCategories: "dining, fuel, grocery",
+      preferredBanks: "SBI, HDFC Bank",
+      joiningFeePreference: "any_amount",
+      submissionType: "test_enhanced_form",
+      userAgent: "Test User Agent",
+    }
+
+    const formResult = handleEnhancedFormSubmission(testFormData)
+    console.log("📝 Form submission test result:", formResult)
+
+    // Test card click tracking
+    const testClickData = {
+      timestamp: new Date().toISOString(),
+      cardName: "SBI Card CashBack",
+      bankName: "SBI",
+      cardType: "Cashback",
+      joiningFee: 500,
+      annualFee: 999,
+      rewardRate: "5.0%",
+      submissionType: "test_card_click",
+      userAgent: "Test User Agent",
+      sessionId: "test_session_123",
+    }
+
+    const clickResult = handleCardClickTracking(testClickData)
+    console.log("🎯 Click tracking test result:", clickResult)
+
+    return {
+      success: true,
+      message: "Direct script test completed successfully",
+      formTest: formResult,
+      clickTest: clickResult,
+    }
+  } catch (error) {
+    console.error("❌ Error in direct script test:", error)
+    return {
+      success: false,
+      error: error.toString(),
+    }
   }
-
-  const mockEvent = {
-    postData: {
-      contents: JSON.stringify(testData),
-    },
-  }
-
-  const result = doPost(mockEvent)
-  console.log("🧪 Test result:", result.getContent())
-
-  return JSON.parse(result.getContent())
 }
 
 /**
@@ -355,40 +444,39 @@ function testCardClickTracking() {
  */
 function checkSheetStructure() {
   try {
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID)
-    const sheet = spreadsheet.getSheetByName(SHEET_NAME)
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+    const sheets = spreadsheet.getSheets()
 
-    if (!sheet) {
-      console.log("❌ Sheet does not exist")
-      return { exists: false }
-    }
+    const sheetInfo = sheets.map((sheet) => {
+      const name = sheet.getName()
+      const lastRow = sheet.getLastRow()
+      const lastColumn = sheet.getLastColumn()
 
-    const lastRow = sheet.getLastRow()
-    const lastCol = sheet.getLastColumn()
-
-    console.log("📊 Sheet structure:")
-    console.log("- Rows:", lastRow)
-    console.log("- Columns:", lastCol)
-
-    if (lastRow > 0) {
-      const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
-      console.log("- Headers:", headers)
-
-      if (lastRow > 1) {
-        const sampleData = sheet.getRange(2, 1, Math.min(3, lastRow - 1), lastCol).getValues()
-        console.log("- Sample data:", sampleData)
+      let headers = []
+      if (lastRow > 0 && lastColumn > 0) {
+        headers = sheet.getRange(1, 1, 1, lastColumn).getValues()[0]
       }
-    }
 
+      return {
+        name: name,
+        rows: lastRow,
+        columns: lastColumn,
+        headers: headers,
+      }
+    })
+
+    console.log("📊 Sheet structure:", sheetInfo)
     return {
-      exists: true,
-      rows: lastRow,
-      columns: lastCol,
-      headers: lastRow > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [],
+      success: true,
+      sheets: sheetInfo,
+      totalSheets: sheets.length,
     }
   } catch (error) {
     console.error("❌ Error checking sheet structure:", error)
-    return { error: error.toString() }
+    return {
+      success: false,
+      error: error.toString(),
+    }
   }
 }
 
@@ -430,12 +518,18 @@ function clearAllData() {
   try {
     console.log("🧹 Clearing all data...")
 
-    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID)
-    const formSheet = spreadsheet.getSheetByName(SHEET_NAME)
+    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+    const formSheet = spreadsheet.getSheetByName("Enhanced-Form-Submissions")
+    const clickSheet = spreadsheet.getSheetByName("Card-Click-Tracking")
 
     if (formSheet && formSheet.getLastRow() > 1) {
       formSheet.getRange(2, 1, formSheet.getLastRow() - 1, formSheet.getLastColumn()).clear()
-      console.log("✅ Form-Submissions data cleared")
+      console.log("✅ Enhanced-Form-Submissions data cleared")
+    }
+
+    if (clickSheet && clickSheet.getLastRow() > 1) {
+      clickSheet.getRange(2, 1, clickSheet.getLastRow() - 1, clickSheet.getLastColumn()).clear()
+      console.log("✅ Card-Click-Tracking data cleared")
     }
 
     return {

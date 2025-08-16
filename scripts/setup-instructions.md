@@ -1,148 +1,100 @@
-# CredWise Card Page - Complete Setup Instructions
+# CredWise Enhanced Personalization Setup Instructions
 
 ## 🚀 Quick Setup Guide
 
-### 1. Environment Variables Setup
-Add these environment variables to your project:
+### Step 1: Update Apps Script URL
+Add your Google Apps Script URL to your environment variables:
 
-\`\`\`env
-NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY=your_google_sheets_api_key
-NEXT_PUBLIC_APPS_SCRIPT_URL=https://script.google.com/macros/s/AKfycbxICw4o9GbH59pQYDTmY_d9R0XdNGGuoOejbFRmGtdfqayd8Q6EpRArs6XigY3QjKa5/exec
+\`\`\`bash
+NEXT_PUBLIC_APPS_SCRIPT_URL=https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec
 \`\`\`
 
-### 2. Google Apps Script Setup
+### Step 2: Set Up Google Sheets Structure
+1. Open your Google Apps Script editor
+2. Run the `setupCompleteColumnStructure()` function
+3. This will create two sheets with proper headers:
+   - **Enhanced-Form-Submissions** (18 columns)
+   - **Card-Click-Tracking** (18 columns)
 
-1. **Create New Apps Script Project**
-   - Go to [Google Apps Script](https://script.google.com)
-   - Click "New Project"
-   - Replace default code with `scripts/enhanced-google-apps-script.js`
+### Step 3: Test the Setup
+1. Run `testScriptDirectly()` in Apps Script to verify functionality
+2. Check that both sheets are created with sample data
+3. Verify the console logs show successful operations
 
-2. **Configure Spreadsheet ID**
-   - Update `SPREADSHEET_ID` in the script with your Google Sheet ID
-   - Current ID: `1rHR5xzCmZZAlIjahAcpXrxwgYMcItVPckTCiOCSZfSo`
+### Step 4: Test the Form
+1. Fill out the enhanced personalization form with:
+   - **Monthly Income**: 100000
+   - **Monthly Spending**: 25000
+   - **Credit Score**: Excellent (750-850)
+   - **Spending Categories**: Select dining, fuel, grocery
+   - **Preferred Banks**: Select SBI
+   - **Joining Fee**: Any Amount
 
-3. **Run Setup Function**
-   - In Apps Script editor, run `setupCompleteColumnStructure()`
-   - This creates the 18-column structure needed for the refined algorithm
+2. Submit the form and check:
+   - Form submission is logged in Google Sheets
+   - Recommendations appear (should include SBI cards)
+   - Click "Show Tester" to see detailed analysis
 
-4. **Deploy as Web App**
-   - Click "Deploy" → "New Deployment"
-   - Type: Web app
-   - Execute as: Me
-   - Who has access: Anyone
-   - Copy the deployment URL
+### Step 5: Use the Card Tester
+1. After getting recommendations, click "Show Tester"
+2. The tester now includes **ALL 18 cards** in the dropdown
+3. Select any card (especially SBI cards) to see:
+   - **Basic Eligibility Check** (Credit Score, Income, Card Type)
+   - **Refined Scoring Breakdown** (6 categories with detailed scores)
+   - **Category Matching Analysis** (Your categories vs Card categories)
+   - **Final Verdict** (Eligible/Not Eligible with reasoning)
 
-### 3. Google Sheets Structure
+## 🎯 Enhanced Features
 
-The system uses an 18-column structure to capture:
+### Refined Scoring Algorithm (105 points total):
+- **🎁 Rewards Rate (30 points)**: Higher reward rates get more points
+- **🛍️ Category Match (30 points)**: Cards matching your spending categories
+- **🎉 Sign-up Bonus (20 points)**: Higher bonuses get more points
+- **💳 Joining Fee (10 points)**: Lower fees get more points
+- **📅 Annual Fee (10 points)**: Lower fees get more points
+- **🏦 Bank Bonus (5 points)**: Extra points for preferred banks
 
-| Column | Field | Description |
-|--------|-------|-------------|
-| A | Timestamp | When the submission occurred |
-| B | Monthly Income | User's monthly income |
-| C | Monthly Spending | User's monthly spending |
-| D | Credit Score Range | User's credit score range |
-| E | Current Cards | Number of current credit cards |
-| F | Spending Categories | Selected spending categories |
-| G | Preferred Banks | User's preferred banks |
-| H | Joining Fee Preference | Fee preference selection |
-| I | Submission Type | Type of submission (form/click) |
-| J | User Agent | Browser/device information |
-| K | Card Name | Name of clicked card (for clicks) |
-| L | Bank Name | Bank of clicked card (for clicks) |
-| M | Card Type | Type of clicked card (for clicks) |
-| N | Joining Fee | Joining fee of clicked card |
-| O | Annual Fee | Annual fee of clicked card |
-| P | Reward Rate | Reward rate of clicked card |
-| Q | Session ID | Unique session identifier |
-| R | Additional Data | JSON data for extra information |
+### Card Database (18 Cards Total):
+- **SBI Cards**: 4 cards (CashBack, SimplyCLICK, PRIME, ELITE)
+- **HDFC Bank**: 3 cards (Millennia, Regalia, Infinia)
+- **ICICI Bank**: 2 cards (Amazon Pay, Platinum)
+- **Axis Bank**: 2 cards (ACE, Magnus)
+- **American Express**: 2 cards (Gold, Platinum)
+- **Other Banks**: 5 cards (Kotak, YES Bank, IndusInd, Standard Chartered, Citibank)
 
-### 4. Refined Scoring Algorithm
+### Eligibility Tester Features:
+- **All Cards Available**: Test any of the 18 cards in the database
+- **SBI Cards Overview**: Quick view of all SBI cards and their eligibility
+- **Detailed Analysis**: See exactly why cards pass or fail
+- **Score Breakdown**: Understand how each card scores in all 6 categories
+- **Category Matching**: Visual representation of spending category matches
 
-The new algorithm uses these weights:
+## 🔧 Troubleshooting
 
-- **🎁 Rewards Rate: 30 points** (highest priority)
-- **🛍️ Category Match: 30 points** (highest priority)
-- **🎉 Sign-up Bonus: 20 points**
-- **💳 Joining Fee: 10 points**
-- **📅 Annual Fee: 10 points**
-- **🏦 Bank Bonus: +5 points** (for preferred banks)
+### If form submission fails:
+1. Check that `NEXT_PUBLIC_APPS_SCRIPT_URL` is set correctly
+2. Verify the Apps Script is deployed as a web app
+3. Ensure the script has proper permissions
+4. Run `testScriptDirectly()` to test the backend
 
-### 5. Testing & Debugging
+### If cards don't appear in recommendations:
+1. Check the eligibility criteria (credit score, income)
+2. Verify the scoring algorithm (minimum 25.0 points required)
+3. Use the card tester to see detailed analysis
+4. Check console logs for debugging information
 
-#### Test Apps Script Connection
-1. In Apps Script editor, run `testScriptDirectly()`
-2. Check execution logs for success/error messages
-3. Verify data appears in Google Sheet
+### If SBI Cashback doesn't appear:
+1. Ensure you select "SBI" in preferred banks
+2. Check that your income ≥ ₹25,000
+3. Verify credit score ≥ 650
+4. Use the tester to see the exact score breakdown
 
-#### Test Card Click Tracking
-1. Run `testCardClickTracking()` in Apps Script
-2. Verify click data is logged correctly
-3. Check both form submissions and card clicks work
+## 📊 Data Tracking
 
-#### Use Built-in Card Tester
-1. Fill out the form and get recommendations
-2. Click "Show Tester" button
-3. Select any card to see detailed analysis:
-   - Basic eligibility check
-   - Refined scoring breakdown
-   - Category matching analysis
-   - Final verdict with reasoning
+The system tracks:
+- **Form Submissions**: All user inputs and preferences
+- **Card Clicks**: Which cards users click to apply
+- **User Analytics**: Browser, device, and session information
+- **Scoring Data**: How each card scores for each user
 
-### 6. Troubleshooting
-
-#### Common Issues:
-
-**"Load failed" Error:**
-- Check Apps Script URL is correct in environment variables
-- Verify Apps Script is deployed with "Anyone" access
-- Test Apps Script directly using `testScriptDirectly()`
-
-**SBI Cashback Not Appearing:**
-- Use the Card Tester to see detailed analysis
-- Check if card passes basic eligibility (credit score, income)
-- Verify scoring meets 25.0 threshold
-- Check category matching for your spending patterns
-
-**Google Sheets Not Updating:**
-- Run `checkSheetStructure()` in Apps Script
-- Verify spreadsheet ID is correct
-- Check sheet permissions are set to "Editor"
-- Test with `testScriptDirectly()` function
-
-### 7. Features Overview
-
-#### Enhanced Personalization Form
-- Captures detailed financial profile
-- Multiple spending categories selection
-- Bank preferences with bonus scoring
-- Joining fee preferences
-
-#### Refined Scoring Algorithm
-- Prioritizes rewards rate and category matching
-- Normalizes scores across all factors
-- Includes bank preference bonus
-- Filters cards with score ≥ 25.0
-
-#### Comprehensive Card Tester
-- Real-time eligibility analysis
-- Detailed scoring breakdown
-- Category matching visualization
-- SBI cards quick overview
-- Pass/fail reasoning
-
-#### Google Sheets Integration
-- 18-column comprehensive logging
-- Both form submissions and card clicks
-- Session tracking and analytics
-- Error handling and retry logic
-
-### 8. Next Steps
-
-1. **Update Apps Script URL** in your environment variables
-2. **Run setupCompleteColumnStructure()** in Google Apps Script
-3. **Test the form** with SBI preference and high spending categories
-4. **Use Card Tester** to debug why specific cards appear/don't appear
-5. **Monitor Google Sheets** for data capture verification
-
-The system is now ready with the refined scoring algorithm that prioritizes rewards rate and category matching, ensuring high-cashback cards like SBI Cashback rank appropriately when they match user spending patterns.
+All data is stored in Google Sheets with timestamps and can be analyzed for insights.
