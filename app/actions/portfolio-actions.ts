@@ -51,6 +51,8 @@ export async function parsePortfolioFiles(formData: FormData) {
       count: number
       success: boolean
       error?: string
+      detectedTableRange?: string
+      sheetName?: string
     }> = []
 
     for (const file of files) {
@@ -82,9 +84,11 @@ export async function parsePortfolioFiles(formData: FormData) {
             broker: result.broker,
             count: result.totalParsed,
             success: true,
+            detectedTableRange: result.detectedTableRange,
+            sheetName: result.sheetName,
           })
         } else {
-          const errorMessage = result.errors.length > 0 ? result.errors.join(", ") : "Unknown parsing error"
+          const errorMessage = result.errors.length > 0 ? result.errors.join(" ") : "Unknown parsing error"
           errors.push(`${file.name}: ${errorMessage}`)
           processingResults.push({
             fileName: file.name,

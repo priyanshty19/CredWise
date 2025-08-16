@@ -70,6 +70,12 @@ export default function PortfolioDashboard({ portfolioEntries, summary }: Portfo
 
   return (
     <div className="space-y-6">
+      {/* Real Data Confirmation */}
+      <div className="text-xs text-green-700 bg-green-50 p-3 rounded border border-green-200">
+        ✅ <strong>Real Data Analysis:</strong> Showing analysis of {portfolioEntries.length} actual investments from
+        your uploaded files and manual entries
+      </div>
+
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
