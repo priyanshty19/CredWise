@@ -20,75 +20,10 @@ interface UserSubmission {
   timestamp: string
 }
 
-export interface CardData {
-  cardName: string
-  bank: string
-  cardType: string
-  annualFee: number
-  joiningFee: number
-  rewardRate: string
-  welcomeBonus: string
-  minIncome: number
-  maxIncome: number
-  spendingCategories: string[]
-  keyFeatures: string[]
-  bestFor: string[]
-  rating: number
-  status: string
-}
-
-export class GoogleSheetsAPI {
-  private apiKey: string
-  private sheetId: string
-
-  constructor() {
-    this.apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY || ""
-    this.sheetId = process.env.NEXT_PUBLIC_SHEET_ID || ""
-  }
-
-  async getCardData(): Promise<CardData[]> {
-    if (!this.apiKey || !this.sheetId) {
-      throw new Error("Missing Google Sheets API key or Sheet ID")
-    }
-
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${this.sheetId}/values/Sheet1!A1:O1000?key=${this.apiKey}`
-
-    const response = await fetch(url)
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
-    }
-
-    const data = await response.json()
-
-    if (!data.values || data.values.length < 2) {
-      return []
-    }
-
-    // Skip header row and parse data
-    const rows = data.values.slice(1)
-
-    return rows
-      .filter((row: string[]) => row[0] && row[13] === "Active") // Filter active cards
-      .map(
-        (row: string[]): CardData => ({
-          cardName: row[0] || "",
-          bank: row[1] || "",
-          cardType: row[2] || "",
-          annualFee: Number.parseInt(row[3]) || 0,
-          joiningFee: Number.parseInt(row[4]) || 0,
-          rewardRate: row[5] || "",
-          welcomeBonus: row[6] || "",
-          minIncome: Number.parseInt(row[7]) || 0,
-          maxIncome: Number.parseInt(row[8]) || 0,
-          spendingCategories: row[9] ? row[9].split(",").map((s) => s.trim()) : [],
-          keyFeatures: row[10] ? row[10].split(",").map((s) => s.trim()) : [],
-          bestFor: row[11] ? row[11].split(",").map((s) => s.trim()) : [],
-          rating: Number.parseFloat(row[12]) || 0,
-          status: row[13] || "",
-        }),
-      )
-  }
+interface SheetData {
+  range: string
+  majorDimension: string
+  values: string[][]
 }
 
 // Google Sheets configuration - Updated for public access
@@ -105,67 +40,9 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
       )
     }
 
-    // Construct the URL for public sheet access - no authentication headers needed
-    const baseUrl = "https://sheets.googleapis.com/v4/spreadsheets"
-    const url = `${baseUrl}/${SHEET_ID}/values/${encodeURIComponent(CARDS_RANGE)}?key=${API_KEY}&majorDimension=ROWS&valueRenderOption=UNFORMATTED_VALUE`
+    const sheetData = await fetchGoogleSheetData(SHEET_ID, CARDS_RANGE)
 
-    console.log("🔗 Fetching from public Google Sheet...")
-    console.log("📋 Sheet ID:", SHEET_ID)
-    console.log("📊 Range:", CARDS_RANGE)
-    console.log("🔑 Using API Key:", API_KEY ? "✅ Configured" : "❌ Missing")
-
-    // Fetch with minimal headers for public access
-    const response = await fetch(url, {
-      method: "GET",
-      headers: {
-        Accept: "application/json",
-        "Content-Type": "application/json",
-      },
-      // Remove any authentication or session-related options
-      cache: "no-store", // Ensure fresh data for all users
-    })
-
-    console.log("📡 Response status:", response.status)
-    console.log("📡 Response headers:", Object.fromEntries(response.headers.entries()))
-
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error("❌ API Error Response:", errorText)
-
-      // Enhanced error handling for public access issues
-      if (response.status === 400) {
-        throw new Error(
-          `Bad request (400): Please verify:\n` +
-            `1. Sheet ID is correct: ${SHEET_ID}\n` +
-            `2. Tab name 'Card-Data' exists\n` +
-            `3. Range 'A:K' is valid\n` +
-            `4. Sheet is publicly accessible`,
-        )
-      } else if (response.status === 403) {
-        throw new Error(
-          `Access forbidden (403): Please ensure:\n` +
-            `1. Google Sheets API is enabled in Google Cloud Console\n` +
-            `2. API key is valid and not restricted\n` +
-            `3. Sheet sharing is set to "Anyone with the link can view"\n` +
-            `4. No IP or referrer restrictions on the API key`,
-        )
-      } else if (response.status === 404) {
-        throw new Error(
-          `Sheet not found (404): Please check:\n` +
-            `1. Sheet ID: ${SHEET_ID}\n` +
-            `2. Tab name: 'Card-Data'\n` +
-            `3. Sheet exists and is not deleted`,
-        )
-      } else {
-        throw new Error(`Google Sheets API error: ${response.status} - ${errorText}`)
-      }
-    }
-
-    const data = await response.json()
-    console.log("✅ API Response received successfully")
-    console.log("📊 Total rows received:", data.values?.length || 0)
-
-    if (!data.values || data.values.length === 0) {
+    if (!sheetData || !sheetData.values || sheetData.values.length === 0) {
       throw new Error(
         "No data found in Google Sheet. Please ensure:\n" +
           "1. The 'Card-Data' tab contains data\n" +
@@ -174,8 +51,7 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
       )
     }
 
-    // Skip header row and parse data
-    const [headers, ...rows] = data.values
+    const [headers, ...rows] = sheetData.values
     console.log("📋 Headers found:", headers)
     console.log("📊 Data rows to process:", rows.length)
 
@@ -335,6 +211,32 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
   }
 }
 
+export async function fetchGoogleSheetData(sheetId: string, range: string): Promise<SheetData | null> {
+  try {
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
+
+    if (!apiKey) {
+      throw new Error("Google Sheets API key not found")
+    }
+
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?key=${apiKey}`
+
+    const response = await fetch(url, {
+      next: { revalidate: 300 }, // Cache for 5 minutes
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const data: SheetData = await response.json()
+    return data
+  } catch (error) {
+    console.error("Error fetching Google Sheets data:", error)
+    return null
+  }
+}
+
 // Enhanced helper function to normalize card types from sheet to match dropdown options
 function normalizeCardType(sheetCardType: string): string | null {
   const normalized = sheetCardType.toLowerCase().trim()
@@ -401,6 +303,34 @@ export async function submitUserData(submission: UserSubmission): Promise<boolea
     return true
   } catch (error) {
     console.error("❌ Error submitting user data:", error)
+    return false
+  }
+}
+
+export async function submitToGoogleSheets(data: any): Promise<boolean> {
+  try {
+    const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL
+
+    if (!appsScriptUrl) {
+      throw new Error("Apps Script URL not configured")
+    }
+
+    const response = await fetch(appsScriptUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result = await response.json()
+    return result.success === true
+  } catch (error) {
+    console.error("Error submitting to Google Sheets:", error)
     return false
   }
 }

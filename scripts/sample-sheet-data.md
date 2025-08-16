@@ -1,56 +1,46 @@
-# Sample Google Sheets Data
+# Sample Google Sheets Data Structure
 
-Copy this data into your Google Sheet:
+This document outlines the expected data structure for the Google Sheets integration.
 
-## Row 2 (HDFC Regalia Gold)
-- Card Name: HDFC Regalia Gold
-- Bank: HDFC Bank
-- Card Type: Premium
-- Annual Fee: 2500
-- Joining Fee: 2500
-- Reward Rate: 4 points per ₹150
-- Welcome Bonus: 10000 bonus points
-- Min Income: 300000
-- Max Income: 1000000
-- Spending Categories: Travel,Dining,Shopping
-- Key Features: Airport lounge access,Dining privileges,Fuel surcharge waiver
-- Best For: Travel,Dining,Premium lifestyle
-- Rating: 4.5
-- Status: Active
-- Last Updated: 2024-01-15
+## Sheet: "Card-Database"
 
-## Row 3 (SBI Cashback Card)
-- Card Name: SBI Cashback Card
-- Bank: State Bank of India
-- Card Type: Cashback
-- Annual Fee: 999
-- Joining Fee: 999
-- Reward Rate: 5% cashback online
-- Welcome Bonus: ₹2000 cashback
-- Min Income: 200000
-- Max Income: 800000
-- Spending Categories: Online Shopping,Digital Payments
-- Key Features: 5% online cashback,No capping,Fuel surcharge waiver
-- Best For: Online shopping,Digital payments
-- Rating: 4.3
-- Status: Active
-- Last Updated: 2024-01-15
+### Headers (Row 1):
+| A | B | C | D | E | F | G | H | I | J | K | L |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Card Name | Bank | Type | Annual Fee | Joining Fee | Reward Rate | Welcome Bonus | Key Features | Best For | Min Income | Credit Score | Status |
 
-## Row 4 (ICICI Amazon Pay)
-- Card Name: ICICI Amazon Pay
-- Bank: ICICI Bank
-- Card Type: Co-branded
-- Annual Fee: 0
-- Joining Fee: 0
-- Reward Rate: 5% on Amazon
-- Welcome Bonus: ₹1000 Amazon voucher
-- Min Income: 150000
-- Max Income: 600000
-- Spending Categories: Amazon,Bill Payments,Online Shopping
-- Key Features: 5% Amazon cashback,2% bill payments,No annual fee
-- Best For: Amazon shopping,Bill payments
-- Rating: 4.2
-- Status: Active
-- Last Updated: 2024-01-15
+### Sample Data:
+\`\`\`
+HDFC Regalia Gold,HDFC Bank,Premium,2500,2500,2-4% on dining & travel,10000 reward points,Airport lounge access; Dining offers; Travel insurance,Dining;Travel,500000,750,Active
+SBI Cashback,SBI,Cashback,999,999,5% on online shopping,2000 cashback,High cashback rates; No reward point hassle; Online shopping benefits,Shopping;Online,300000,700,Active
+ICICI Amazon Pay,ICICI Bank,Co-branded,500,500,2-5% on Amazon,2000 Amazon Pay balance,Amazon Prime membership; High Amazon rewards; Fuel surcharge waiver,Shopping;Amazon,250000,650,Active
+\`\`\`
 
-Continue adding more cards following this pattern...
+## Sheet: "User-Submissions" (Optional)
+
+### Headers (Row 1):
+| A | B | C | D | E | F | G | H |
+|---|---|---|---|---|---|---|---|
+| Timestamp | Monthly Income | Spending Categories | Monthly Spending | Current Cards | Credit Score | Preferred Banks | Joining Fee Preference |
+
+## Data Types:
+
+- **Card Name**: Text
+- **Bank**: Text
+- **Type**: Text (Premium, Cashback, Travel, Co-branded, etc.)
+- **Annual Fee**: Number
+- **Joining Fee**: Number
+- **Reward Rate**: Text
+- **Welcome Bonus**: Text
+- **Key Features**: Text (semicolon separated)
+- **Best For**: Text (semicolon separated)
+- **Min Income**: Number
+- **Credit Score**: Number
+- **Status**: Text (Active, Inactive)
+
+## Notes:
+
+1. Use semicolons (;) to separate multiple values in Key Features and Best For columns
+2. All fee amounts should be in INR
+3. Reward rates can be text descriptions (e.g., "2-4% on dining")
+4. Status should be "Active" for cards currently available

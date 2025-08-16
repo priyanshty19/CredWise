@@ -5,77 +5,96 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Textarea } from "@/components/ui/textarea"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Loader2, Send, CheckCircle, XCircle, Code } from "lucide-react"
+import { Textarea } from "@/components/ui/textarea"
+import { CheckCircle2, AlertCircle, Loader2, Code, Send, Clock, ExternalLink, Copy, RefreshCw } from "lucide-react"
+import { testGoogleAppsScriptConnection } from "@/lib/google-apps-script-submission"
 
 export default function AppsScriptDebugger() {
   const [isLoading, setIsLoading] = useState(false)
-  const [result, setResult] = useState<any>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [testData, setTestData] = useState({
-    monthlyIncome: 50000,
-    spendingCategories: ["Online Shopping", "Dining"],
-    preferredBanks: ["HDFC Bank", "ICICI Bank"],
-    maxAnnualFee: 2500,
-    cardType: "Cashback",
-    topRecommendation: "SBI Cashback Card",
-    totalRecommendations: 5,
-  })
+  const [testResult, setTestResult] = useState<{
+    success: boolean
+    error?: string
+    responseTime?: number
+  } | null>(null)
+  const [customUrl, setCustomUrl] = useState("")
+  const [customPayload, setCustomPayload] = useState(`{
+  "monthlyIncome": "75000",
+  "spendingCategories": ["dining", "travel", "shopping"],
+  "monthlySpending": "30000",
+  "currentCards": "2",
+  "creditScore": "780",
+  "preferredBanks": ["HDFC Bank", "ICICI Bank"],
+  "joiningFeePreference": "low_fee"
+}`)
 
-  const testAppsScript = async () => {
+  const runTest = async () => {
     setIsLoading(true)
-    setError(null)
-    setResult(null)
+    setTestResult(null)
 
     try {
-      const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL
-
-      if (!appsScriptUrl) {
-        throw new Error("Apps Script URL not found in environment variables")
-      }
-
-      const response = await fetch(appsScriptUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          ...testData,
-          timestamp: new Date().toISOString(),
-          userAgent: navigator.userAgent,
-        }),
+      const result = await testGoogleAppsScriptConnection()
+      setTestResult(result)
+    } catch (error) {
+      setTestResult({
+        success: false,
+        error: error instanceof Error ? error.message : "Test failed",
       })
-
-      const responseText = await response.text()
-
-      try {
-        const jsonResult = JSON.parse(responseText)
-        setResult({
-          status: response.status,
-          success: response.ok,
-          data: jsonResult,
-          rawResponse: responseText,
-        })
-      } catch {
-        setResult({
-          status: response.status,
-          success: response.ok,
-          data: null,
-          rawResponse: responseText,
-        })
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unknown error occurred")
     } finally {
       setIsLoading(false)
     }
   }
 
-  const updateTestData = (field: string, value: any) => {
-    setTestData((prev) => ({ ...prev, [field]: value }))
+  const testCustomEndpoint = async () => {
+    if (!customUrl) return
+
+    setIsLoading(true)
+    setTestResult(null)
+
+    const startTime = Date.now()
+
+    try {
+      const response = await fetch(customUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: customPayload,
+      })
+
+      const responseTime = Date.now() - startTime
+      const responseText = await response.text()
+
+      let responseData
+      try {
+        responseData = JSON.parse(responseText)
+      } catch {
+        responseData = { rawResponse: responseText }
+      }
+
+      setTestResult({
+        success: response.ok,
+        error: response.ok ? undefined : `HTTP ${response.status}: ${response.statusText}`,
+        responseTime,
+        ...responseData,
+      })
+    } catch (error) {
+      setTestResult({
+        success: false,
+        error: error instanceof Error ? error.message : "Request failed",
+        responseTime: Date.now() - startTime,
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
+
+  const copyToClipboard = (text: string) => {
+    navigator.clipboard.writeText(text)
+  }
+
+  const currentAppsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "Not configured"
 
   return (
     <div className="space-y-6">
@@ -83,118 +102,171 @@ export default function AppsScriptDebugger() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Code className="h-5 w-5" />
-            Apps Script Debugger
+            Google Apps Script Debugger
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label htmlFor="monthlyIncome">Monthly Income</Label>
-              <Input
-                id="monthlyIncome"
-                type="number"
-                value={testData.monthlyIncome}
-                onChange={(e) => updateTestData("monthlyIncome", Number.parseInt(e.target.value))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="maxAnnualFee">Max Annual Fee</Label>
-              <Input
-                id="maxAnnualFee"
-                type="number"
-                value={testData.maxAnnualFee}
-                onChange={(e) => updateTestData("maxAnnualFee", Number.parseInt(e.target.value))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="spendingCategories">Spending Categories (comma-separated)</Label>
-              <Input
-                id="spendingCategories"
-                value={testData.spendingCategories.join(", ")}
-                onChange={(e) => updateTestData("spendingCategories", e.target.value.split(", "))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="preferredBanks">Preferred Banks (comma-separated)</Label>
-              <Input
-                id="preferredBanks"
-                value={testData.preferredBanks.join(", ")}
-                onChange={(e) => updateTestData("preferredBanks", e.target.value.split(", "))}
-              />
-            </div>
-            <div>
-              <Label htmlFor="cardType">Card Type</Label>
-              <Input
-                id="cardType"
-                value={testData.cardType}
-                onChange={(e) => updateTestData("cardType", e.target.value)}
-              />
-            </div>
-            <div>
-              <Label htmlFor="topRecommendation">Top Recommendation</Label>
-              <Input
-                id="topRecommendation"
-                value={testData.topRecommendation}
-                onChange={(e) => updateTestData("topRecommendation", e.target.value)}
-              />
+        <CardContent className="space-y-6">
+          {/* Current Configuration */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h4 className="font-medium text-gray-900 mb-2">Current Configuration</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">Apps Script URL:</span>
+                <div className="flex items-center gap-2">
+                  <Badge variant={currentAppsScriptUrl !== "Not configured" ? "default" : "destructive"}>
+                    {currentAppsScriptUrl !== "Not configured" ? "Configured" : "Missing"}
+                  </Badge>
+                  {currentAppsScriptUrl !== "Not configured" && (
+                    <Button variant="ghost" size="sm" onClick={() => copyToClipboard(currentAppsScriptUrl)}>
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {currentAppsScriptUrl !== "Not configured" && (
+                <div className="text-xs text-gray-500 break-all bg-white p-2 rounded border">
+                  {currentAppsScriptUrl}
+                </div>
+              )}
             </div>
           </div>
 
-          <Button onClick={testAppsScript} disabled={isLoading} className="w-full">
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Testing Apps Script...
-              </>
-            ) : (
-              <>
-                <Send className="h-4 w-4 mr-2" />
-                Test Apps Script Submission
-              </>
-            )}
-          </Button>
+          {/* Quick Test */}
+          <div className="space-y-4">
+            <h4 className="font-medium text-gray-900">Quick Connection Test</h4>
+            <Button onClick={runTest} disabled={isLoading} className="w-full">
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Testing Connection...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Test Apps Script Connection
+                </>
+              )}
+            </Button>
+          </div>
 
-          {error && (
-            <Alert className="border-red-200 bg-red-50">
-              <XCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription className="text-red-700">
-                <strong>Error:</strong> {error}
+          {/* Custom Endpoint Test */}
+          <div className="space-y-4 border-t pt-6">
+            <h4 className="font-medium text-gray-900">Custom Endpoint Test</h4>
+
+            <div className="space-y-2">
+              <Label htmlFor="custom-url">Apps Script URL</Label>
+              <Input
+                id="custom-url"
+                value={customUrl}
+                onChange={(e) => setCustomUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="custom-payload">Test Payload (JSON)</Label>
+              <Textarea
+                id="custom-payload"
+                value={customPayload}
+                onChange={(e) => setCustomPayload(e.target.value)}
+                rows={8}
+                className="font-mono text-sm"
+              />
+            </div>
+
+            <Button
+              onClick={testCustomEndpoint}
+              disabled={isLoading || !customUrl}
+              variant="outline"
+              className="w-full bg-transparent"
+            >
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Test Custom Endpoint
+                </>
+              )}
+            </Button>
+          </div>
+
+          {/* Test Results */}
+          {testResult && (
+            <Alert className={testResult.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+              {testResult.success ? (
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
+              ) : (
+                <AlertCircle className="h-4 w-4 text-red-600" />
+              )}
+              <AlertDescription>
+                <div className="space-y-2">
+                  <div className={`font-medium ${testResult.success ? "text-green-800" : "text-red-800"}`}>
+                    {testResult.success ? "✅ Connection Successful!" : "❌ Connection Failed"}
+                  </div>
+
+                  {testResult.responseTime && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="h-3 w-3" />
+                      <span>Response time: {testResult.responseTime}ms</span>
+                    </div>
+                  )}
+
+                  {testResult.error && (
+                    <div className="text-red-700 text-sm">
+                      <strong>Error:</strong> {testResult.error}
+                    </div>
+                  )}
+
+                  {testResult.success && (
+                    <div className="text-green-700 text-sm">
+                      Your Apps Script is properly configured and responding to requests.
+                    </div>
+                  )}
+                </div>
               </AlertDescription>
             </Alert>
           )}
 
-          {result && (
-            <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                {result.success ? (
-                  <CheckCircle className="h-5 w-5 text-green-600" />
-                ) : (
-                  <XCircle className="h-5 w-5 text-red-600" />
-                )}
-                <span className="font-medium">Response Status: {result.status}</span>
-                <Badge variant={result.success ? "default" : "destructive"}>
-                  {result.success ? "Success" : "Failed"}
-                </Badge>
+          {/* Troubleshooting Guide */}
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+            <h4 className="font-medium text-blue-900 mb-2">Troubleshooting Guide</h4>
+            <div className="space-y-2 text-sm text-blue-800">
+              <div className="flex items-start gap-2">
+                <span className="font-medium">1.</span>
+                <span>Ensure your Apps Script is deployed as a web app with "Anyone" access</span>
               </div>
-
-              {result.data && (
-                <div>
-                  <Label>Parsed Response:</Label>
-                  <Textarea
-                    value={JSON.stringify(result.data, null, 2)}
-                    readOnly
-                    className="mt-1 font-mono text-sm"
-                    rows={6}
-                  />
-                </div>
-              )}
-
-              <div>
-                <Label>Raw Response:</Label>
-                <Textarea value={result.rawResponse} readOnly className="mt-1 font-mono text-sm" rows={4} />
+              <div className="flex items-start gap-2">
+                <span className="font-medium">2.</span>
+                <span>Check that the NEXT_PUBLIC_APPS_SCRIPT_URL environment variable is set</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="font-medium">3.</span>
+                <span>Verify your Google Sheet has the correct "Form-Submissions" tab</span>
+              </div>
+              <div className="flex items-start gap-2">
+                <span className="font-medium">4.</span>
+                <span>Test the script directly in the Apps Script editor</span>
               </div>
             </div>
-          )}
+          </div>
+
+          {/* Quick Links */}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <a href="https://script.google.com" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3 w-3 mr-2" />
+                Apps Script Console
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" onClick={runTest} disabled={isLoading}>
+              <RefreshCw className={`h-3 w-3 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+              Retest
+            </Button>
+          </div>
         </CardContent>
       </Card>
     </div>

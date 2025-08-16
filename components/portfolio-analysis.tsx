@@ -1,8 +1,6 @@
 "use client"
 
-import type React from "react"
-
-import { useState, useCallback } from "react"
+import { useState, useTransition } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -10,99 +8,89 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
-import { Upload, Plus, FileText, TrendingUp, AlertCircle } from "lucide-react"
-import { uploadPortfolioFile, addManualEntry, calculatePortfolioSummary } from "@/app/actions/portfolio-actions"
-import type { PortfolioEntry, PortfolioSummary } from "@/app/actions/portfolio-actions"
-import PortfolioDashboard from "./portfolio-dashboard"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Upload, Plus, FileText, BarChart3, PieChart, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
+import {
+  parsePortfolioFile,
+  addManualEntry,
+  type PortfolioEntry,
+  calculatePortfolioSummary,
+} from "@/app/actions/portfolio-actions"
+import PortfolioDashboard from "@/components/portfolio-dashboard"
 
-interface PortfolioAnalysisProps {
-  onDataUpdate?: (entries: PortfolioEntry[], summary: PortfolioSummary) => void
-}
-
-export default function PortfolioAnalysis({ onDataUpdate }: PortfolioAnalysisProps) {
+export default function PortfolioAnalysis() {
   const [portfolioEntries, setPortfolioEntries] = useState<PortfolioEntry[]>([])
-  const [isUploading, setIsUploading] = useState(false)
-  const [uploadResults, setUploadResults] = useState<string[]>([])
-  const [isAddingManual, setIsAddingManual] = useState(false)
+  const [activeTab, setActiveTab] = useState("upload")
+  const [uploadStatus, setUploadStatus] = useState<{
+    status: "idle" | "uploading" | "success" | "error"
+    message?: string
+    details?: any
+  }>({ status: "idle" })
 
-  const updatePortfolioData = useCallback(
-    (entries: PortfolioEntry[]) => {
-      const summary = calculatePortfolioSummary(entries)
-      setPortfolioEntries(entries)
-      onDataUpdate?.(entries, summary)
-    },
-    [onDataUpdate],
-  )
+  const [isPending, startTransition] = useTransition()
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files
-    if (!files || files.length === 0) return
+  const handleFileUpload = async (formData: FormData) => {
+    setUploadStatus({ status: "uploading", message: "Parsing your investment file..." })
 
-    setIsUploading(true)
-    const results: string[] = []
-    let allNewEntries: PortfolioEntry[] = []
-
-    for (const file of Array.from(files)) {
-      const formData = new FormData()
-      formData.append("file", file)
-
+    startTransition(async () => {
       try {
-        const result = await uploadPortfolioFile(formData)
+        const result = await parsePortfolioFile(formData)
 
         if (result.success && result.data) {
-          allNewEntries = [...allNewEntries, ...result.data]
-          results.push(
-            `✅ ${file.name}: Successfully parsed ${result.data.length} entries${
-              result.summary?.broker ? ` (${result.summary.broker})` : ""
-            }${result.summary?.detectedTableRange ? ` from ${result.summary.detectedTableRange}` : ""}`,
-          )
+          setPortfolioEntries((prev) => [...prev, ...result.data])
+          setUploadStatus({
+            status: "success",
+            message: `Successfully parsed ${result.data.length} investments from ${result.summary?.fileName}`,
+            details: result.summary,
+          })
+          // Switch to dashboard tab after successful upload
+          setTimeout(() => setActiveTab("dashboard"), 1000)
         } else {
-          results.push(`❌ ${file.name}: ${result.error || "Failed to parse file"}`)
+          setUploadStatus({
+            status: "error",
+            message: result.error || "Failed to parse file",
+          })
         }
       } catch (error) {
-        results.push(`❌ ${file.name}: ${error instanceof Error ? error.message : "Unknown error"}`)
+        setUploadStatus({
+          status: "error",
+          message: "An unexpected error occurred while parsing the file",
+        })
       }
-    }
-
-    // Update portfolio with all new entries
-    const updatedEntries = [...portfolioEntries, ...allNewEntries]
-    updatePortfolioData(updatedEntries)
-
-    setUploadResults(results)
-    setIsUploading(false)
-
-    // Reset file input
-    event.target.value = ""
+    })
   }
 
-  const handleManualEntry = async (event: React.FormEvent<HTMLFormElement>) => {
-    event.preventDefault()
-    setIsAddingManual(true)
+  const handleManualEntry = async (formData: FormData) => {
+    startTransition(async () => {
+      const result = await addManualEntry(formData)
 
-    const formData = new FormData(event.currentTarget)
-    const result = await addManualEntry(formData)
-
-    if (result.success && result.data) {
-      const updatedEntries = [...portfolioEntries, result.data]
-      updatePortfolioData(updatedEntries)
-
-      // Reset form
-      event.currentTarget.reset()
-      setUploadResults([`✅ Manual Entry: Added "${result.data.name}" successfully`])
-    } else {
-      setUploadResults([`❌ Manual Entry: ${result.error || "Failed to add entry"}`])
-    }
-
-    setIsAddingManual(false)
+      if (result.success && result.data) {
+        setPortfolioEntries((prev) => [...prev, result.data])
+        // Reset form
+        const form = document.getElementById("manual-entry-form") as HTMLFormElement
+        form?.reset()
+      }
+    })
   }
 
   const summary = calculatePortfolioSummary(portfolioEntries)
 
   return (
     <div className="space-y-6">
-      {/* Upload and Entry Section */}
-      <Tabs defaultValue="upload" className="w-full">
-        <TabsList className="grid w-full grid-cols-2">
+      <Card className="border-l-4 border-l-blue-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BarChart3 className="h-6 w-6 text-blue-600" />
+            Portfolio Analysis with Universal Parser
+          </CardTitle>
+          <p className="text-gray-600">
+            Upload statements from Groww, Zerodha, Angel One, HDFC Securities, ICICI Direct, or any supported platform
+          </p>
+        </CardHeader>
+      </Card>
+
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="upload" className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
             Upload Files
@@ -111,178 +99,233 @@ export default function PortfolioAnalysis({ onDataUpdate }: PortfolioAnalysisPro
             <Plus className="h-4 w-4" />
             Manual Entry
           </TabsTrigger>
+          <TabsTrigger value="dashboard" className="flex items-center gap-2">
+            <PieChart className="h-4 w-4" />
+            Dashboard
+            {portfolioEntries.length > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {portfolioEntries.length}
+              </Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="upload" className="space-y-4">
+        {/* File Upload Tab */}
+        <TabsContent value="upload" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <FileText className="h-5 w-5" />
-                Upload Portfolio Files
+                Universal Statement Parser
               </CardTitle>
               <p className="text-sm text-gray-600">
-                Upload CSV or Excel files from Groww, Zerodha, HDFC Securities, Angel One, Kuvera, Coin, or Paytm Money
+                Advanced parser supporting multiple platforms and file formats with automatic detection
               </p>
             </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+            <CardContent className="space-y-4">
+              <form action={handleFileUpload} className="space-y-4">
+                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
                   <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
                   <div className="space-y-2">
-                    <p className="text-lg font-medium">Choose files to upload</p>
-                    <p className="text-sm text-gray-500">Supports CSV and Excel (.xlsx) files</p>
+                    <Label htmlFor="file" className="text-lg font-medium cursor-pointer">
+                      Choose investment statement file
+                    </Label>
+                    <p className="text-sm text-gray-500">CSV, Excel, PDF, Word files up to 10MB</p>
                     <Input
+                      id="file"
+                      name="file"
                       type="file"
-                      accept=".csv,.xlsx,.xls"
-                      multiple
-                      onChange={handleFileUpload}
-                      disabled={isUploading}
-                      className="max-w-xs mx-auto"
+                      accept=".csv,.xlsx,.xls,.pdf,.doc,.docx"
+                      className="mt-2"
+                      disabled={isPending}
                     />
                   </div>
                 </div>
 
-                {isUploading && (
-                  <div className="flex items-center justify-center p-4">
-                    <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
-                    <span className="ml-2">Processing files...</span>
-                  </div>
-                )}
-
-                {/* Supported Formats */}
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
-                  {["Groww", "Zerodha", "HDFC Sec", "Angel One", "Kuvera", "Coin", "Paytm Money", "Generic"].map(
-                    (broker) => (
-                      <Badge key={broker} variant="outline" className="justify-center">
-                        {broker}
-                      </Badge>
-                    ),
+                <Button type="submit" className="w-full" disabled={isPending}>
+                  {isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Processing with Universal Parser...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-4 w-4 mr-2" />
+                      Parse & Analyze File
+                    </>
                   )}
+                </Button>
+              </form>
+
+              {/* Upload Status */}
+              {uploadStatus.status !== "idle" && (
+                <Alert
+                  className={
+                    uploadStatus.status === "success"
+                      ? "border-green-200 bg-green-50"
+                      : uploadStatus.status === "error"
+                        ? "border-red-200 bg-red-50"
+                        : "border-blue-200 bg-blue-50"
+                  }
+                >
+                  {uploadStatus.status === "success" && <CheckCircle2 className="h-4 w-4 text-green-600" />}
+                  {uploadStatus.status === "error" && <AlertCircle className="h-4 w-4 text-red-600" />}
+                  {uploadStatus.status === "uploading" && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+
+                  <AlertDescription className="ml-2">
+                    {uploadStatus.message}
+                    {uploadStatus.details && (
+                      <div className="mt-2 text-sm">
+                        <strong>Platform:</strong> {uploadStatus.details.platform} |<strong> Format:</strong>{" "}
+                        {uploadStatus.details.detectedFormat} |<strong> Holdings:</strong>{" "}
+                        {uploadStatus.details.totalInvestments} |<strong> Total Value:</strong> ₹
+                        {uploadStatus.details.totalValue?.toLocaleString("en-IN")}
+                      </div>
+                    )}
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Supported Platforms */}
+              <div className="bg-gray-50 rounded-lg p-4">
+                <h4 className="font-medium text-gray-900 mb-3">Supported Platforms & Formats:</h4>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                  <div className="space-y-2">
+                    <h5 className="text-sm font-medium text-gray-700">Trading Platforms</h5>
+                    <div className="space-y-1 text-xs text-gray-600">
+                      <div>• Groww (Stocks & MF)</div>
+                      <div>• Zerodha Console</div>
+                      <div>• Angel One</div>
+                      <div>• HDFC Securities</div>
+                      <div>• ICICI Direct</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h5 className="text-sm font-medium text-gray-700">File Formats</h5>
+                    <div className="space-y-1 text-xs text-gray-600">
+                      <div>• CSV files</div>
+                      <div>• Excel (.xlsx, .xls)</div>
+                      <div>• PDF statements</div>
+                      <div>• Word documents</div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <h5 className="text-sm font-medium text-gray-700">Auto-Detection</h5>
+                    <div className="space-y-1 text-xs text-gray-600">
+                      <div>• Platform recognition</div>
+                      <div>• Header mapping</div>
+                      <div>• Data validation</div>
+                      <div>• Format conversion</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="manual" className="space-y-4">
+        {/* Manual Entry Tab */}
+        <TabsContent value="manual" className="space-y-6">
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Plus className="h-5 w-5" />
-                Add Manual Entry
+                Add Investment Manually
               </CardTitle>
-              <p className="text-sm text-gray-600">Manually add investments that aren't in your uploaded files</p>
+              <p className="text-sm text-gray-600">Manually add individual investments to your portfolio</p>
             </CardHeader>
             <CardContent>
-              <form onSubmit={handleManualEntry} className="space-y-4">
+              <form id="manual-entry-form" action={handleManualEntry} className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
+                  <div className="space-y-2">
                     <Label htmlFor="name">Investment Name</Label>
-                    <Input id="name" name="name" placeholder="e.g., HDFC Top 100 Fund" required />
+                    <Input id="name" name="name" placeholder="e.g., Reliance Industries, SBI Bluechip Fund" required />
                   </div>
-                  <div>
-                    <Label htmlFor="type">Type</Label>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="type">Investment Type</Label>
                     <Select name="type" required>
                       <SelectTrigger>
                         <SelectValue placeholder="Select type" />
                       </SelectTrigger>
                       <SelectContent>
+                        <SelectItem value="equity">Equity/Stocks</SelectItem>
                         <SelectItem value="mutual_fund">Mutual Fund</SelectItem>
-                        <SelectItem value="stock">Stock</SelectItem>
-                        <SelectItem value="bond">Bond</SelectItem>
-                        <SelectItem value="etf">ETF</SelectItem>
+                        <SelectItem value="bond">Bonds</SelectItem>
+                        <SelectItem value="other">Other</SelectItem>
                       </SelectContent>
                     </Select>
                   </div>
-                  <div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="quantity">Quantity/Units</Label>
-                    <Input
-                      id="quantity"
-                      name="quantity"
-                      type="number"
-                      step="0.001"
-                      placeholder="100"
-                      min="0.001"
-                      required
-                    />
+                    <Input id="quantity" name="quantity" type="number" step="0.001" placeholder="100" required />
                   </div>
-                  <div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="avgPrice">Average Price (₹)</Label>
-                    <Input
-                      id="avgPrice"
-                      name="avgPrice"
-                      type="number"
-                      step="0.01"
-                      placeholder="50.00"
-                      min="0.01"
-                      required
-                    />
+                    <Input id="avgPrice" name="avgPrice" type="number" step="0.01" placeholder="2500.00" required />
                   </div>
-                  <div>
+
+                  <div className="space-y-2">
                     <Label htmlFor="currentPrice">Current Price (₹)</Label>
                     <Input
                       id="currentPrice"
                       name="currentPrice"
                       type="number"
                       step="0.01"
-                      placeholder="55.00"
-                      min="0.01"
+                      placeholder="2750.00"
                       required
                     />
                   </div>
                 </div>
-                <Button type="submit" disabled={isAddingManual} className="w-full">
-                  {isAddingManual ? "Adding..." : "Add Investment"}
+
+                <Button type="submit" className="w-full" disabled={isPending}>
+                  {isPending ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Adding...
+                    </>
+                  ) : (
+                    <>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Investment
+                    </>
+                  )}
                 </Button>
               </form>
             </CardContent>
           </Card>
         </TabsContent>
-      </Tabs>
 
-      {/* Results Section */}
-      {uploadResults.length > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AlertCircle className="h-5 w-5" />
-              Processing Results
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-2">
-              {uploadResults.map((result, index) => (
-                <div
-                  key={index}
-                  className={`p-3 rounded-lg text-sm ${
-                    result.startsWith("✅")
-                      ? "bg-green-50 text-green-800 border border-green-200"
-                      : "bg-red-50 text-red-800 border border-red-200"
-                  }`}
-                >
-                  {result}
+        {/* Dashboard Tab */}
+        <TabsContent value="dashboard" className="space-y-6">
+          {portfolioEntries.length > 0 ? (
+            <PortfolioDashboard portfolioEntries={portfolioEntries} summary={summary} />
+          ) : (
+            <Card className="border-dashed border-2 border-gray-300">
+              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+                <PieChart className="h-16 w-16 text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Portfolio Data</h3>
+                <p className="text-gray-600 mb-6 max-w-md">
+                  Upload your investment statements using our universal parser or add manual entries to see your
+                  portfolio analysis and insights.
+                </p>
+                <div className="flex gap-3">
+                  <Button onClick={() => setActiveTab("upload")} variant="default">
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload Files
+                  </Button>
+                  <Button onClick={() => setActiveTab("manual")} variant="outline">
+                    <Plus className="h-4 w-4 mr-2" />
+                    Manual Entry
+                  </Button>
                 </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Portfolio Dashboard */}
-      {portfolioEntries.length > 0 ? (
-        <PortfolioDashboard portfolioEntries={portfolioEntries} summary={summary} />
-      ) : (
-        <Card>
-          <CardContent className="flex flex-col items-center justify-center py-12">
-            <TrendingUp className="h-16 w-16 text-gray-300 mb-4" />
-            <h3 className="text-xl font-semibold text-gray-600 mb-2">No Portfolio Data Yet</h3>
-            <p className="text-gray-500 text-center max-w-md">
-              Upload your portfolio files or add manual entries to start analyzing your investments. We support files
-              from all major Indian brokers and platforms.
-            </p>
-          </CardContent>
-        </Card>
-      )}
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

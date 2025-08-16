@@ -2,116 +2,222 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
-  BarChart3,
-  Users,
-  TrendingUp,
-  DollarSign,
-  RefreshCw,
-  Download,
-  Calendar,
-  CreditCard,
-  Building2,
-} from "lucide-react"
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+} from "recharts"
+import { TrendingUp, Users, DollarSign, CreditCard, AlertCircle, RefreshCw } from "lucide-react"
+import { Button } from "@/components/ui/button"
 
 interface SubmissionData {
   timestamp: string
-  monthlyIncome: number
-  spendingCategories: string[]
-  preferredBanks: string[]
-  maxAnnualFee: number
-  cardType: string
-  topRecommendation: string
-  totalRecommendations: number
+  monthlyIncome: string
+  spendingCategories: string
+  monthlySpending: string
+  currentCards: string
+  creditScore: string
+  preferredBanks: string
+  joiningFeePreference: string
 }
 
 interface AnalyticsData {
   totalSubmissions: number
   avgIncome: number
-  popularCategories: { [key: string]: number }
-  popularBanks: { [key: string]: number }
-  cardTypeDistribution: { [key: string]: number }
-  feePreferences: { [key: string]: number }
-  topRecommendedCards: { [key: string]: number }
-  submissionsByDate: { [key: string]: number }
+  avgSpending: number
+  avgCreditScore: number
+  topCategories: Array<{ name: string; count: number }>
+  topBanks: Array<{ name: string; count: number }>
+  incomeDistribution: Array<{ range: string; count: number }>
+  submissionTrend: Array<{ date: string; count: number }>
 }
+
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D"]
 
 export default function SubmissionAnalyticsSheets() {
   const [data, setData] = useState<AnalyticsData | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [lastUpdated, setLastUpdated] = useState<Date | null>(null)
 
   const fetchAnalytics = async () => {
-    setIsLoading(true)
+    setLoading(true)
     setError(null)
 
     try {
-      // This would fetch from your Google Sheets submissions
-      // For now, we'll use mock data
-      await new Promise((resolve) => setTimeout(resolve, 1000)) // Simulate API call
+      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
+      const sheetId = "YOUR_SHEET_ID" // Replace with your actual sheet ID
 
-      const mockData: AnalyticsData = {
-        totalSubmissions: 156,
-        avgIncome: 75000,
-        popularCategories: {
-          "Online Shopping": 89,
-          Dining: 67,
-          Travel: 45,
-          Groceries: 34,
-          Fuel: 23,
-        },
-        popularBanks: {
-          "HDFC Bank": 45,
-          "ICICI Bank": 38,
-          SBI: 32,
-          "Axis Bank": 25,
-          "Any Bank": 16,
-        },
-        cardTypeDistribution: {
-          Cashback: 56,
-          Rewards: 42,
-          Travel: 28,
-          Premium: 18,
-          Any: 12,
-        },
-        feePreferences: {
-          "₹0": 67,
-          "₹1,000": 34,
-          "₹2,500": 28,
-          "₹5,000": 18,
-          "₹10,000+": 9,
-        },
-        topRecommendedCards: {
-          "SBI Cashback Card": 34,
-          "HDFC Regalia Gold": 28,
-          "ICICI Amazon Pay": 25,
-          "Axis Ace Credit Card": 22,
-          "HDFC Millennia": 19,
-        },
-        submissionsByDate: {
-          "2024-01-15": 12,
-          "2024-01-16": 8,
-          "2024-01-17": 15,
-          "2024-01-18": 11,
-          "2024-01-19": 9,
-          "2024-01-20": 14,
-          "2024-01-21": 7,
-        },
+      if (!apiKey) {
+        throw new Error("Google Sheets API key not configured")
       }
 
-      setData(mockData)
-      setLastUpdated(new Date())
+      const response = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Form-Submissions!A1:H1000?key=${apiKey}`,
+      )
+
+      if (!response.ok) {
+        throw new Error(`Failed to fetch data: ${response.status}`)
+      }
+
+      const result = await response.json()
+      const rows = result.values || []
+
+      if (rows.length < 2) {
+        throw new Error("No submission data found")
+      }
+
+      // Parse submissions data
+      const submissions: SubmissionData[] = rows.slice(1).map((row: string[]) => ({
+        timestamp: row[0] || "",
+        monthlyIncome: row[1] || "",
+        spendingCategories: row[2] || "",
+        monthlySpending: row[3] || "",
+        currentCards: row[4] || "",
+        creditScore: row[5] || "",
+        preferredBanks: row[6] || "",
+        joiningFeePreference: row[7] || "",
+      }))
+
+      // Process analytics
+      const analytics = processAnalytics(submissions)
+      setData(analytics)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch analytics")
+      // Set demo data for development
+      setData(getDemoAnalytics())
     } finally {
-      setIsLoading(false)
+      setLoading(false)
     }
   }
+
+  const processAnalytics = (submissions: SubmissionData[]): AnalyticsData => {
+    const totalSubmissions = submissions.length
+
+    // Calculate averages
+    const incomes = submissions.map((s) => Number.parseInt(s.monthlyIncome) || 0).filter((i) => i > 0)
+    const spendings = submissions.map((s) => Number.parseInt(s.monthlySpending) || 0).filter((s) => s > 0)
+    const creditScores = submissions.map((s) => Number.parseInt(s.creditScore) || 0).filter((c) => c > 0)
+
+    const avgIncome = incomes.length > 0 ? incomes.reduce((a, b) => a + b, 0) / incomes.length : 0
+    const avgSpending = spendings.length > 0 ? spendings.reduce((a, b) => a + b, 0) / spendings.length : 0
+    const avgCreditScore = creditScores.length > 0 ? creditScores.reduce((a, b) => a + b, 0) / creditScores.length : 0
+
+    // Top spending categories
+    const categoryCount: Record<string, number> = {}
+    submissions.forEach((s) => {
+      if (s.spendingCategories) {
+        s.spendingCategories.split(",").forEach((cat) => {
+          const category = cat.trim()
+          categoryCount[category] = (categoryCount[category] || 0) + 1
+        })
+      }
+    })
+
+    const topCategories = Object.entries(categoryCount)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6)
+
+    // Top preferred banks
+    const bankCount: Record<string, number> = {}
+    submissions.forEach((s) => {
+      if (s.preferredBanks) {
+        s.preferredBanks.split(",").forEach((bank) => {
+          const bankName = bank.trim()
+          bankCount[bankName] = (bankCount[bankName] || 0) + 1
+        })
+      }
+    })
+
+    const topBanks = Object.entries(bankCount)
+      .map(([name, count]) => ({ name, count }))
+      .sort((a, b) => b.count - a.count)
+      .slice(0, 6)
+
+    // Income distribution
+    const incomeRanges = [
+      { range: "< 25K", min: 0, max: 25000 },
+      { range: "25K-50K", min: 25000, max: 50000 },
+      { range: "50K-75K", min: 50000, max: 75000 },
+      { range: "75K-100K", min: 75000, max: 100000 },
+      { range: "100K+", min: 100000, max: Number.POSITIVE_INFINITY },
+    ]
+
+    const incomeDistribution = incomeRanges.map((range) => ({
+      range: range.range,
+      count: incomes.filter((income) => income >= range.min && income < range.max).length,
+    }))
+
+    // Submission trend (last 7 days)
+    const submissionTrend = Array.from({ length: 7 }, (_, i) => {
+      const date = new Date()
+      date.setDate(date.getDate() - (6 - i))
+      return {
+        date: date.toLocaleDateString(),
+        count: Math.floor(Math.random() * 10) + 1, // Mock data
+      }
+    })
+
+    return {
+      totalSubmissions,
+      avgIncome,
+      avgSpending,
+      avgCreditScore,
+      topCategories,
+      topBanks,
+      incomeDistribution,
+      submissionTrend,
+    }
+  }
+
+  const getDemoAnalytics = (): AnalyticsData => ({
+    totalSubmissions: 156,
+    avgIncome: 65000,
+    avgSpending: 25000,
+    avgCreditScore: 742,
+    topCategories: [
+      { name: "Dining", count: 89 },
+      { name: "Shopping", count: 76 },
+      { name: "Travel", count: 54 },
+      { name: "Fuel", count: 43 },
+      { name: "Groceries", count: 38 },
+      { name: "Entertainment", count: 29 },
+    ],
+    topBanks: [
+      { name: "HDFC Bank", count: 45 },
+      { name: "ICICI Bank", count: 38 },
+      { name: "SBI", count: 32 },
+      { name: "Axis Bank", count: 28 },
+      { name: "Kotak Mahindra", count: 21 },
+    ],
+    incomeDistribution: [
+      { range: "< 25K", count: 12 },
+      { range: "25K-50K", count: 34 },
+      { range: "50K-75K", count: 56 },
+      { range: "75K-100K", count: 38 },
+      { range: "100K+", count: 16 },
+    ],
+    submissionTrend: [
+      { date: "Dec 10", count: 8 },
+      { date: "Dec 11", count: 12 },
+      { date: "Dec 12", count: 15 },
+      { date: "Dec 13", count: 9 },
+      { date: "Dec 14", count: 18 },
+      { date: "Dec 15", count: 22 },
+      { date: "Dec 16", count: 16 },
+    ],
+  })
 
   useEffect(() => {
     fetchAnalytics()
@@ -125,246 +231,197 @@ export default function SubmissionAnalyticsSheets() {
     }).format(amount)
   }
 
-  if (!data && !isLoading) {
+  if (loading) {
     return (
       <Card>
-        <CardContent className="flex flex-col items-center justify-center py-12">
-          <BarChart3 className="h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-semibold text-gray-600 mb-2">No Analytics Data</h3>
-          <p className="text-gray-500 text-center mb-4">Click the button below to load submission analytics</p>
-          <Button onClick={fetchAnalytics}>Load Analytics</Button>
+        <CardContent className="flex items-center justify-center py-12">
+          <div className="text-center">
+            <RefreshCw className="h-8 w-8 animate-spin text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">Loading analytics data...</p>
+          </div>
         </CardContent>
       </Card>
     )
   }
+
+  if (error && !data) {
+    return (
+      <Alert className="border-red-200 bg-red-50">
+        <AlertCircle className="h-4 w-4 text-red-600" />
+        <AlertDescription className="text-red-800">
+          {error}
+          <Button onClick={fetchAnalytics} variant="outline" size="sm" className="ml-4 bg-transparent">
+            Retry
+          </Button>
+        </AlertDescription>
+      </Alert>
+    )
+  }
+
+  if (!data) return null
 
   return (
     <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-bold text-gray-900">Submission Analytics</h2>
-          {lastUpdated && <p className="text-sm text-gray-600">Last updated: {lastUpdated.toLocaleString()}</p>}
+          <h2 className="text-2xl font-bold text-gray-900">Form Submission Analytics</h2>
+          <p className="text-gray-600">Real-time insights from user submissions</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline" onClick={fetchAnalytics} disabled={isLoading}>
-            <RefreshCw className={`h-4 w-4 mr-2 ${isLoading ? "animate-spin" : ""}`} />
-            Refresh
-          </Button>
-          <Button variant="outline">
-            <Download className="h-4 w-4 mr-2" />
-            Export
-          </Button>
-        </div>
+        <Button onClick={fetchAnalytics} variant="outline" disabled={loading}>
+          <RefreshCw className={`h-4 w-4 mr-2 ${loading ? "animate-spin" : ""}`} />
+          Refresh
+        </Button>
       </div>
 
       {error && (
-        <Alert className="border-red-200 bg-red-50">
-          <AlertDescription className="text-red-700">{error}</AlertDescription>
+        <Alert className="border-yellow-200 bg-yellow-50">
+          <AlertCircle className="h-4 w-4 text-yellow-600" />
+          <AlertDescription className="text-yellow-800">Using demo data due to API error: {error}</AlertDescription>
         </Alert>
       )}
 
-      {data && (
-        <>
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Total Submissions</CardTitle>
-                <Users className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{data.totalSubmissions}</div>
-                <p className="text-xs text-muted-foreground">+12% from last week</p>
-              </CardContent>
-            </Card>
+      {/* Key Metrics */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Total Submissions</CardTitle>
+            <Users className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{data.totalSubmissions}</div>
+            <p className="text-xs text-muted-foreground">Form submissions received</p>
+          </CardContent>
+        </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Average Income</CardTitle>
-                <DollarSign className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{formatCurrency(data.avgIncome)}</div>
-                <p className="text-xs text-muted-foreground">Monthly average</p>
-              </CardContent>
-            </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg Monthly Income</CardTitle>
+            <DollarSign className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(data.avgIncome)}</div>
+            <p className="text-xs text-muted-foreground">Average user income</p>
+          </CardContent>
+        </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Top Category</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold">{Object.keys(data.popularCategories)[0]}</div>
-                <p className="text-xs text-muted-foreground">{Object.values(data.popularCategories)[0]} selections</p>
-              </CardContent>
-            </Card>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg Monthly Spending</CardTitle>
+            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{formatCurrency(data.avgSpending)}</div>
+            <p className="text-xs text-muted-foreground">Average user spending</p>
+          </CardContent>
+        </Card>
 
-            <Card>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">Top Recommended</CardTitle>
-                <CreditCard className="h-4 w-4 text-muted-foreground" />
-              </CardHeader>
-              <CardContent>
-                <div className="text-lg font-bold">{Object.keys(data.topRecommendedCards)[0]}</div>
-                <p className="text-xs text-muted-foreground">
-                  {Object.values(data.topRecommendedCards)[0]} recommendations
-                </p>
-              </CardContent>
-            </Card>
-          </div>
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+            <CardTitle className="text-sm font-medium">Avg Credit Score</CardTitle>
+            <CreditCard className="h-4 w-4 text-muted-foreground" />
+          </CardHeader>
+          <CardContent>
+            <div className="text-2xl font-bold">{Math.round(data.avgCreditScore)}</div>
+            <p className="text-xs text-muted-foreground">Average credit score</p>
+          </CardContent>
+        </Card>
+      </div>
 
-          {/* Detailed Analytics */}
-          <Tabs defaultValue="categories" className="w-full">
-            <TabsList className="grid w-full grid-cols-5">
-              <TabsTrigger value="categories">Categories</TabsTrigger>
-              <TabsTrigger value="banks">Banks</TabsTrigger>
-              <TabsTrigger value="cards">Cards</TabsTrigger>
-              <TabsTrigger value="fees">Fees</TabsTrigger>
-              <TabsTrigger value="trends">Trends</TabsTrigger>
-            </TabsList>
+      {/* Charts */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Top Spending Categories */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Spending Categories</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={data.topCategories}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="count" fill="#8884d8" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
 
-            <TabsContent value="categories" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Popular Spending Categories</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {Object.entries(data.popularCategories).map(([category, count]) => (
-                      <div key={category} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="w-4 h-4 bg-blue-500 rounded"></div>
-                          <span className="font-medium">{category}</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <div className="w-32 bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-blue-500 h-2 rounded-full"
-                              style={{ width: `${(count / data.totalSubmissions) * 100}%` }}
-                            ></div>
-                          </div>
-                          <Badge variant="secondary">{count}</Badge>
-                        </div>
-                      </div>
-                    ))}
+        {/* Income Distribution */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Income Distribution</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={data.incomeDistribution}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="count"
+                >
+                  {data.incomeDistribution.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Preferred Banks */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Preferred Banks</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {data.topBanks.map((bank, index) => (
+                <div key={bank.name} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{index + 1}</Badge>
+                    <span className="font-medium">{bank.name}</span>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="banks" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Building2 className="h-5 w-5" />
-                    Bank Preferences
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {Object.entries(data.popularBanks).map(([bank, count]) => (
-                      <div key={bank} className="flex items-center justify-between">
-                        <span className="font-medium">{bank}</span>
-                        <div className="flex items-center gap-3">
-                          <div className="w-32 bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-green-500 h-2 rounded-full"
-                              style={{ width: `${(count / data.totalSubmissions) * 100}%` }}
-                            ></div>
-                          </div>
-                          <Badge variant="outline">{count}</Badge>
-                        </div>
-                      </div>
-                    ))}
+                  <div className="flex items-center gap-2">
+                    <div className="w-20 bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full"
+                        style={{ width: `${(bank.count / data.totalSubmissions) * 100}%` }}
+                      />
+                    </div>
+                    <span className="text-sm text-gray-600">{bank.count}</span>
                   </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
 
-            <TabsContent value="cards" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Most Recommended Cards</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {Object.entries(data.topRecommendedCards).map(([card, count]) => (
-                      <div key={card} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <div className="font-medium">{card}</div>
-                          <div className="text-sm text-gray-600">
-                            {((count / data.totalSubmissions) * 100).toFixed(1)}% of recommendations
-                          </div>
-                        </div>
-                        <Badge className="bg-purple-100 text-purple-800">{count}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="fees" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle>Annual Fee Preferences</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {Object.entries(data.feePreferences).map(([fee, count]) => (
-                      <div key={fee} className="flex items-center justify-between">
-                        <span className="font-medium">Up to {fee}</span>
-                        <div className="flex items-center gap-3">
-                          <div className="w-32 bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-orange-500 h-2 rounded-full"
-                              style={{ width: `${(count / data.totalSubmissions) * 100}%` }}
-                            ></div>
-                          </div>
-                          <Badge variant="secondary">{count}</Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-
-            <TabsContent value="trends" className="space-y-4">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Calendar className="h-5 w-5" />
-                    Daily Submissions
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    {Object.entries(data.submissionsByDate).map(([date, count]) => (
-                      <div key={date} className="flex items-center justify-between">
-                        <span className="font-medium">{new Date(date).toLocaleDateString()}</span>
-                        <div className="flex items-center gap-3">
-                          <div className="w-32 bg-gray-200 rounded-full h-2">
-                            <div
-                              className="bg-indigo-500 h-2 rounded-full"
-                              style={{
-                                width: `${(count / Math.max(...Object.values(data.submissionsByDate))) * 100}%`,
-                              }}
-                            ></div>
-                          </div>
-                          <Badge variant="outline">{count}</Badge>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-            </TabsContent>
-          </Tabs>
-        </>
-      )}
+        {/* Submission Trend */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Submission Trend (Last 7 Days)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={data.submissionTrend}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Line type="monotone" dataKey="count" stroke="#8884d8" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   )
 }

@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -10,320 +8,346 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, CreditCard, Star, TrendingUp, CheckCircle } from "lucide-react"
-import { getCardRecommendations, type CardRecommendation } from "@/app/actions/card-recommendation"
+import {
+  CreditCard,
+  Utensils,
+  Fuel,
+  ShoppingBag,
+  Plane,
+  Smartphone,
+  Zap,
+  Car,
+  ArrowRight,
+  CheckCircle2,
+} from "lucide-react"
+import EnhancedRecommendations from "./enhanced-recommendations"
 
-interface FormData {
-  monthlyIncome: string
-  spendingCategories: string[]
-  preferredBanks: string[]
-  maxAnnualFee: string
-  cardType: string
-}
+const spendingCategories = [
+  { id: "dining", label: "Dining & Restaurants", icon: Utensils },
+  { id: "fuel", label: "Fuel & Gas", icon: Fuel },
+  { id: "groceries", label: "Groceries", icon: ShoppingBag },
+  { id: "travel", label: "Travel & Hotels", icon: Plane },
+  { id: "shopping", label: "Online Shopping", icon: ShoppingBag },
+  { id: "entertainment", label: "Entertainment", icon: Smartphone },
+  { id: "utilities", label: "Utilities & Bills", icon: Zap },
+  { id: "transport", label: "Transport", icon: Car },
+]
 
-export function CardRecommendationForm() {
-  const [formData, setFormData] = useState<FormData>({
+const banks = [
+  "HDFC Bank",
+  "ICICI Bank",
+  "SBI",
+  "Axis Bank",
+  "Kotak Mahindra Bank",
+  "IndusInd Bank",
+  "Yes Bank",
+  "Standard Chartered",
+  "Citibank",
+  "American Express",
+]
+
+export default function CardRecommendationForm() {
+  const [currentStep, setCurrentStep] = useState(1)
+  const [formData, setFormData] = useState({
     monthlyIncome: "",
-    spendingCategories: [],
-    preferredBanks: [],
-    maxAnnualFee: "",
-    cardType: "",
+    spendingCategories: [] as string[],
+    monthlySpending: "",
+    currentCards: "",
+    creditScore: "",
+    preferredBanks: [] as string[],
+    joiningFeePreference: "",
   })
+  const [showRecommendations, setShowRecommendations] = useState(false)
 
-  const [recommendations, setRecommendations] = useState<CardRecommendation[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [showResults, setShowResults] = useState(false)
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
 
-  const spendingCategories = [
-    "Online Shopping",
-    "Dining",
-    "Travel",
-    "Groceries",
-    "Fuel",
-    "Entertainment",
-    "Bills & Utilities",
-  ]
-
-  const banks = ["HDFC Bank", "ICICI Bank", "SBI", "Axis Bank", "Kotak Mahindra Bank", "IndusInd Bank"]
-
-  const handleCategoryChange = (category: string, checked: boolean) => {
+  const handleCategoryToggle = (categoryId: string) => {
     setFormData((prev) => ({
       ...prev,
-      spendingCategories: checked
-        ? [...prev.spendingCategories, category]
-        : prev.spendingCategories.filter((c) => c !== category),
+      spendingCategories: prev.spendingCategories.includes(categoryId)
+        ? prev.spendingCategories.filter((id) => id !== categoryId)
+        : [...prev.spendingCategories, categoryId],
     }))
   }
 
-  const handleBankChange = (bank: string, checked: boolean) => {
+  const handleBankToggle = (bank: string) => {
     setFormData((prev) => ({
       ...prev,
-      preferredBanks: checked ? [...prev.preferredBanks, bank] : prev.preferredBanks.filter((b) => b !== bank),
+      preferredBanks: prev.preferredBanks.includes(bank)
+        ? prev.preferredBanks.filter((b) => b !== bank)
+        : [...prev.preferredBanks, bank],
     }))
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setError(null)
-
-    try {
-      const profile = {
-        monthlyIncome: Number.parseInt(formData.monthlyIncome),
-        spendingCategories: formData.spendingCategories,
-        preferredBanks: formData.preferredBanks,
-        maxAnnualFee: Number.parseInt(formData.maxAnnualFee),
-        cardType: formData.cardType,
-        currentCards: [],
-      }
-
-      const result = await getCardRecommendations(profile)
-
-      if (result.success) {
-        setRecommendations(result.recommendations)
-        setShowResults(true)
-      } else {
-        setError(result.error || "Failed to get recommendations")
-      }
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "An unexpected error occurred")
-    } finally {
-      setIsLoading(false)
+  const nextStep = () => {
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1)
     }
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(amount)
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1)
+    }
   }
 
-  if (showResults) {
-    return (
-      <div className="space-y-6">
-        <div className="text-center">
-          <div className="flex items-center justify-center gap-2 mb-4">
-            <CheckCircle className="h-8 w-8 text-green-600" />
-            <h2 className="text-2xl font-bold text-gray-900">Your Personalized Recommendations</h2>
-          </div>
-          <p className="text-gray-600">Found {recommendations.length} credit cards tailored to your profile</p>
-          <Button variant="outline" onClick={() => setShowResults(false)} className="mt-4">
-            Modify Search
-          </Button>
-        </div>
+  const handleSubmit = () => {
+    setShowRecommendations(true)
+  }
 
-        <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-          {recommendations.map((card, index) => (
-            <Card key={index} className="hover:shadow-lg transition-shadow">
-              <CardHeader>
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-lg">{card.cardName}</CardTitle>
-                  <Badge variant="secondary">#{index + 1}</Badge>
-                </div>
-                <p className="text-sm text-gray-600">{card.bank}</p>
-                <div className="flex items-center gap-2">
-                  <Star className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                  <span className="text-sm font-medium">{card.rating}/5</span>
-                  <Badge className="ml-auto bg-green-100 text-green-800">{card.matchScore}% Match</Badge>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4 text-sm">
-                  <div>
-                    <span className="text-gray-600">Annual Fee:</span>
-                    <div className="font-medium">{formatCurrency(card.annualFee)}</div>
-                  </div>
-                  <div>
-                    <span className="text-gray-600">Joining Fee:</span>
-                    <div className="font-medium">{formatCurrency(card.joiningFee)}</div>
-                  </div>
-                </div>
+  const isStepValid = (step: number) => {
+    switch (step) {
+      case 1:
+        return formData.monthlyIncome && formData.monthlySpending && formData.creditScore
+      case 2:
+        return formData.spendingCategories.length > 0
+      case 3:
+        return true // Optional step
+      default:
+        return false
+    }
+  }
 
-                <div>
-                  <span className="text-sm text-gray-600">Reward Rate:</span>
-                  <div className="font-medium">{card.rewardRate}</div>
-                </div>
-
-                <div>
-                  <span className="text-sm text-gray-600">Welcome Bonus:</span>
-                  <div className="font-medium">{card.welcomeBonus}</div>
-                </div>
-
-                <div>
-                  <span className="text-sm text-gray-600 block mb-2">Why this card:</span>
-                  <div className="space-y-1">
-                    {card.matchReasons.slice(0, 3).map((reason, idx) => (
-                      <div key={idx} className="flex items-center gap-2 text-xs">
-                        <div className="w-1.5 h-1.5 bg-green-500 rounded-full" />
-                        {reason}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
-                <div>
-                  <span className="text-sm text-gray-600 block mb-2">Best For:</span>
-                  <div className="flex flex-wrap gap-1">
-                    {card.bestFor.slice(0, 3).map((category) => (
-                      <Badge key={category} variant="outline" className="text-xs">
-                        {category}
-                      </Badge>
-                    ))}
-                  </div>
-                </div>
-
-                <div className="pt-2 space-y-2">
-                  <Button className="w-full" size="sm">
-                    <CreditCard className="h-4 w-4 mr-2" />
-                    Apply Now
-                  </Button>
-                  <Button variant="outline" className="w-full bg-transparent" size="sm">
-                    View Details
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-
-        {recommendations.length === 0 && (
-          <Card>
-            <CardContent className="text-center py-12">
-              <CreditCard className="h-16 w-16 text-gray-300 mx-auto mb-4" />
-              <h3 className="text-xl font-semibold text-gray-600 mb-2">No Recommendations Found</h3>
-              <p className="text-gray-500 mb-4">Try adjusting your criteria or income range to see more options.</p>
-              <Button onClick={() => setShowResults(false)}>Modify Search Criteria</Button>
-            </CardContent>
-          </Card>
-        )}
-      </div>
-    )
+  if (showRecommendations) {
+    return <EnhancedRecommendations formData={formData} />
   }
 
   return (
-    <Card className="max-w-2xl mx-auto">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <CreditCard className="h-6 w-6" />
-          Find Your Perfect Credit Card
-        </CardTitle>
-      </CardHeader>
-      <CardContent>
-        <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Monthly Income */}
-          <div>
-            <Label htmlFor="monthlyIncome">Monthly Income (₹)</Label>
-            <Input
-              id="monthlyIncome"
-              type="number"
-              placeholder="50000"
-              value={formData.monthlyIncome}
-              onChange={(e) => setFormData((prev) => ({ ...prev, monthlyIncome: e.target.value }))}
-              required
-            />
-          </div>
-
-          {/* Spending Categories */}
-          <div>
-            <Label>Primary Spending Categories (Select all that apply)</Label>
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              {spendingCategories.map((category) => (
-                <div key={category} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={category}
-                    checked={formData.spendingCategories.includes(category)}
-                    onCheckedChange={(checked) => handleCategoryChange(category, checked as boolean)}
-                  />
-                  <Label htmlFor={category} className="text-sm">
-                    {category}
-                  </Label>
-                </div>
-              ))}
+    <div className="space-y-6">
+      {/* Progress Indicator */}
+      <div className="flex items-center justify-center space-x-4">
+        {[1, 2, 3].map((step) => (
+          <div key={step} className="flex items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                step === currentStep
+                  ? "bg-blue-600 text-white"
+                  : step < currentStep
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-200 text-gray-600"
+              }`}
+            >
+              {step < currentStep ? <CheckCircle2 className="h-4 w-4" /> : step}
             </div>
+            {step < 3 && <div className={`w-12 h-1 mx-2 ${step < currentStep ? "bg-green-600" : "bg-gray-200"}`} />}
           </div>
+        ))}
+      </div>
 
-          {/* Preferred Banks */}
-          <div>
-            <Label>Preferred Banks (Optional)</Label>
-            <div className="grid grid-cols-2 gap-3 mt-2">
-              {banks.map((bank) => (
-                <div key={bank} className="flex items-center space-x-2">
-                  <Checkbox
-                    id={bank}
-                    checked={formData.preferredBanks.includes(bank)}
-                    onCheckedChange={(checked) => handleBankChange(bank, checked as boolean)}
+      {/* Step Content */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-blue-600" />
+            {currentStep === 1 && "Basic Financial Information"}
+            {currentStep === 2 && "Spending Preferences"}
+            {currentStep === 3 && "Additional Preferences"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Step 1: Basic Information */}
+          {currentStep === 1 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyIncome">Monthly Income (₹) *</Label>
+                  <Input
+                    id="monthlyIncome"
+                    type="number"
+                    value={formData.monthlyIncome}
+                    onChange={(e) => handleInputChange("monthlyIncome", e.target.value)}
+                    placeholder="50000"
                   />
-                  <Label htmlFor={bank} className="text-sm">
-                    {bank}
-                  </Label>
                 </div>
-              ))}
+                <div className="space-y-2">
+                  <Label htmlFor="monthlySpending">Monthly Credit Card Spending (₹) *</Label>
+                  <Input
+                    id="monthlySpending"
+                    type="number"
+                    value={formData.monthlySpending}
+                    onChange={(e) => handleInputChange("monthlySpending", e.target.value)}
+                    placeholder="25000"
+                  />
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="creditScore">Credit Score Range *</Label>
+                <Select value={formData.creditScore} onValueChange={(value) => handleInputChange("creditScore", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your credit score range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="300-549">300-549 (Poor)</SelectItem>
+                    <SelectItem value="550-649">550-649 (Fair)</SelectItem>
+                    <SelectItem value="650-749">650-749 (Good)</SelectItem>
+                    <SelectItem value="750-850">750-850 (Excellent)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="currentCards">How many credit cards do you currently have?</Label>
+                <Select
+                  value={formData.currentCards}
+                  onValueChange={(value) => handleInputChange("currentCards", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select number of cards" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">No credit cards</SelectItem>
+                    <SelectItem value="1">1 credit card</SelectItem>
+                    <SelectItem value="2">2 credit cards</SelectItem>
+                    <SelectItem value="3">3 or more credit cards</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </div>
-
-          {/* Max Annual Fee */}
-          <div>
-            <Label htmlFor="maxAnnualFee">Maximum Annual Fee (₹)</Label>
-            <Select onValueChange={(value) => setFormData((prev) => ({ ...prev, maxAnnualFee: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select maximum annual fee" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="0">₹0 (Free cards only)</SelectItem>
-                <SelectItem value="1000">Up to ₹1,000</SelectItem>
-                <SelectItem value="2500">Up to ₹2,500</SelectItem>
-                <SelectItem value="5000">Up to ₹5,000</SelectItem>
-                <SelectItem value="10000">Up to ₹10,000</SelectItem>
-                <SelectItem value="25000">Up to ₹25,000</SelectItem>
-                <SelectItem value="999999">Any Amount</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {/* Card Type */}
-          <div>
-            <Label htmlFor="cardType">Preferred Card Type</Label>
-            <Select onValueChange={(value) => setFormData((prev) => ({ ...prev, cardType: value }))}>
-              <SelectTrigger>
-                <SelectValue placeholder="Select card type preference" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="Any">Any Type</SelectItem>
-                <SelectItem value="Cashback">Cashback Cards</SelectItem>
-                <SelectItem value="Rewards">Reward Points Cards</SelectItem>
-                <SelectItem value="Travel">Travel Cards</SelectItem>
-                <SelectItem value="Premium">Premium/Luxury Cards</SelectItem>
-                <SelectItem value="Fuel">Fuel Cards</SelectItem>
-                <SelectItem value="Shopping">Shopping Cards</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          {error && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertDescription className="text-red-700">{error}</AlertDescription>
-            </Alert>
           )}
 
-          <Button type="submit" disabled={isLoading} className="w-full" size="lg">
-            {isLoading ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Finding Your Perfect Cards...
-              </>
+          {/* Step 2: Spending Categories */}
+          {currentStep === 2 && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-medium">
+                  What are your primary spending categories? (Select all that apply)
+                </Label>
+                <p className="text-sm text-gray-600 mt-1">
+                  This helps us recommend cards with the best rewards for your spending patterns.
+                </p>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                {spendingCategories.map((category) => {
+                  const IconComponent = category.icon
+                  const isSelected = formData.spendingCategories.includes(category.id)
+                  return (
+                    <div
+                      key={category.id}
+                      className={`flex items-center space-x-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                        isSelected
+                          ? "border-blue-500 bg-blue-50"
+                          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                      }`}
+                      onClick={() => handleCategoryToggle(category.id)}
+                    >
+                      <Checkbox checked={isSelected} onChange={() => handleCategoryToggle(category.id)} />
+                      <IconComponent className="h-5 w-5 text-gray-600" />
+                      <span className="font-medium">{category.label}</span>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {formData.spendingCategories.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm text-gray-600 mb-2">Selected categories:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.spendingCategories.map((categoryId) => {
+                      const category = spendingCategories.find((cat) => cat.id === categoryId)
+                      return (
+                        <Badge key={categoryId} variant="secondary">
+                          {category?.label}
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Step 3: Additional Preferences */}
+          {currentStep === 3 && (
+            <div className="space-y-6">
+              <div>
+                <Label className="text-base font-medium">Additional Preferences (Optional)</Label>
+                <p className="text-sm text-gray-600 mt-1">These preferences help us fine-tune your recommendations.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="joiningFee">Joining Fee Preference</Label>
+                <Select
+                  value={formData.joiningFeePreference}
+                  onValueChange={(value) => handleInputChange("joiningFeePreference", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your preference" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no_fee">I prefer cards with no joining fee</SelectItem>
+                    <SelectItem value="low_fee">I'm okay with low joining fees (₹0-1000)</SelectItem>
+                    <SelectItem value="any_amount">Joining fee is not a concern</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-3">
+                <Label>Preferred Banks (Optional)</Label>
+                <p className="text-sm text-gray-600">Select banks you prefer or have existing relationships with.</p>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                  {banks.map((bank) => {
+                    const isSelected = formData.preferredBanks.includes(bank)
+                    return (
+                      <div
+                        key={bank}
+                        className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        }`}
+                        onClick={() => handleBankToggle(bank)}
+                      >
+                        <Checkbox checked={isSelected} onChange={() => handleBankToggle(bank)} />
+                        <span className="text-sm font-medium">{bank}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+
+                {formData.preferredBanks.length > 0 && (
+                  <div className="mt-3">
+                    <p className="text-sm text-gray-600 mb-2">Selected banks:</p>
+                    <div className="flex flex-wrap gap-2">
+                      {formData.preferredBanks.map((bank) => (
+                        <Badge key={bank} variant="secondary">
+                          {bank}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Navigation Buttons */}
+          <div className="flex justify-between pt-6">
+            <Button variant="outline" onClick={prevStep} disabled={currentStep === 1}>
+              Previous
+            </Button>
+
+            {currentStep < 3 ? (
+              <Button onClick={nextStep} disabled={!isStepValid(currentStep)}>
+                Next
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
             ) : (
-              <>
-                <TrendingUp className="h-4 w-4 mr-2" />
-                Get Personalized Recommendations
-              </>
+              <Button
+                onClick={handleSubmit}
+                disabled={!isStepValid(1) || !isStepValid(2)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Get My Recommendations
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
             )}
-          </Button>
-        </form>
-      </CardContent>
-    </Card>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

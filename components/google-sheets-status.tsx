@@ -2,211 +2,277 @@
 
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { CheckCircle, XCircle, AlertCircle, RefreshCw, ExternalLink } from "lucide-react"
+import {
+  CheckCircle2,
+  AlertCircle,
+  Clock,
+  Database,
+  ExternalLink,
+  RefreshCw,
+  Loader2,
+  Wifi,
+  WifiOff,
+} from "lucide-react"
 
 interface ConnectionStatus {
-  sheetsAPI: boolean
-  appsScript: boolean
-  lastChecked: Date | null
-  cardCount: number
-  errors: string[]
+  sheetsApi: {
+    status: "connected" | "error" | "checking"
+    message?: string
+    responseTime?: number
+  }
+  appsScript: {
+    status: "connected" | "error" | "checking"
+    message?: string
+    responseTime?: number
+  }
+  lastChecked?: Date
 }
 
 export default function GoogleSheetsStatus() {
   const [status, setStatus] = useState<ConnectionStatus>({
-    sheetsAPI: false,
-    appsScript: false,
-    lastChecked: null,
-    cardCount: 0,
-    errors: [],
+    sheetsApi: { status: "checking" },
+    appsScript: { status: "checking" },
   })
-  const [isChecking, setIsChecking] = useState(false)
+  const [isRefreshing, setIsRefreshing] = useState(false)
 
   const checkConnections = async () => {
-    setIsChecking(true)
-    const newStatus: ConnectionStatus = {
-      sheetsAPI: false,
-      appsScript: false,
-      lastChecked: new Date(),
-      cardCount: 0,
-      errors: [],
-    }
+    setIsRefreshing(true)
+    setStatus({
+      sheetsApi: { status: "checking" },
+      appsScript: { status: "checking" },
+    })
 
-    // Test Google Sheets API
+    // Check Google Sheets API
+    const sheetsStartTime = Date.now()
     try {
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
-      const sheetId = process.env.NEXT_PUBLIC_SHEET_ID
+      if (!apiKey) {
+        throw new Error("API key not configured")
+      }
 
-      if (!apiKey || !sheetId) {
-        newStatus.errors.push("Missing API key or Sheet ID")
+      const response = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Sheet1!A1:A1?key=${apiKey}`,
+      )
+
+      const sheetsResponseTime = Date.now() - sheetsStartTime
+
+      if (response.ok) {
+        setStatus((prev) => ({
+          ...prev,
+          sheetsApi: {
+            status: "connected",
+            message: "Google Sheets API is accessible",
+            responseTime: sheetsResponseTime,
+          },
+        }))
       } else {
-        const url = `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Sheet1!A1:O10?key=${apiKey}`
-        const response = await fetch(url)
-
-        if (response.ok) {
-          const data = await response.json()
-          newStatus.sheetsAPI = true
-          newStatus.cardCount = data.values ? data.values.length - 1 : 0
-        } else {
-          newStatus.errors.push(`Sheets API error: ${response.status}`)
-        }
+        throw new Error(`HTTP ${response.status}`)
       }
     } catch (error) {
-      newStatus.errors.push(`Sheets API: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setStatus((prev) => ({
+        ...prev,
+        sheetsApi: {
+          status: "error",
+          message: error instanceof Error ? error.message : "Connection failed",
+          responseTime: Date.now() - sheetsStartTime,
+        },
+      }))
     }
 
-    // Test Apps Script
+    // Check Apps Script
+    const appsScriptStartTime = Date.now()
     try {
       const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL
-
       if (!appsScriptUrl) {
-        newStatus.errors.push("Missing Apps Script URL")
+        throw new Error("Apps Script URL not configured")
+      }
+
+      const response = await fetch(appsScriptUrl, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ test: true }),
+      })
+
+      const appsScriptResponseTime = Date.now() - appsScriptStartTime
+
+      if (response.ok) {
+        setStatus((prev) => ({
+          ...prev,
+          appsScript: {
+            status: "connected",
+            message: "Apps Script webhook is responding",
+            responseTime: appsScriptResponseTime,
+          },
+        }))
       } else {
-        const testData = {
-          monthlyIncome: 50000,
-          spendingCategories: ["Test"],
-          preferredBanks: ["Test Bank"],
-          maxAnnualFee: 1000,
-          cardType: "Test",
-          topRecommendation: "Test Card",
-          totalRecommendations: 1,
-          test: true,
-        }
-
-        const response = await fetch(appsScriptUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify(testData),
-        })
-
-        if (response.ok) {
-          newStatus.appsScript = true
-        } else {
-          newStatus.errors.push(`Apps Script error: ${response.status}`)
-        }
+        throw new Error(`HTTP ${response.status}`)
       }
     } catch (error) {
-      newStatus.errors.push(`Apps Script: ${error instanceof Error ? error.message : "Unknown error"}`)
+      setStatus((prev) => ({
+        ...prev,
+        appsScript: {
+          status: "error",
+          message: error instanceof Error ? error.message : "Connection failed",
+          responseTime: Date.now() - appsScriptStartTime,
+        },
+      }))
     }
 
-    setStatus(newStatus)
-    setIsChecking(false)
+    setStatus((prev) => ({
+      ...prev,
+      lastChecked: new Date(),
+    }))
+    setIsRefreshing(false)
   }
 
   useEffect(() => {
     checkConnections()
   }, [])
 
-  const getStatusIcon = (isWorking: boolean) => {
-    if (isWorking) {
-      return <CheckCircle className="h-4 w-4 text-green-600" />
+  const getStatusIcon = (status: "connected" | "error" | "checking") => {
+    switch (status) {
+      case "connected":
+        return <CheckCircle2 className="h-4 w-4 text-green-600" />
+      case "error":
+        return <AlertCircle className="h-4 w-4 text-red-600" />
+      case "checking":
+        return <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
     }
-    return <XCircle className="h-4 w-4 text-red-600" />
   }
 
-  const getStatusBadge = (isWorking: boolean) => {
-    return <Badge variant={isWorking ? "default" : "destructive"}>{isWorking ? "Connected" : "Failed"}</Badge>
+  const getStatusBadge = (status: "connected" | "error" | "checking") => {
+    switch (status) {
+      case "connected":
+        return <Badge className="bg-green-100 text-green-800">Connected</Badge>
+      case "error":
+        return <Badge variant="destructive">Error</Badge>
+      case "checking":
+        return <Badge variant="secondary">Checking...</Badge>
+    }
   }
+
+  const overallStatus = status.sheetsApi.status === "connected" && status.appsScript.status === "connected"
 
   return (
     <div className="space-y-4">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Google Services Status</CardTitle>
-            <Button variant="outline" size="sm" onClick={checkConnections} disabled={isChecking}>
-              <RefreshCw className={`h-4 w-4 mr-2 ${isChecking ? "animate-spin" : ""}`} />
-              Check Status
+          <CardTitle className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              {overallStatus ? (
+                <Wifi className="h-5 w-5 text-green-600" />
+              ) : (
+                <WifiOff className="h-5 w-5 text-red-600" />
+              )}
+              Google Sheets Integration Status
+            </div>
+            <Button onClick={checkConnections} disabled={isRefreshing} variant="outline" size="sm">
+              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
+              Refresh
             </Button>
-          </div>
+          </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Google Sheets API Status */}
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div className="flex items-center gap-3">
-              {getStatusIcon(status.sheetsAPI)}
-              <div>
-                <div className="font-medium">Google Sheets API</div>
-                <div className="text-sm text-gray-600">
-                  {status.sheetsAPI ? `${status.cardCount} cards loaded` : "Connection failed"}
-                </div>
+          {/* Overall Status */}
+          <Alert className={overallStatus ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+            {overallStatus ? (
+              <CheckCircle2 className="h-4 w-4 text-green-600" />
+            ) : (
+              <AlertCircle className="h-4 w-4 text-red-600" />
+            )}
+            <AlertDescription>
+              <div className={overallStatus ? "text-green-800" : "text-red-800"}>
+                {overallStatus
+                  ? "✅ All systems operational - ready to receive form submissions"
+                  : "❌ Some services are experiencing issues"}
               </div>
-            </div>
-            {getStatusBadge(status.sheetsAPI)}
-          </div>
+            </AlertDescription>
+          </Alert>
 
-          {/* Apps Script Status */}
-          <div className="flex items-center justify-between p-3 border rounded-lg">
-            <div className="flex items-center gap-3">
-              {getStatusIcon(status.appsScript)}
-              <div>
-                <div className="font-medium">Google Apps Script</div>
-                <div className="text-sm text-gray-600">
-                  {status.appsScript ? "Form submissions working" : "Submission failed"}
+          {/* Individual Service Status */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* Google Sheets API */}
+            <div className="border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <Database className="h-4 w-4" />
+                  <span className="font-medium">Google Sheets API</span>
                 </div>
+                {getStatusBadge(status.sheetsApi.status)}
+              </div>
+              <div className="space-y-2 text-sm text-gray-600">
+                <div className="flex items-center gap-2">
+                  {getStatusIcon(status.sheetsApi.status)}
+                  <span>{status.sheetsApi.message || "Checking connection..."}</span>
+                </div>
+                {status.sheetsApi.responseTime && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3 w-3" />
+                    <span>{status.sheetsApi.responseTime}ms response time</span>
+                  </div>
+                )}
               </div>
             </div>
-            {getStatusBadge(status.appsScript)}
+
+            {/* Apps Script */}
+            <div className="border rounded-lg p-4">
+              <div className="flex items-center justify-between mb-2">
+                <div className="flex items-center gap-2">
+                  <ExternalLink className="h-4 w-4" />
+                  <span className="font-medium">Apps Script Webhook</span>
+                </div>
+                {getStatusBadge(status.appsScript.status)}
+              </div>
+              <div className="space-y-2 text-sm text-gray-600">
+                <div className="flex items-center gap-2">
+                  {getStatusIcon(status.appsScript.status)}
+                  <span>{status.appsScript.message || "Checking connection..."}</span>
+                </div>
+                {status.appsScript.responseTime && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="h-3 w-3" />
+                    <span>{status.appsScript.responseTime}ms response time</span>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Last Checked */}
           {status.lastChecked && (
-            <div className="text-sm text-gray-600 text-center">Last checked: {status.lastChecked.toLocaleString()}</div>
+            <div className="text-xs text-gray-500 text-center">
+              Last checked: {status.lastChecked.toLocaleTimeString()}
+            </div>
           )}
 
-          {/* Errors */}
-          {status.errors.length > 0 && (
-            <Alert className="border-red-200 bg-red-50">
-              <AlertCircle className="h-4 w-4 text-red-600" />
-              <AlertDescription>
-                <div className="space-y-1">
-                  <strong className="text-red-700">Issues found:</strong>
-                  {status.errors.map((error, index) => (
-                    <div key={index} className="text-red-700 text-sm">
-                      • {error}
-                    </div>
-                  ))}
-                </div>
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* Environment Variables Check */}
-          <div className="bg-gray-50 p-3 rounded-lg">
-            <h4 className="font-medium mb-2">Environment Variables</h4>
-            <div className="space-y-1 text-sm">
-              <div className="flex justify-between">
-                <span>NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY:</span>
-                <Badge variant={process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY ? "default" : "destructive"}>
+          {/* Configuration Status */}
+          <div className="bg-gray-50 rounded-lg p-3">
+            <h4 className="font-medium text-gray-900 mb-2 text-sm">Configuration Status</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
+              <div className="flex items-center justify-between">
+                <span>API Key:</span>
+                <Badge
+                  variant={process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY ? "default" : "destructive"}
+                  className="text-xs"
+                >
                   {process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY ? "Set" : "Missing"}
                 </Badge>
               </div>
-              <div className="flex justify-between">
-                <span>NEXT_PUBLIC_APPS_SCRIPT_URL:</span>
-                <Badge variant={process.env.NEXT_PUBLIC_APPS_SCRIPT_URL ? "default" : "destructive"}>
+              <div className="flex items-center justify-between">
+                <span>Apps Script URL:</span>
+                <Badge
+                  variant={process.env.NEXT_PUBLIC_APPS_SCRIPT_URL ? "default" : "destructive"}
+                  className="text-xs"
+                >
                   {process.env.NEXT_PUBLIC_APPS_SCRIPT_URL ? "Set" : "Missing"}
                 </Badge>
               </div>
             </div>
-          </div>
-
-          {/* Quick Links */}
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" asChild>
-              <a href="https://console.cloud.google.com" target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Google Cloud Console
-              </a>
-            </Button>
-            <Button variant="outline" size="sm" asChild>
-              <a href="https://script.google.com" target="_blank" rel="noopener noreferrer">
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Apps Script
-              </a>
-            </Button>
           </div>
         </CardContent>
       </Card>
