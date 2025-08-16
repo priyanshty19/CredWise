@@ -1,142 +1,126 @@
 # Google Sheet Column Structure Guide
 
-## 📊 Complete 18-Column Structure for Form Submissions
+## 18-Column Structure for Enhanced CredWise Card Page
 
-This document outlines the complete column structure for the CredWise form submissions Google Sheet.
+This document outlines the complete column structure used by the CredWise Card Page for capturing both form submissions and card application clicks.
 
-### Column Layout
+### Column Layout (A-R)
 
-| Column | Letter | Name | Data Type | Description | Example |
-|--------|--------|------|-----------|-------------|---------|
-| 1 | A | Timestamp | DateTime | When the submission occurred | 2024-01-15T10:30:00.000Z |
-| 2 | B | Monthly Income | Number | User's monthly income in INR | 100000 |
-| 3 | C | Monthly Spending | Number | Monthly credit card spending | 25000 |
-| 4 | D | Credit Score Range | Text | User's credit score range | 750-850 |
-| 5 | E | Current Cards | Text | Number of current credit cards | 3 or more |
-| 6 | F | Spending Categories | Text | Comma-separated categories | dining, fuel, shopping |
-| 7 | G | Preferred Banks | Text | Comma-separated bank names | SBI, HDFC Bank |
-| 8 | H | Joining Fee Preference | Text | Fee preference selection | any_amount |
-| 9 | I | Submission Type | Text | Type of data submission | enhanced_form |
-| 10 | J | User Agent | Text | Browser/device information | Mozilla/5.0... |
-| 11 | K | Card Name | Text | Name of clicked card | SBI Card CashBack |
-| 12 | L | Bank Name | Text | Bank of clicked card | SBI |
-| 13 | M | Card Type | Text | Type of clicked card | Cashback |
-| 14 | N | Joining Fee | Number | Joining fee of clicked card | 500 |
-| 15 | O | Annual Fee | Number | Annual fee of clicked card | 999 |
-| 16 | P | Reward Rate | Text | Reward rate description | 5% cashback |
-| 17 | Q | Session ID | Text | Unique session identifier | session_1642234567_abc123 |
-| 18 | R | Additional Data | Text | JSON string with extra data | {"formType":"enhanced"} |
+| Column | Field Name | Data Type | Description | Example Values |
+|--------|------------|-----------|-------------|----------------|
+| **A** | Timestamp | DateTime | ISO timestamp of submission | 2024-01-15T10:30:00.000Z |
+| **B** | Monthly Income | Number | User's monthly income in ₹ | 50000, 75000, 100000 |
+| **C** | Monthly Spending | Number | User's monthly spending in ₹ | 25000, 35000, 45000 |
+| **D** | Credit Score Range | Text | User's credit score range | 750-850, 650-749, 550-649 |
+| **E** | Current Cards | Text | Number of current credit cards | 0, 1, 2, 3, 4+ |
+| **F** | Spending Categories | Text | Comma-separated spending categories | dining, grocery, fuel |
+| **G** | Preferred Banks | Text | Comma-separated preferred banks | SBI, HDFC Bank, ICICI Bank |
+| **H** | Joining Fee Preference | Text | User's joining fee preference | free, low, medium, any_amount |
+| **I** | Submission Type | Text | Type of submission | enhanced_personalization, card_application_click |
+| **J** | User Agent | Text | Browser/device information | Mozilla/5.0... |
+| **K** | Card Name | Text | Name of clicked card (for clicks only) | SBI Card CashBack |
+| **L** | Bank Name | Text | Bank of clicked card (for clicks only) | SBI, HDFC Bank |
+| **M** | Card Type | Text | Type of clicked card (for clicks only) | Cashback, Rewards, Premium |
+| **N** | Joining Fee | Number | Joining fee of clicked card | 0, 500, 1000, 2500 |
+| **O** | Annual Fee | Number | Annual fee of clicked card | 0, 500, 999, 2500 |
+| **P** | Reward Rate | Text | Reward rate of clicked card | 5%, 2.5%, 4X points |
+| **Q** | Session ID | Text | Unique session identifier | session_1642234200_abc123 |
+| **R** | Additional Data | Text | JSON string with extra data | {"formType":"enhanced_personalization"} |
 
-### Data Types by Submission Type
+### Data Flow Types
 
-#### Form Submissions
-**Columns Used:** A, B, C, D, E, F, G, H, I, J, Q, R
-**Empty Columns:** K, L, M, N, O, P
+#### 1. Form Submission Data
+When a user submits the personalization form:
+- **Columns A-J, Q-R**: Populated with form data
+- **Columns K-P**: Empty (not applicable for form submissions)
 
-#### Card Application Clicks
-**Columns Used:** A, I, J, K, L, M, N, O, P, Q, R
-**Empty Columns:** B, C, D, E, F, G, H
+#### 2. Card Click Data
+When a user clicks "Apply Now" on a recommended card:
+- **Columns A, I-R**: Populated with click data
+- **Columns B-H**: Empty (not applicable for card clicks)
 
-### Sample Data
+### Sample Data Examples
 
 #### Form Submission Row
 \`\`\`
-2024-01-15T10:30:00.000Z | 100000 | 25000 | 750-850 | 3 or more | dining,fuel,shopping | SBI,HDFC Bank | any_amount | enhanced_form | Mozilla/5.0... | | | | | | | session_123 | {"formType":"enhanced"}
+A: 2024-01-15T10:30:00.000Z
+B: 75000
+C: 30000
+D: 750-850
+E: 2
+F: dining, grocery, fuel, online_shopping
+G: SBI, HDFC Bank
+H: any_amount
+I: enhanced_personalization
+J: Mozilla/5.0 (Windows NT 10.0; Win64; x64)...
+K: (empty)
+L: (empty)
+M: (empty)
+N: (empty)
+O: (empty)
+P: (empty)
+Q: session_1642234200_abc123
+R: {"formType":"enhanced_personalization","totalCategories":4,"totalBanks":2}
 \`\`\`
 
 #### Card Click Row
 \`\`\`
-2024-01-15T10:35:00.000Z | | | | | | | | card_application_click | Mozilla/5.0... | SBI Card CashBack | SBI | Cashback | 500 | 999 | 5% cashback | click_456 | {"clickType":"application"}
+A: 2024-01-15T10:35:00.000Z
+B: (empty)
+C: (empty)
+D: (empty)
+E: (empty)
+F: (empty)
+G: (empty)
+H: (empty)
+I: card_application_click
+J: Mozilla/5.0 (Windows NT 10.0; Win64; x64)...
+K: SBI Card CashBack
+L: SBI
+M: Cashback
+N: 500
+O: 999
+P: 5% cashback
+Q: click_1642234500_def456
+R: {"clickType":"card_application","cardDetails":{"name":"SBI Card CashBack","bank":"SBI","type":"Cashback"}}
 \`\`\`
+
+### Analytics Insights
+
+This structure enables comprehensive analytics:
+
+#### User Behavior Analysis
+- **Form completion rates**: Track submissions vs. clicks
+- **Bank preferences**: Most selected banks
+- **Category preferences**: Popular spending categories
+- **Income distribution**: User income ranges
+
+#### Card Performance Analysis
+- **Click-through rates**: Which cards get clicked most
+- **Bank performance**: Which banks' cards are most popular
+- **Card type preferences**: Cashback vs. Rewards vs. Premium
+- **Fee sensitivity**: Impact of joining/annual fees on clicks
+
+#### Refined Algorithm Validation
+- **Score correlation**: Do higher-scored cards get more clicks?
+- **Category matching effectiveness**: Do category matches drive clicks?
+- **Bank bonus impact**: Effect of bank preference bonus
+- **Fee threshold analysis**: Optimal fee ranges for different user segments
 
 ### Setup Instructions
 
-1. **Create Headers**
-   \`\`\`javascript
-   // Run this in Google Apps Script
-   setupCompleteColumnStructure()
-   \`\`\`
+1. **Create Google Sheet** with 18 columns (A-R)
+2. **Add headers** using the field names above
+3. **Set permissions** to allow Apps Script to write
+4. **Run setupCompleteColumnStructure()** in Apps Script to auto-create structure
+5. **Verify data flow** using test functions
 
-2. **Format Headers**
-   - Bold text
-   - Blue background (#4285f4)
-   - White text color
-   - Frozen first row
+### Maintenance Notes
 
-3. **Auto-resize Columns**
-   - All columns auto-sized to content
-   - Minimum width for readability
+- **Column order is fixed**: Do not rearrange columns A-R
+- **Data types matter**: Ensure numbers are stored as numbers, not text
+- **Empty cells**: Use empty strings, not null values
+- **JSON formatting**: Additional Data should be valid JSON
+- **Timestamp format**: Always use ISO 8601 format
 
-### Data Validation
-
-#### Required Fields
-- **All Submissions:** Timestamp, Submission Type
-- **Form Submissions:** Monthly Income, Monthly Spending, Credit Score Range
-- **Card Clicks:** Card Name, Bank Name, Card Type
-
-#### Optional Fields
-- User Agent (auto-populated)
-- Session ID (auto-generated)
-- Additional Data (JSON metadata)
-
-### Analytics Queries
-
-#### Count Form Submissions
-\`\`\`sql
-=COUNTIF(I:I, "enhanced_form")
-\`\`\`
-
-#### Count Card Clicks
-\`\`\`sql
-=COUNTIF(I:I, "card_application_click")
-\`\`\`
-
-#### Average Monthly Income
-\`\`\`sql
-=AVERAGE(FILTER(B:B, B:B<>"", I:I="enhanced_form"))
-\`\`\`
-
-#### Most Popular Banks
-\`\`\`sql
-=QUERY(G:G, "SELECT G, COUNT(G) WHERE G<>'' GROUP BY G ORDER BY COUNT(G) DESC")
-\`\`\`
-
-#### Most Clicked Cards
-\`\`\`sql
-=QUERY(K:K, "SELECT K, COUNT(K) WHERE K<>'' GROUP BY K ORDER BY COUNT(K) DESC")
-\`\`\`
-
-### Maintenance
-
-#### Regular Tasks
-1. **Weekly:** Check for data quality issues
-2. **Monthly:** Archive old data if needed
-3. **Quarterly:** Analyze trends and patterns
-
-#### Data Cleanup
-- Remove test submissions (Submission Type contains "test")
-- Validate data formats
-- Check for duplicate sessions
-
-### Troubleshooting
-
-#### Common Issues
-1. **Missing Data:** Check Apps Script logs
-2. **Wrong Format:** Verify column mapping
-3. **Duplicate Headers:** Clear sheet and re-run setup
-
-#### Debug Queries
-\`\`\`javascript
-// Check sheet structure
-checkSheetStructure()
-
-// Test data submission
-testScriptDirectly()
-
-// Test click tracking
-testCardClickTracking()
-\`\`\`
-
----
-
-This structure supports comprehensive tracking of user interactions and provides rich data for analysis and optimization.
+This structure supports the refined scoring algorithm and provides comprehensive data for analyzing user preferences and card performance.

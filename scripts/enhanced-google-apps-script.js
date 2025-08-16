@@ -10,17 +10,15 @@
  * 5. Copy the deployment URL to your environment variables
  */
 
-// Declare necessary variables
-const google = {} // Declare the google variable to fix the lint error
-const ContentService = google.script.runtime.ContentService
-const Utilities = google.script.runtime.Utilities
-const SpreadsheetApp = google.script.runtime.SpreadsheetApp
-const HtmlService = google.script.runtime.HtmlService
-
 // Configuration
 const SPREADSHEET_ID = "1rHR5xzCmZZAlIjahAcpXrxwgYMcItVPckTCiOCSZfSo" // Your Google Sheet ID
 const SHEET_NAME = "Form-Submissions" // Sheet tab name
-const CARD_CLICKS_TAB = "Card-Clicks"
+
+// Declare necessary variables
+const ContentService = SpreadsheetApp.newContentService()
+const Utilities = SpreadsheetApp.newUtilities()
+const HtmlService = SpreadsheetApp.newHtmlService()
+const SpreadsheetApp = SpreadsheetApp
 
 /**
  * Main function to handle POST requests
@@ -220,24 +218,16 @@ function setupCompleteColumnStructure() {
     formSheet.clear()
     setupFormSubmissionsHeaders(formSheet)
 
-    // Set up Card-Clicks sheet
-    let cardClicksSheet = spreadsheet.getSheetByName(CARD_CLICKS_TAB)
-    if (!cardClicksSheet) {
-      cardClicksSheet = spreadsheet.insertSheet(CARD_CLICKS_TAB)
-      setupCardClicksHeaders(cardClicksSheet)
-    }
-
     console.log("✅ Complete column structure set up successfully!")
     console.log("📋 Sheet structure:")
     console.log("   - Form-Submissions: 18 columns (A-R)")
-    console.log("   - Card-Clicks: 18 columns (A-R)")
     console.log("   - Supports both form submissions and card clicks")
     console.log("   - Ready for refined scoring algorithm data")
 
     return {
       success: true,
       message: "Complete column structure set up successfully",
-      sheetsCreated: [SHEET_NAME, CARD_CLICKS_TAB],
+      sheetsCreated: [SHEET_NAME],
       columnsSetup: 18,
     }
   } catch (error) {
@@ -271,7 +261,7 @@ function setupFormSubmissionsHeaders(sheet) {
     "Annual Fee", // O
     "Reward Rate", // P
     "Session ID", // Q
-    "Entry Type", // R
+    "Additional Data", // R
   ]
 
   sheet.getRange(1, 1, 1, headers.length).setValues([headers])
@@ -286,45 +276,6 @@ function setupFormSubmissionsHeaders(sheet) {
   sheet.autoResizeColumns(1, headers.length)
 
   console.log("✅ Form-Submissions headers set up with 18 columns")
-}
-
-/**
- * Set up headers for the Card-Clicks sheet (18 columns)
- */
-function setupCardClicksHeaders(sheet) {
-  const headers = [
-    "Timestamp", // A
-    "Monthly Income", // B
-    "Monthly Spending", // C
-    "Credit Score Range", // D
-    "Current Cards", // E
-    "Spending Categories", // F
-    "Preferred Banks", // G
-    "Joining Fee Preference", // H
-    "Submission Type", // I
-    "User Agent", // J
-    "Card Name", // K
-    "Bank Name", // L
-    "Card Type", // M
-    "Joining Fee", // N
-    "Annual Fee", // O
-    "Reward Rate", // P
-    "Session ID", // Q
-    "Entry Type", // R
-  ]
-
-  sheet.getRange(1, 1, 1, headers.length).setValues([headers])
-
-  // Format headers
-  const headerRange = sheet.getRange(1, 1, 1, headers.length)
-  headerRange.setFontWeight("bold")
-  headerRange.setBackground("#4285f4")
-  headerRange.setFontColor("white")
-
-  // Auto-resize columns
-  sheet.autoResizeColumns(1, headers.length)
-
-  console.log("✅ Card-Clicks headers set up with 18 columns")
 }
 
 /**

@@ -1,676 +1,817 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import type React from "react"
+
+import { useState } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
+import { Separator } from "@/components/ui/separator"
+import { AlertCircle, CreditCard, TrendingUp, Building2, Eye, EyeOff } from "lucide-react"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  CreditCard,
-  Star,
-  Shield,
-  Zap,
-  Gift,
-  Plane,
-  Car,
-  ShoppingBag,
-  Utensils,
-  Fuel,
-  Smartphone,
-  AlertCircle,
-  CheckCircle2,
-  Loader2,
-  ExternalLink,
-  Filter,
-  RotateCcw,
-  TestTube,
-  Search,
-} from "lucide-react"
-import { getCardRecommendationsForForm } from "@/app/actions/card-recommendation"
-import {
-  submitEnhancedFormData,
-  trackCardApplicationClick,
-  type CardApplicationClick,
-} from "@/lib/google-sheets-submissions"
-import { fetchCreditCards } from "@/lib/google-sheets"
+import { submitEnhancedFormData, trackCardApplicationClick } from "@/lib/google-sheets-submissions"
 
-interface CardRecommendation {
-  name: string
-  bank: string
-  type: string
-  annualFee: number
-  joiningFee: number
-  rewardRate: string
-  welcomeBonus: string
-  keyFeatures: string[]
-  bestFor: string[]
-  score: number
-  reasoning: string
-  spendingCategories?: string[]
+// Enhanced card data with refined scoring algorithm
+const ENHANCED_CARD_DATA = [
+  {
+    id: "sbi-cashback",
+    name: "SBI Card CashBack",
+    bank: "SBI",
+    cardType: "Cashback",
+    joiningFee: 500,
+    annualFee: 999,
+    rewardRate: 5.0,
+    signupBonus: 2000,
+    minCreditScore: 650,
+    minIncome: 25000,
+    tags: ["fuel", "grocery", "dining", "online_shopping"],
+    description: "5% cashback on fuel, grocery & dining",
+    applyUrl: "https://www.sbicard.com/en/personal/credit-cards/shopping/sbi-card-cashback.page",
+  },
+  {
+    id: "hdfc-millennia",
+    name: "HDFC Bank Millennia Credit Card",
+    bank: "HDFC Bank",
+    cardType: "Cashback",
+    joiningFee: 1000,
+    annualFee: 1000,
+    rewardRate: 2.5,
+    signupBonus: 1000,
+    minCreditScore: 700,
+    minIncome: 25000,
+    tags: ["online_shopping", "dining"],
+    description: "2.5% cashback on online spends",
+    applyUrl: "https://www.hdfcbank.com/personal/pay/cards/credit-cards/millennia-credit-card",
+  },
+  {
+    id: "icici-amazon-pay",
+    name: "Amazon Pay ICICI Bank Credit Card",
+    bank: "ICICI Bank",
+    cardType: "Cashback",
+    joiningFee: 0,
+    annualFee: 500,
+    rewardRate: 5.0,
+    signupBonus: 2000,
+    minCreditScore: 650,
+    minIncome: 20000,
+    tags: ["online_shopping", "amazon"],
+    description: "5% cashback on Amazon purchases",
+    applyUrl: "https://www.icicibank.com/personal-banking/cards/credit-card/amazon-pay-credit-card",
+  },
+  {
+    id: "axis-ace",
+    name: "Axis Bank ACE Credit Card",
+    bank: "Axis Bank",
+    cardType: "Cashback",
+    joiningFee: 500,
+    annualFee: 500,
+    rewardRate: 4.0,
+    signupBonus: 500,
+    minCreditScore: 650,
+    minIncome: 25000,
+    tags: ["bill_payments", "online_shopping"],
+    description: "4% cashback on bill payments",
+    applyUrl: "https://www.axisbank.com/retail/cards/credit-card/ace-credit-card",
+  },
+  {
+    id: "sbi-prime",
+    name: "SBI Card PRIME",
+    bank: "SBI",
+    cardType: "Rewards",
+    joiningFee: 2999,
+    annualFee: 2999,
+    rewardRate: 3.0,
+    signupBonus: 5000,
+    minCreditScore: 700,
+    minIncome: 30000,
+    tags: ["dining", "movies", "grocery"],
+    description: "10X reward points on dining & movies",
+    applyUrl: "https://www.sbicard.com/en/personal/credit-cards/rewards/sbi-card-prime.page",
+  },
+  {
+    id: "hdfc-regalia",
+    name: "HDFC Bank Regalia Credit Card",
+    bank: "HDFC Bank",
+    cardType: "Premium",
+    joiningFee: 2500,
+    annualFee: 2500,
+    rewardRate: 2.0,
+    signupBonus: 10000,
+    minCreditScore: 750,
+    minIncome: 50000,
+    tags: ["travel", "dining", "shopping"],
+    description: "4X reward points on dining, shopping & travel",
+    applyUrl: "https://www.hdfcbank.com/personal/pay/cards/credit-cards/regalia-credit-card",
+  },
+  {
+    id: "amex-gold",
+    name: "American Express Gold Card",
+    bank: "American Express",
+    cardType: "Premium",
+    joiningFee: 4500,
+    annualFee: 4500,
+    rewardRate: 2.0,
+    signupBonus: 20000,
+    minCreditScore: 750,
+    minIncome: 60000,
+    tags: ["travel", "dining", "shopping"],
+    description: "4X Membership Rewards points on dining & travel",
+    applyUrl: "https://www.americanexpress.com/in/credit-cards/gold-card/",
+  },
+]
+
+const SPENDING_CATEGORIES = [
+  { id: "dining", label: "Dining & Restaurants" },
+  { id: "grocery", label: "Grocery & Supermarkets" },
+  { id: "fuel", label: "Fuel & Gas Stations" },
+  { id: "online_shopping", label: "Online Shopping" },
+  { id: "travel", label: "Travel & Hotels" },
+  { id: "movies", label: "Movies & Entertainment" },
+  { id: "bill_payments", label: "Bill Payments & Utilities" },
+  { id: "shopping", label: "Shopping & Retail" },
+  { id: "amazon", label: "Amazon Purchases" },
+]
+
+const BANK_OPTIONS = [
+  { id: "sbi", label: "SBI" },
+  { id: "hdfc", label: "HDFC Bank" },
+  { id: "icici", label: "ICICI Bank" },
+  { id: "axis", label: "Axis Bank" },
+  { id: "amex", label: "American Express" },
+  { id: "kotak", label: "Kotak Mahindra Bank" },
+  { id: "yes", label: "YES Bank" },
+  { id: "indusind", label: "IndusInd Bank" },
+]
+
+interface FormData {
+  monthlyIncome: string
+  monthlySpending: string
+  creditScoreRange: string
+  currentCards: string
+  spendingCategories: string[]
+  preferredBanks: string[]
+  joiningFeePreference: string
 }
 
-const spendingCategories = [
-  { id: "dining", label: "Dining & Restaurants", icon: Utensils },
-  { id: "fuel", label: "Fuel & Gas", icon: Fuel },
-  { id: "groceries", label: "Groceries & Supermarkets", icon: ShoppingBag },
-  { id: "travel", label: "Travel & Hotels", icon: Plane },
-  { id: "shopping", label: "Online Shopping", icon: ShoppingBag },
-  { id: "entertainment", label: "Entertainment & Movies", icon: Smartphone },
-  { id: "utilities", label: "Utilities & Bills", icon: Zap },
-  { id: "transport", label: "Transport & Commute", icon: Car },
-]
+interface ScoredCard {
+  card: (typeof ENHANCED_CARD_DATA)[0]
+  score: number
+  scoreBreakdown: {
+    rewards: number
+    category: number
+    signup: number
+    joining: number
+    annual: number
+    bank: number
+  }
+  eligible: boolean
+  eligibilityReasons: string[]
+  categoryMatches: string[]
+}
 
-// FIXED: Updated bank names to match Google Sheet data exactly
-const banks = [
-  "SBI", // FIXED: Changed from "SBI" to match sheet data
-  "American Express", // FIXED: Changed from "American Express" to match sheet data
-  "HDFC Bank",
-  "ICICI Bank",
-  "Axis Bank",
-  "Kotak Mahindra Bank",
-  "IndusInd Bank",
-  "Yes Bank",
-  "Standard Chartered",
-  "Citibank",
-]
+interface CardTesterProps {
+  cards: ScoredCard[]
+  formData: FormData
+  onClose: () => void
+}
 
-export default function EnhancedPersonalization() {
-  const [formData, setFormData] = useState({
-    monthlyIncome: "",
-    spendingCategories: [] as string[],
-    monthlySpending: "",
-    currentCards: "",
-    creditScore: "",
-    preferredBanks: [] as string[],
-    joiningFeePreference: "",
-  })
+function CardTester({ cards, formData, onClose }: CardTesterProps) {
+  const [selectedCardId, setSelectedCardId] = useState<string>("")
+  const [selectedCard, setSelectedCard] = useState<ScoredCard | null>(null)
 
-  const [recommendations, setRecommendations] = useState<CardRecommendation[]>([])
-  const [isLoading, setIsLoading] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [showFilters, setShowFilters] = useState(false)
-  const [isPending, startTransition] = useTransition()
-  const [clickingCard, setClickingCard] = useState<string | null>(null)
-  const [showTester, setShowTester] = useState(false)
-  const [allCards, setAllCards] = useState<any[]>([])
-  const [testResults, setTestResults] = useState<any[]>([])
-
-  const handleInputChange = (field: string, value: string | string[]) => {
-    setFormData((prev) => ({ ...prev, [field]: value }))
+  const handleCardSelect = (cardId: string) => {
+    setSelectedCardId(cardId)
+    const card = cards.find((c) => c.card.id === cardId)
+    setSelectedCard(card || null)
   }
 
-  const handleCategoryToggle = (categoryId: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      spendingCategories: prev.spendingCategories.includes(categoryId)
-        ? prev.spendingCategories.filter((id) => id !== categoryId)
-        : [...prev.spendingCategories, categoryId],
-    }))
-  }
-
-  const handleBankToggle = (bank: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      preferredBanks: prev.preferredBanks.includes(bank)
-        ? prev.preferredBanks.filter((b) => b !== bank)
-        : [...prev.preferredBanks, bank],
-    }))
-  }
-
-  const resetForm = () => {
-    setFormData({
-      monthlyIncome: "",
-      spendingCategories: [],
-      monthlySpending: "",
-      currentCards: "",
-      creditScore: "",
-      preferredBanks: [],
-      joiningFeePreference: "",
-    })
-    setRecommendations([])
-    setError(null)
-    setTestResults([])
-  }
-
-  // NEW: Card testing function
-  const runCardTester = async () => {
-    try {
-      console.log("🧪 Running card tester...")
-      const cards = await fetchCreditCards()
-      setAllCards(cards)
-
-      // Convert form data to test criteria
-      const creditScore = formData.creditScore === "750-850" ? 750 : 650
-      const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 100000
-      const cardType = "Cashback" // Based on spending categories
-
-      console.log("🎯 Test criteria:", { creditScore, monthlyIncome, cardType })
-
-      // Find specific cards to test
-      const testCards = [
-        "SBI Card CashBack",
-        "SBI Card SimplyCLICK",
-        "HDFC Millennia Credit Card",
-        "ICICI Amazon Pay Credit Card",
-        "Axis Bank Ace Credit Card",
-      ]
-
-      const results = testCards.map((cardName) => {
-        const card = cards.find((c) => c.cardName.toLowerCase().includes(cardName.toLowerCase()))
-
-        if (!card) {
-          return {
-            cardName,
-            found: false,
-            reason: "Card not found in database",
-            eligible: false,
-            score: 0,
-          }
-        }
-
-        // Test basic eligibility
-        const meetsCredit = card.creditScoreRequirement === 0 || creditScore >= card.creditScoreRequirement
-        const meetsIncome = card.monthlyIncomeRequirement === 0 || monthlyIncome >= card.monthlyIncomeRequirement
-        const matchesType = card.cardType === cardType
-
-        // Test bank preference
-        const matchesBank = formData.preferredBanks.length === 0 || formData.preferredBanks.includes(card.bank)
-
-        // Calculate composite score
-        const maxJoiningFee = Math.max(...cards.map((c) => c.joiningFee), 1)
-        const maxAnnualFee = Math.max(...cards.map((c) => c.annualFee), 1)
-        const maxRewardsRate = Math.max(...cards.map((c) => c.rewardsRate), 1)
-        const maxSignUpBonus = Math.max(...cards.map((c) => c.signUpBonus), 1)
-
-        const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
-        const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
-        const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
-        const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
-
-        const compositeScore = Math.round((joiningFeeScore + annualFeeScore + rewardsScore + bonusScore) * 100) / 100
-
-        const basicEligible = meetsCredit && meetsIncome && matchesType
-        const scoreEligible = compositeScore >= 25.0
-        const bankEligible = matchesBank
-
-        let reason = ""
-        if (!basicEligible) {
-          const issues = []
-          if (!meetsCredit) issues.push(`Credit: Need ${card.creditScoreRequirement}, have ${creditScore}`)
-          if (!meetsIncome) issues.push(`Income: Need ₹${card.monthlyIncomeRequirement}, have ₹${monthlyIncome}`)
-          if (!matchesType) issues.push(`Type: Need ${cardType}, card is ${card.cardType}`)
-          reason = `Basic eligibility failed: ${issues.join(", ")}`
-        } else if (!scoreEligible) {
-          reason = `Score too low: ${compositeScore}/100 (need ≥25.0)`
-        } else if (!bankEligible) {
-          reason = `Bank not preferred: ${card.bank} not in [${formData.preferredBanks.join(", ")}]`
-        } else {
-          reason = `✅ ELIGIBLE: Score ${compositeScore}/100, Bank: ${card.bank}`
-        }
-
-        return {
-          cardName: card.cardName,
-          bank: card.bank,
-          cardType: card.cardType,
-          found: true,
-          eligible: basicEligible && scoreEligible && bankEligible,
-          basicEligible,
-          scoreEligible,
-          bankEligible,
-          score: compositeScore,
-          creditReq: card.creditScoreRequirement,
-          incomeReq: card.monthlyIncomeRequirement,
-          joiningFee: card.joiningFee,
-          annualFee: card.annualFee,
-          rewardsRate: card.rewardsRate,
-          reason,
-        }
-      })
-
-      setTestResults(results)
-      console.log("🧪 Test results:", results)
-    } catch (error) {
-      console.error("❌ Error running card tester:", error)
-    }
-  }
-
-  // Handle card application click tracking
-  const handleCardApplicationClick = async (card: CardRecommendation) => {
-    setClickingCard(card.name)
-
-    try {
-      // Track the click in Google Sheets
-      const clickData: CardApplicationClick = {
-        timestamp: new Date().toISOString(),
-        cardName: card.name,
-        bankName: card.bank,
-        cardType: card.type,
-        joiningFee: card.joiningFee,
-        annualFee: card.annualFee,
-        rewardRate: card.rewardRate,
-        submissionType: "card_application_click",
-        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
-        sessionId: `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      }
-
-      console.log("🎯 Tracking card application click:", clickData)
-
-      // Track the click (don't wait for response to avoid blocking user)
-      trackCardApplicationClick(clickData).then((success) => {
-        if (success) {
-          console.log("✅ Card application click tracked successfully")
-        } else {
-          console.warn("⚠️ Failed to track card application click")
-        }
-      })
-
-      // Simulate redirect to bank's application page
-      console.log(`🔗 Redirecting to application page for ${card.name}`)
-
-      // For demo purposes, we'll just show an alert
-      alert(`Redirecting to ${card.bank} application page for ${card.name}...`)
-
-      // In production, you would do:
-      // window.open(card.applyUrl || `https://${card.bank.toLowerCase().replace(' ', '')}.com/apply`, '_blank')
-    } catch (error) {
-      console.error("❌ Error tracking card application click:", error)
-      // Still allow the user to proceed even if tracking fails
-    } finally {
-      setClickingCard(null)
-    }
-  }
-
-  const fetchRecommendations = async () => {
-    if (!formData.monthlyIncome || !formData.monthlySpending || !formData.creditScore) {
-      setError("Please fill in all required fields")
-      return
-    }
-
-    setIsLoading(true)
-    setError(null)
-
-    startTransition(async () => {
-      try {
-        // Submit form data to Google Sheets
-        try {
-          await submitEnhancedFormData({
-            timestamp: new Date().toISOString(),
-            monthlyIncome: Number.parseInt(formData.monthlyIncome),
-            monthlySpending: Number.parseInt(formData.monthlySpending),
-            creditScoreRange: formData.creditScore,
-            currentCards: formData.currentCards,
-            spendingCategories: formData.spendingCategories,
-            preferredBanks: formData.preferredBanks,
-            joiningFeePreference: formData.joiningFeePreference,
-            submissionType: "enhanced_form",
-            userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
-          })
-          console.log("✅ Enhanced form data submitted to Google Sheets")
-        } catch (submissionError) {
-          console.error("⚠️ Failed to submit form data to Google Sheets:", submissionError)
-          // Don't fail the recommendation request if submission fails
-        }
-
-        const result = await getCardRecommendationsForForm(formData)
-
-        if (result.success) {
-          setRecommendations(result.recommendations)
-          // Auto-run tester after getting recommendations
-          setTimeout(() => runCardTester(), 1000)
-        } else {
-          setError(result.error || "Failed to get recommendations")
-        }
-      } catch (err) {
-        setError("An unexpected error occurred. Please try again.")
-        console.error("Recommendation error:", err)
-      } finally {
-        setIsLoading(false)
-      }
-    })
-  }
-
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
-
-  const getScoreColor = (score: number) => {
-    if (score >= 80) return "text-green-600 bg-green-50 border-green-200"
-    if (score >= 60) return "text-blue-600 bg-blue-50 border-blue-200"
-    if (score >= 40) return "text-yellow-600 bg-yellow-50 border-yellow-200"
-    return "text-red-600 bg-red-50 border-red-200"
-  }
-
-  const getCategoryIcon = (categoryId: string) => {
-    const category = spendingCategories.find((cat) => cat.id === categoryId)
-    if (!category) return <CreditCard className="h-4 w-4" />
-    const IconComponent = category.icon
-    return <IconComponent className="h-4 w-4" />
-  }
+  const sbiCards = cards.filter((c) => c.card.bank === "SBI")
 
   return (
-    <div className="space-y-6">
-      {/* Enhanced Form */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <Shield className="h-5 w-5 text-blue-600" />
-              Enhanced Personalization with Click Tracking
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm" onClick={() => setShowFilters(!showFilters)}>
-                <Filter className="h-4 w-4 mr-2" />
-                {showFilters ? "Hide" : "Show"} Filters
-              </Button>
-              <Button variant="outline" size="sm" onClick={resetForm}>
-                <RotateCcw className="h-4 w-4 mr-2" />
-                Reset
-              </Button>
-            </div>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          {/* Basic Information */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label htmlFor="monthlyIncome">Monthly Income (₹) *</Label>
-              <Input
-                id="monthlyIncome"
-                type="number"
-                value={formData.monthlyIncome}
-                onChange={(e) => handleInputChange("monthlyIncome", e.target.value)}
-                placeholder="100000"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="monthlySpending">Monthly Credit Card Spending (₹) *</Label>
-              <Input
-                id="monthlySpending"
-                type="number"
-                value={formData.monthlySpending}
-                onChange={(e) => handleInputChange("monthlySpending", e.target.value)}
-                placeholder="25000"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="creditScore">Credit Score Range *</Label>
-              <Select value={formData.creditScore} onValueChange={(value) => handleInputChange("creditScore", value)}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select range" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="300-549">300-549 (Poor)</SelectItem>
-                  <SelectItem value="550-649">550-649 (Fair)</SelectItem>
-                  <SelectItem value="650-749">650-749 (Good)</SelectItem>
-                  <SelectItem value="750-850">750-850 (Excellent)</SelectItem>
-                </SelectContent>
-              </Select>
+    <div className="fixed inset-0 bg-black/50 flex items-center justify-center p-4 z-50">
+      <div className="bg-white rounded-lg max-w-4xl w-full max-h-[90vh] overflow-y-auto">
+        <div className="p-6">
+          <div className="flex justify-between items-center mb-6">
+            <h2 className="text-2xl font-bold">🧪 Card Eligibility & Scoring Tester</h2>
+            <Button variant="outline" onClick={onClose}>
+              Close
+            </Button>
+          </div>
+
+          {/* SBI Cards Quick Overview */}
+          <div className="mb-6 p-4 bg-blue-50 rounded-lg">
+            <h3 className="font-semibold mb-3 flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              SBI Cards Overview ({sbiCards.length} cards)
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {sbiCards.map((scoredCard) => (
+                <div key={scoredCard.card.id} className="flex justify-between items-center p-2 bg-white rounded">
+                  <div>
+                    <span className="font-medium">{scoredCard.card.name}</span>
+                    <div className="text-sm text-gray-600">
+                      {scoredCard.card.rewardRate}% • ₹{scoredCard.card.joiningFee} joining
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <div className="font-bold text-lg">{scoredCard.score.toFixed(1)}</div>
+                    <div className={`text-sm ${scoredCard.eligible ? "text-green-600" : "text-red-600"}`}>
+                      {scoredCard.eligible ? "✅ Eligible" : "❌ Not Eligible"}
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
 
-          {/* Current Cards */}
-          <div className="space-y-2">
-            <Label htmlFor="currentCards">How many credit cards do you currently have?</Label>
-            <Select value={formData.currentCards} onValueChange={(value) => handleInputChange("currentCards", value)}>
+          {/* Card Selector */}
+          <div className="mb-6">
+            <Label htmlFor="card-select">Select a card to analyze:</Label>
+            <Select value={selectedCardId} onValueChange={handleCardSelect}>
               <SelectTrigger>
-                <SelectValue placeholder="Select number of cards" />
+                <SelectValue placeholder="Choose a card to test..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="0">No credit cards</SelectItem>
-                <SelectItem value="1">1 credit card</SelectItem>
-                <SelectItem value="2">2 credit cards</SelectItem>
-                <SelectItem value="3">3 or more credit cards</SelectItem>
+                {cards.map((scoredCard) => (
+                  <SelectItem key={scoredCard.card.id} value={scoredCard.card.id}>
+                    {scoredCard.card.name} - Score: {scoredCard.score.toFixed(1)} (
+                    {scoredCard.eligible ? "✅ Eligible" : "❌ Not Eligible"})
+                  </SelectItem>
+                ))}
               </SelectContent>
             </Select>
           </div>
 
-          {/* Spending Categories */}
-          <div className="space-y-3">
-            <Label>Primary Spending Categories</Label>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-              {spendingCategories.map((category) => {
-                const IconComponent = category.icon
-                const isSelected = formData.spendingCategories.includes(category.id)
-                return (
-                  <div
-                    key={category.id}
-                    className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-colors ${
-                      isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
-                    }`}
-                    onClick={() => handleCategoryToggle(category.id)}
-                  >
-                    <Checkbox checked={isSelected} onChange={() => handleCategoryToggle(category.id)} />
-                    <IconComponent className="h-4 w-4" />
-                    <span className="text-sm font-medium">{category.label}</span>
+          {/* Selected Card Analysis */}
+          {selectedCard && (
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CreditCard className="h-5 w-5" />
+                    {selectedCard.card.name}
+                  </CardTitle>
+                  <CardDescription>
+                    {selectedCard.card.bank} • {selectedCard.card.cardType} • {selectedCard.card.description}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Basic Eligibility */}
+                    <div>
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <AlertCircle className="h-4 w-4" />
+                        Basic Eligibility Check
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span>Credit Score:</span>
+                          <span
+                            className={
+                              getCreditScoreValue(formData.creditScoreRange) >= selectedCard.card.minCreditScore
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }
+                          >
+                            {getCreditScoreValue(formData.creditScoreRange) >= selectedCard.card.minCreditScore
+                              ? "✅ Pass"
+                              : "❌ Fail"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Monthly Income:</span>
+                          <span
+                            className={
+                              Number.parseInt(formData.monthlyIncome) >= selectedCard.card.minIncome
+                                ? "text-green-600"
+                                : "text-red-600"
+                            }
+                          >
+                            {Number.parseInt(formData.monthlyIncome) >= selectedCard.card.minIncome
+                              ? "✅ Pass"
+                              : "❌ Fail"}
+                          </span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Card Type Match:</span>
+                          <span className="text-green-600">✅ Pass</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Refined Scoring Breakdown */}
+                    <div>
+                      <h4 className="font-semibold mb-3 flex items-center gap-2">
+                        <TrendingUp className="h-4 w-4" />
+                        Refined Scoring Breakdown
+                      </h4>
+                      <div className="space-y-2">
+                        <div className="flex justify-between">
+                          <span>🎁 Rewards Rate (30):</span>
+                          <span className="font-medium">{selectedCard.scoreBreakdown.rewards.toFixed(1)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>🛍️ Category Match (30):</span>
+                          <span className="font-medium">{selectedCard.scoreBreakdown.category.toFixed(1)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>🎉 Sign-up Bonus (20):</span>
+                          <span className="font-medium">{selectedCard.scoreBreakdown.signup.toFixed(1)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>💳 Joining Fee (10):</span>
+                          <span className="font-medium">{selectedCard.scoreBreakdown.joining.toFixed(1)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>📅 Annual Fee (10):</span>
+                          <span className="font-medium">{selectedCard.scoreBreakdown.annual.toFixed(1)}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>🏦 Bank Bonus (5):</span>
+                          <span className="font-medium">{selectedCard.scoreBreakdown.bank.toFixed(1)}</span>
+                        </div>
+                        <Separator />
+                        <div className="flex justify-between font-bold text-lg">
+                          <span>Total Score:</span>
+                          <span>{selectedCard.score.toFixed(1)}/105</span>
+                        </div>
+                      </div>
+                    </div>
                   </div>
-                )
-              })}
+
+                  {/* Category Matching */}
+                  <div className="mt-6">
+                    <h4 className="font-semibold mb-3">Category Matching Analysis</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <span className="text-sm text-gray-600">Your Categories:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {formData.spendingCategories.map((cat) => (
+                            <Badge key={cat} variant="outline">
+                              {SPENDING_CATEGORIES.find((c) => c.id === cat)?.label}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                      <div>
+                        <span className="text-sm text-gray-600">Card Categories:</span>
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {selectedCard.card.tags.map((tag) => (
+                            <Badge
+                              key={tag}
+                              variant={selectedCard.categoryMatches.includes(tag) ? "default" : "secondary"}
+                            >
+                              {SPENDING_CATEGORIES.find((c) => c.id === tag)?.label || tag}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="mt-2 text-sm">
+                      <span className="font-medium">Match Rate:</span> {selectedCard.categoryMatches.length}/
+                      {formData.spendingCategories.length} categories (
+                      {((selectedCard.categoryMatches.length / formData.spendingCategories.length) * 100).toFixed(0)}%)
+                    </div>
+                  </div>
+
+                  {/* Final Verdict */}
+                  <div className="mt-6 p-4 rounded-lg bg-gray-50">
+                    <h4 className="font-semibold mb-2">Final Verdict</h4>
+                    <div className={`text-lg font-bold ${selectedCard.eligible ? "text-green-600" : "text-red-600"}`}>
+                      {selectedCard.eligible ? "✅ ELIGIBLE" : "❌ NOT ELIGIBLE"}
+                    </div>
+                    <div className="text-sm mt-1">
+                      {selectedCard.eligible
+                        ? `This card passes all eligibility checks and scores ${selectedCard.score.toFixed(
+                            1,
+                          )} points. ${
+                            selectedCard.score >= 25.0
+                              ? "It meets the minimum score threshold of 25.0."
+                              : "However, it may not appear in top recommendations due to low score."
+                          }`
+                        : `This card fails eligibility: ${selectedCard.eligibilityReasons.join(", ")}`}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-          </div>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
 
-          {/* Advanced Filters */}
-          {showFilters && (
-            <div className="space-y-4 border-t pt-6">
-              <h4 className="font-medium text-gray-900">Advanced Preferences</h4>
+function getCreditScoreValue(range: string): number {
+  switch (range) {
+    case "300-549":
+      return 425
+    case "550-649":
+      return 600
+    case "650-749":
+      return 700
+    case "750-850":
+      return 800
+    default:
+      return 700
+  }
+}
 
-              <div className="space-y-2">
-                <Label htmlFor="joiningFee">Joining Fee Preference</Label>
+export default function EnhancedPersonalization() {
+  const [formData, setFormData] = useState<FormData>({
+    monthlyIncome: "",
+    monthlySpending: "",
+    creditScoreRange: "",
+    currentCards: "",
+    spendingCategories: [],
+    preferredBanks: [],
+    joiningFeePreference: "",
+  })
+
+  const [recommendations, setRecommendations] = useState<ScoredCard[]>([])
+  const [isLoading, setIsLoading] = useState(false)
+  const [showTester, setShowTester] = useState(false)
+  const [allScoredCards, setAllScoredCards] = useState<ScoredCard[]>([])
+
+  const handleInputChange = (field: keyof FormData, value: string | string[]) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleCategoryChange = (categoryId: string, checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      spendingCategories: checked
+        ? [...prev.spendingCategories, categoryId]
+        : prev.spendingCategories.filter((id) => id !== categoryId),
+    }))
+  }
+
+  const handleBankChange = (bankId: string, checked: boolean) => {
+    setFormData((prev) => ({
+      ...prev,
+      preferredBanks: checked ? [...prev.preferredBanks, bankId] : prev.preferredBanks.filter((id) => id !== bankId),
+    }))
+  }
+
+  const calculateRefinedScore = (
+    card: (typeof ENHANCED_CARD_DATA)[0],
+    userCategories: string[],
+    preferredBanks: string[],
+    maxValues: { rewards: number; signup: number; joining: number; annual: number },
+  ) => {
+    // 1. Rewards Rate Score (0-30 points)
+    const rewardsScore = (card.rewardRate / maxValues.rewards) * 30
+
+    // 2. Category Match Score (0-30 points)
+    const matchingCategories = card.tags.filter((tag) => userCategories.includes(tag))
+    const categoryScore = userCategories.length > 0 ? (matchingCategories.length / userCategories.length) * 30 : 0
+
+    // 3. Sign-up Bonus Score (0-20 points)
+    const signupScore = (card.signupBonus / maxValues.signup) * 20
+
+    // 4. Joining Fee Score (0-10 points) - Lower fee = higher score
+    const joiningScore = ((maxValues.joining - card.joiningFee) / maxValues.joining) * 10
+
+    // 5. Annual Fee Score (0-10 points) - Lower fee = higher score
+    const annualScore = ((maxValues.annual - card.annualFee) / maxValues.annual) * 10
+
+    // 6. Bank Preference Bonus (0-5 points)
+    const bankScore = preferredBanks.some((bank) => card.bank.toLowerCase().includes(bank.toLowerCase())) ? 5 : 0
+
+    const totalScore = rewardsScore + categoryScore + signupScore + joiningScore + annualScore + bankScore
+
+    return {
+      total: totalScore,
+      breakdown: {
+        rewards: rewardsScore,
+        category: categoryScore,
+        signup: signupScore,
+        joining: joiningScore,
+        annual: annualScore,
+        bank: bankScore,
+      },
+      categoryMatches: matchingCategories,
+    }
+  }
+
+  const checkEligibility = (card: (typeof ENHANCED_CARD_DATA)[0], formData: FormData) => {
+    const reasons: string[] = []
+    let eligible = true
+
+    // Credit score check
+    const creditScore = getCreditScoreValue(formData.creditScoreRange)
+    if (creditScore < card.minCreditScore) {
+      eligible = false
+      reasons.push(`Credit score too low (need ${card.minCreditScore}+)`)
+    }
+
+    // Income check
+    const income = Number.parseInt(formData.monthlyIncome)
+    if (income < card.minIncome) {
+      eligible = false
+      reasons.push(`Income too low (need ₹${card.minIncome}+)`)
+    }
+
+    return { eligible, reasons }
+  }
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setIsLoading(true)
+
+    try {
+      // Calculate max values for normalization
+      const maxValues = {
+        rewards: Math.max(...ENHANCED_CARD_DATA.map((c) => c.rewardRate)),
+        signup: Math.max(...ENHANCED_CARD_DATA.map((c) => c.signupBonus)),
+        joining: Math.max(...ENHANCED_CARD_DATA.map((c) => c.joiningFee)),
+        annual: Math.max(...ENHANCED_CARD_DATA.map((c) => c.annualFee)),
+      }
+
+      // Score and filter all cards
+      const scoredCards: ScoredCard[] = ENHANCED_CARD_DATA.map((card) => {
+        const eligibility = checkEligibility(card, formData)
+        const scoring = calculateRefinedScore(card, formData.spendingCategories, formData.preferredBanks, maxValues)
+
+        return {
+          card,
+          score: scoring.total,
+          scoreBreakdown: scoring.breakdown,
+          eligible: eligibility.eligible,
+          eligibilityReasons: eligibility.reasons,
+          categoryMatches: scoring.categoryMatches,
+        }
+      })
+
+      // Filter eligible cards with score >= 25.0
+      const eligibleCards = scoredCards.filter((card) => card.eligible && card.score >= 25.0)
+
+      // Sort by score (highest first) and take top 7
+      const topRecommendations = eligibleCards.sort((a, b) => b.score - a.score).slice(0, 7)
+
+      setAllScoredCards(scoredCards)
+      setRecommendations(topRecommendations)
+
+      // Submit to Google Sheets
+      const submissionData = {
+        timestamp: new Date().toISOString(),
+        monthlyIncome: Number.parseInt(formData.monthlyIncome),
+        monthlySpending: Number.parseInt(formData.monthlySpending),
+        creditScoreRange: formData.creditScoreRange,
+        currentCards: formData.currentCards,
+        spendingCategories: formData.spendingCategories,
+        preferredBanks: formData.preferredBanks,
+        joiningFeePreference: formData.joiningFeePreference,
+        submissionType: "enhanced_personalization",
+        userAgent: navigator.userAgent,
+      }
+
+      await submitEnhancedFormData(submissionData)
+    } catch (error) {
+      console.error("Error generating recommendations:", error)
+    } finally {
+      setIsLoading(false)
+    }
+  }
+
+  const handleCardClick = async (card: ScoredCard) => {
+    try {
+      const clickData = {
+        timestamp: new Date().toISOString(),
+        cardName: card.card.name,
+        bankName: card.card.bank,
+        cardType: card.card.cardType,
+        joiningFee: card.card.joiningFee,
+        annualFee: card.card.annualFee,
+        rewardRate: `${card.card.rewardRate}%`,
+        submissionType: "card_application_click",
+        userAgent: navigator.userAgent,
+        sessionId: `session_${Date.now()}`,
+      }
+
+      await trackCardApplicationClick(clickData)
+      window.open(card.card.applyUrl, "_blank")
+    } catch (error) {
+      console.error("Error tracking card click:", error)
+      // Still open the link even if tracking fails
+      window.open(card.card.applyUrl, "_blank")
+    }
+  }
+
+  return (
+    <div className="max-w-4xl mx-auto p-6 space-y-8">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold mb-2">🎯 Enhanced Card Personalization</h1>
+        <p className="text-gray-600">Get personalized credit card recommendations with our refined scoring algorithm</p>
+      </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Your Financial Profile</CardTitle>
+          <CardDescription>Help us understand your spending patterns and preferences</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Basic Financial Info */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="monthlyIncome">Monthly Income (₹)</Label>
+                <Input
+                  id="monthlyIncome"
+                  type="number"
+                  placeholder="50000"
+                  value={formData.monthlyIncome}
+                  onChange={(e) => handleInputChange("monthlyIncome", e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label htmlFor="monthlySpending">Monthly Spending (₹)</Label>
+                <Input
+                  id="monthlySpending"
+                  type="number"
+                  placeholder="25000"
+                  value={formData.monthlySpending}
+                  onChange={(e) => handleInputChange("monthlySpending", e.target.value)}
+                  required
+                />
+              </div>
+            </div>
+
+            {/* Credit Score and Current Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <Label htmlFor="creditScore">Credit Score Range</Label>
                 <Select
-                  value={formData.joiningFeePreference}
-                  onValueChange={(value) => handleInputChange("joiningFeePreference", value)}
+                  value={formData.creditScoreRange}
+                  onValueChange={(value) => handleInputChange("creditScoreRange", value)}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="Select preference" />
+                    <SelectValue placeholder="Select your credit score range" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="no_fee">No joining fee</SelectItem>
-                    <SelectItem value="low_fee">Low fee (₹0-1000)</SelectItem>
-                    <SelectItem value="any_amount">Any amount</SelectItem>
+                    <SelectItem value="300-549">Poor (300-549)</SelectItem>
+                    <SelectItem value="550-649">Fair (550-649)</SelectItem>
+                    <SelectItem value="650-749">Good (650-749)</SelectItem>
+                    <SelectItem value="750-850">Excellent (750-850)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
-
-              {/* Preferred Banks - FIXED with exact bank names */}
-              <div className="space-y-3">
-                <Label>Preferred Banks (Optional)</Label>
-                <div className="bg-blue-50 p-3 rounded-lg mb-3">
-                  <p className="text-sm text-blue-800">
-                    💡 <strong>Bank Filter Debug:</strong> Select "SBI" and "American Express" to see cards from these
-                    banks. Bank names must match exactly with the data in Google Sheets.
-                  </p>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
-                  {banks.map((bank) => {
-                    const isSelected = formData.preferredBanks.includes(bank)
-                    return (
-                      <div
-                        key={bank}
-                        className={`flex items-center space-x-2 p-2 rounded border cursor-pointer transition-colors ${
-                          isSelected ? "border-blue-500 bg-blue-50" : "border-gray-200 hover:border-gray-300"
-                        }`}
-                        onClick={() => handleBankToggle(bank)}
-                      >
-                        <Checkbox checked={isSelected} onChange={() => handleBankToggle(bank)} />
-                        <span className="text-sm">{bank}</span>
-                      </div>
-                    )
-                  })}
-                </div>
-                {formData.preferredBanks.length > 0 && (
-                  <div className="mt-2">
-                    <p className="text-sm text-gray-600">Selected banks:</p>
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {formData.preferredBanks.map((bank) => (
-                        <Badge key={bank} variant="secondary" className="text-xs">
-                          {bank}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
+              <div>
+                <Label htmlFor="currentCards">Number of Current Credit Cards</Label>
+                <Select
+                  value={formData.currentCards}
+                  onValueChange={(value) => handleInputChange("currentCards", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select number of cards" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">0 cards</SelectItem>
+                    <SelectItem value="1">1 card</SelectItem>
+                    <SelectItem value="2">2 cards</SelectItem>
+                    <SelectItem value="3">3 cards</SelectItem>
+                    <SelectItem value="4+">4+ cards</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
-          )}
 
-          {/* Submit Button */}
-          <Button onClick={fetchRecommendations} disabled={isLoading || isPending} className="w-full" size="lg">
-            {isLoading || isPending ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Analyzing Your Profile...
-              </>
-            ) : (
-              <>
-                <Zap className="h-4 w-4 mr-2" />
-                Get Enhanced Recommendations
-              </>
-            )}
-          </Button>
+            {/* Spending Categories */}
+            <div>
+              <Label>Primary Spending Categories (Select all that apply)</Label>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
+                {SPENDING_CATEGORIES.map((category) => (
+                  <div key={category.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={category.id}
+                      checked={formData.spendingCategories.includes(category.id)}
+                      onCheckedChange={(checked) => handleCategoryChange(category.id, checked as boolean)}
+                    />
+                    <Label htmlFor={category.id} className="text-sm">
+                      {category.label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Preferred Banks */}
+            <div>
+              <Label>Preferred Banks (Optional)</Label>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2">
+                {BANK_OPTIONS.map((bank) => (
+                  <div key={bank.id} className="flex items-center space-x-2">
+                    <Checkbox
+                      id={bank.id}
+                      checked={formData.preferredBanks.includes(bank.id)}
+                      onCheckedChange={(checked) => handleBankChange(bank.id, checked as boolean)}
+                    />
+                    <Label htmlFor={bank.id} className="text-sm">
+                      {bank.label}
+                    </Label>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Joining Fee Preference */}
+            <div>
+              <Label htmlFor="joiningFee">Joining Fee Preference</Label>
+              <Select
+                value={formData.joiningFeePreference}
+                onValueChange={(value) => handleInputChange("joiningFeePreference", value)}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Select joining fee preference" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="free">Free (₹0)</SelectItem>
+                  <SelectItem value="low">Low (₹1-1000)</SelectItem>
+                  <SelectItem value="medium">Medium (₹1001-3000)</SelectItem>
+                  <SelectItem value="any_amount">Any Amount</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Button type="submit" className="w-full" disabled={isLoading}>
+              {isLoading ? "Generating Recommendations..." : "Get Personalized Recommendations"}
+            </Button>
+          </form>
         </CardContent>
       </Card>
 
-      {/* Error Display */}
-      {error && (
-        <Alert className="border-red-200 bg-red-50">
-          <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Recommendations Display with Click Tracking */}
+      {/* Recommendations */}
       {recommendations.length > 0 && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-2xl font-bold text-gray-900">Your Enhanced Recommendations</h2>
-            <div className="flex gap-2">
-              <Badge variant="secondary">{recommendations.length} cards found</Badge>
-              <Button variant="outline" size="sm" onClick={() => setShowTester(!showTester)}>
-                <TestTube className="h-4 w-4 mr-2" />
-                {showTester ? "Hide" : "Show"} Tester
-              </Button>
-            </div>
+          <div className="flex justify-between items-center">
+            <h2 className="text-2xl font-bold">🏆 Top Recommendations</h2>
+            <Button variant="outline" onClick={() => setShowTester(true)} className="flex items-center gap-2">
+              {showTester ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+              Show Tester
+            </Button>
           </div>
 
-          <div className="grid gap-6">
-            {recommendations.map((card, index) => (
-              <Card key={`${card.bank}-${card.name}-${index}`} className="overflow-hidden">
-                <CardHeader className="pb-4">
-                  <div className="flex items-start justify-between">
-                    <div className="flex-1">
-                      <div className="flex items-center gap-3 mb-2">
-                        <CardTitle className="text-xl">{card.name}</CardTitle>
-                        {index === 0 && (
-                          <Badge className="bg-gradient-to-r from-yellow-400 to-orange-500 text-white">
-                            <Star className="h-3 w-3 mr-1" />
-                            Best Match
-                          </Badge>
-                        )}
+          <Alert>
+            <TrendingUp className="h-4 w-4" />
+            <AlertDescription>
+              Cards are ranked using our refined algorithm: Rewards Rate (30%) + Category Match (30%) + Sign-up Bonus
+              (20%) + Fees (20%). Only showing cards with score ≥ 25.0.
+            </AlertDescription>
+          </Alert>
+
+          <div className="grid gap-4">
+            {recommendations.map((scoredCard, index) => (
+              <Card key={scoredCard.card.id} className="hover:shadow-lg transition-shadow">
+                <CardContent className="p-6">
+                  <div className="flex justify-between items-start mb-4">
+                    <div>
+                      <div className="flex items-center gap-2 mb-1">
+                        <Badge variant="secondary">#{index + 1}</Badge>
+                        <h3 className="text-xl font-bold">{scoredCard.card.name}</h3>
+                        <Badge variant="outline">{scoredCard.card.bank}</Badge>
                       </div>
-                      <div className="flex items-center gap-4 text-sm text-gray-600">
-                        <span className="font-medium">{card.bank}</span>
-                        <span>•</span>
-                        <span className="capitalize">{card.type}</span>
-                        <span>•</span>
-                        <span>{card.rewardRate}</span>
-                      </div>
+                      <p className="text-gray-600">{scoredCard.card.description}</p>
                     </div>
                     <div className="text-right">
-                      <div
-                        className={`inline-flex items-center px-3 py-1 rounded-full text-sm font-medium border ${getScoreColor(card.score)}`}
-                      >
-                        {card.score}/100
-                      </div>
-                    </div>
-                  </div>
-                </CardHeader>
-
-                <CardContent className="space-y-4">
-                  {/* Fees and Bonus */}
-                  <div className="flex items-center gap-6 text-sm">
-                    <div>
-                      <span className="text-gray-600">Joining:</span>
-                      <span className="ml-2 font-semibold">
-                        {card.joiningFee === 0 ? "Free" : formatCurrency(card.joiningFee)}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-gray-600">Annual:</span>
-                      <span className="ml-2 font-semibold">
-                        {card.annualFee === 0 ? "Free" : formatCurrency(card.annualFee)}
-                      </span>
-                    </div>
-                    {card.welcomeBonus && (
-                      <div>
-                        <span className="text-gray-600">Welcome:</span>
-                        <span className="ml-2 font-semibold text-green-600">{card.welcomeBonus}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Key Features */}
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                      <Gift className="h-4 w-4" />
-                      Key Features
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                      {card.keyFeatures.map((feature, idx) => (
-                        <div key={idx} className="flex items-center gap-2 text-sm">
-                          <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
-                          <span>{feature}</span>
-                        </div>
-                      ))}
+                      <div className="text-2xl font-bold text-blue-600">{scoredCard.score.toFixed(1)}</div>
+                      <div className="text-sm text-gray-500">Score</div>
                     </div>
                   </div>
 
-                  {/* Best For Categories */}
-                  <div>
-                    <h4 className="font-semibold text-gray-900 mb-2">Perfect For</h4>
-                    <div className="flex flex-wrap gap-2">
-                      {card.bestFor.map((category, idx) => (
-                        <Badge key={idx} variant="secondary" className="flex items-center gap-1">
-                          {getCategoryIcon(category.toLowerCase())}
-                          {category}
-                        </Badge>
-                      ))}
+                  <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                    <div className="text-center">
+                      <div className="font-bold text-green-600">{scoredCard.card.rewardRate}%</div>
+                      <div className="text-sm text-gray-500">Reward Rate</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-bold">₹{scoredCard.card.joiningFee}</div>
+                      <div className="text-sm text-gray-500">Joining Fee</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-bold">₹{scoredCard.card.annualFee}</div>
+                      <div className="text-sm text-gray-500">Annual Fee</div>
+                    </div>
+                    <div className="text-center">
+                      <div className="font-bold text-orange-600">₹{scoredCard.card.signupBonus}</div>
+                      <div className="text-sm text-gray-500">Sign-up Bonus</div>
                     </div>
                   </div>
 
-                  {/* AI Reasoning */}
-                  <div className="bg-blue-50 rounded-lg p-4">
-                    <h4 className="font-semibold text-blue-900 mb-2 flex items-center gap-2">
-                      <Zap className="h-4 w-4" />
-                      Why This Card Matches You
-                    </h4>
-                    <p className="text-blue-800 text-sm">{card.reasoning}</p>
+                  <div className="flex flex-wrap gap-2 mb-4">
+                    {scoredCard.categoryMatches.map((category) => (
+                      <Badge key={category} variant="default">
+                        {SPENDING_CATEGORIES.find((c) => c.id === category)?.label || category}
+                      </Badge>
+                    ))}
                   </div>
 
-                  {/* Apply Button with Click Tracking */}
-                  <Button
-                    className="w-full"
-                    size="lg"
-                    onClick={() => handleCardApplicationClick(card)}
-                    disabled={clickingCard === card.name}
-                  >
-                    {clickingCard === card.name ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Tracking Click...
-                      </>
-                    ) : (
-                      <>
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                        Apply for {card.name}
-                      </>
-                    )}
+                  <Button onClick={() => handleCardClick(scoredCard)} className="w-full">
+                    Apply Now
                   </Button>
                 </CardContent>
               </Card>
@@ -679,76 +820,9 @@ export default function EnhancedPersonalization() {
         </div>
       )}
 
-      {/* NEW: Card Testing Component */}
-      {showTester && testResults.length > 0 && (
-        <Card className="border-orange-200 bg-orange-50">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-orange-800">
-              <TestTube className="h-5 w-5" />
-              Card Eligibility Tester (Debug Mode)
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="text-sm text-orange-700 mb-4">
-                <strong>Test Criteria:</strong> Income: ₹{formData.monthlyIncome}, Credit Score: {formData.creditScore},
-                Preferred Banks: [{formData.preferredBanks.join(", ")}], Card Type: Cashback
-              </div>
-
-              {testResults.map((result, index) => (
-                <div
-                  key={index}
-                  className={`p-4 rounded-lg border ${
-                    result.eligible
-                      ? "border-green-200 bg-green-50"
-                      : result.found
-                        ? "border-red-200 bg-red-50"
-                        : "border-gray-200 bg-gray-50"
-                  }`}
-                >
-                  <div className="flex items-center justify-between mb-2">
-                    <h4 className="font-semibold">
-                      {result.eligible ? "✅" : result.found ? "❌" : "❓"} {result.cardName}
-                    </h4>
-                    {result.found && (
-                      <Badge variant={result.eligible ? "default" : "destructive"}>Score: {result.score}/100</Badge>
-                    )}
-                  </div>
-
-                  {result.found && (
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs mb-2">
-                      <div>Bank: {result.bank}</div>
-                      <div>Type: {result.cardType}</div>
-                      <div>Credit Req: {result.creditReq}</div>
-                      <div>Income Req: ₹{result.incomeReq?.toLocaleString()}</div>
-                      <div>Joining Fee: ₹{result.joiningFee}</div>
-                      <div>Annual Fee: ₹{result.annualFee}</div>
-                      <div>Rewards: {result.rewardsRate}%</div>
-                      <div className="flex gap-1">
-                        <span className={result.basicEligible ? "text-green-600" : "text-red-600"}>
-                          Basic: {result.basicEligible ? "✓" : "✗"}
-                        </span>
-                        <span className={result.scoreEligible ? "text-green-600" : "text-red-600"}>
-                          Score: {result.scoreEligible ? "✓" : "✗"}
-                        </span>
-                        <span className={result.bankEligible ? "text-green-600" : "text-red-600"}>
-                          Bank: {result.bankEligible ? "✓" : "✗"}
-                        </span>
-                      </div>
-                    </div>
-                  )}
-
-                  <p className="text-sm text-gray-700">{result.reason}</p>
-                </div>
-              ))}
-
-              <Button variant="outline" size="sm" onClick={runCardTester}>
-                <Search className="h-4 w-4 mr-2" />
-                Re-run Test
-              </Button>
-            </div>
-          </CardContent>
-        </Card>
+      {/* Card Tester Modal */}
+      {showTester && allScoredCards.length > 0 && (
+        <CardTester cards={allScoredCards} formData={formData} onClose={() => setShowTester(false)} />
       )}
     </div>
   )
