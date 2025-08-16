@@ -11,11 +11,12 @@ import { Label } from "@/components/ui/label"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Textarea } from "@/components/ui/textarea"
-import { Loader2, Search, CreditCardIcon, Star, TrendingUp, Award, DollarSign, Calendar } from "lucide-react"
+import { Loader2, Search, CreditCard, Star, TrendingUp, Award, DollarSign, Calendar } from "lucide-react"
 import {
   fetchCreditCards,
   fetchAvailableSpendingCategories,
   filterAndRankCardsWithSpendingCategories,
+  getCardRecommendationsForForm,
 } from "@/lib/google-sheets"
 
 interface Recommendation {
@@ -165,9 +166,6 @@ export default function EnhancedPersonalization() {
         joiningFeePreference,
       })
 
-      // Import the function dynamically to avoid build-time issues
-      const { getCardRecommendationsForForm } = await import("@/lib/google-sheets")
-
       const result = await getCardRecommendationsForForm({
         monthlyIncome,
         spendingCategories,
@@ -279,7 +277,7 @@ export default function EnhancedPersonalization() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <CreditCardIcon className="h-5 w-5" />
+            <CreditCard className="h-5 w-5" />
             Personal Information
           </CardTitle>
         </CardHeader>
