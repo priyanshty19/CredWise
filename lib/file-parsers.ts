@@ -47,25 +47,50 @@ const BROKER_PATTERNS = {
     "market_price",
   ],
   groww: [
+    // Mutual Fund headers
     "scheme_name",
     "scheme",
     "fund_name",
     "investment_name",
+    "amc",
+    "category",
+    "sub_category",
+    "subcategory",
+    "sub-category",
+    "folio_no",
     "folio_number",
     "folio",
-    "folio_no",
+    "source",
     "units",
     "quantity",
     "qty",
-    "nav",
-    "net_asset_value",
-    "price",
-    "current_value",
-    "market_value",
-    "present_value",
     "invested_value",
     "invested_amount",
     "purchase_value",
+    "current_value",
+    "market_value",
+    "present_value",
+    "returns",
+    "return",
+    "xirr",
+    // Stock headers
+    "stock_name",
+    "stockname",
+    "isin",
+    "average_buy_price",
+    "averagebuyprice",
+    "avg_buy_price",
+    "buy_value",
+    "buyvalue",
+    "closing_price",
+    "closingprice",
+    "closing_value",
+    "closingvalue",
+    "unrealised_p_l",
+    "unrealised_pl",
+    "unrealisedpl",
+    "pnl",
+    "profit_loss",
   ],
   hdfc: [
     "scrip_name",
@@ -179,6 +204,7 @@ const FINANCIAL_KEYWORDS = [
   "scrip",
   "security",
   "investment",
+  "stock",
   "nav",
   "price",
   "rate",
@@ -199,6 +225,15 @@ const FINANCIAL_KEYWORDS = [
   "profit",
   "pnl",
   "return",
+  "returns",
+  "xirr",
+  "amc",
+  "category",
+  "closing",
+  "buy",
+  "average",
+  "unrealised",
+  "realised",
 ]
 
 interface TableDetectionResult {
@@ -213,10 +248,12 @@ function normalizeHeader(header: string): string {
   return header
     .toLowerCase()
     .trim()
-    .replace(/[^\w\s]/g, "") // Remove special characters
+    .replace(/[^\w\s]/g, "") // Remove special characters like &, /, etc.
     .replace(/\s+/g, "_") // Replace spaces with underscores
     .replace(/_+/g, "_") // Replace multiple underscores with single
     .replace(/^_|_$/g, "") // Remove leading/trailing underscores
+    .replace(/p_l$/, "pl") // Convert "p_l" to "pl" for P&L columns
+    .replace(/p_and_l/, "pl") // Convert "p_and_l" to "pl"
 }
 
 function detectBroker(headers: string[]): string {
@@ -410,7 +447,20 @@ function findColumnValue(row: any, possibleNames: string[]): string {
   for (const name of possibleNames) {
     const normalizedName = normalizeHeader(name)
     for (const [key, value] of Object.entries(row)) {
-      if (normalizeHeader(key).includes(normalizedName) || normalizedName.includes(normalizeHeader(key))) {
+      const normalizedKey = normalizeHeader(key)
+
+      // Exact match
+      if (normalizedKey === normalizedName) {
+        return value?.toString() || ""
+      }
+
+      // Contains match
+      if (normalizedKey.includes(normalizedName) || normalizedName.includes(normalizedKey)) {
+        return value?.toString() || ""
+      }
+
+      // Special handling for Groww headers that might have spaces removed
+      if (normalizedName.replace(/_/g, "") === normalizedKey.replace(/_/g, "")) {
         return value?.toString() || ""
       }
     }
@@ -458,31 +508,70 @@ function parseZerodhaData(data: any[], fileName: string): ParsedPortfolioEntry[]
 function parseGrowwData(data: any[], fileName: string): ParsedPortfolioEntry[] {
   return data
     .map((row, index) => {
-      const units = findNumericValue(row, ["units", "quantity", "qty"])
-      const nav = findNumericValue(row, ["nav", "net_asset_value", "price"])
-      const currentValue = findNumericValue(row, ["current_value", "market_value", "present_value"])
-      const investedValue = findNumericValue(row, ["invested_value", "invested_amount", "purchase_value"])
-      const name = findColumnValue(row, ["scheme_name", "scheme", "fund_name", "investment_name"])
+      // Check if this is a Mutual Fund row (has Scheme Name)
+      const schemeName = findColumnValue(row, ["scheme_name", "scheme", "fund_name"])
+      const stockName = findColumnValue(row, ["stock_name", "stockname"])
 
-      if (units <= 0 || nav <= 0 || !name) return null
+      if (schemeName) {
+        // Parse as Mutual Fund
+        const units = findNumericValue(row, ["units", "quantity", "qty"])
+        const investedValue = findNumericValue(row, ["invested_value", "invested_amount", "purchase_value"])
+        const currentValue = findNumericValue(row, ["current_value", "market_value", "present_value"])
+        const amc = findColumnValue(row, ["amc"])
+        const category = findColumnValue(row, ["category"])
+        const subCategory = findColumnValue(row, ["sub_category", "subcategory", "sub-category"])
+        const folioNo = findColumnValue(row, ["folio_no", "folio_number", "folio"])
+        const source = findColumnValue(row, ["source"])
 
-      const invested = investedValue || units * nav
-      const current = currentValue || units * nav
+        if (units <= 0 || investedValue <= 0 || !schemeName) return null
 
-      return {
-        id: `groww-${index}`,
-        name,
-        type: "mutual_fund" as const,
-        invested,
-        current,
-        units,
-        nav,
-        date: new Date().toISOString().split("T")[0],
-        source: "upload" as const,
-        fileName,
-        broker: "Groww",
-        folio: findColumnValue(row, ["folio_number", "folio", "folio_no"]),
+        const nav = currentValue > 0 && units > 0 ? currentValue / units : investedValue / units
+
+        return {
+          id: `groww-mf-${index}`,
+          name: schemeName,
+          type: "mutual_fund" as const,
+          invested: investedValue,
+          current: currentValue || investedValue,
+          units,
+          nav,
+          date: new Date().toISOString().split("T")[0],
+          source: "upload" as const,
+          fileName,
+          broker: "Groww",
+          folio: folioNo,
+        }
+      } else if (stockName) {
+        // Parse as Stock
+        const quantity = findNumericValue(row, ["quantity", "qty", "units"])
+        const averageBuyPrice = findNumericValue(row, ["average_buy_price", "averagebuyprice", "avg_buy_price"])
+        const buyValue = findNumericValue(row, ["buy_value", "buyvalue"])
+        const closingPrice = findNumericValue(row, ["closing_price", "closingprice", "current_price"])
+        const closingValue = findNumericValue(row, ["closing_value", "closingvalue", "current_value"])
+        const isin = findColumnValue(row, ["isin", "ISIN"])
+
+        if (quantity <= 0 || averageBuyPrice <= 0 || !stockName) return null
+
+        const invested = buyValue || quantity * averageBuyPrice
+        const current = closingValue || quantity * closingPrice
+
+        return {
+          id: `groww-stock-${index}`,
+          name: stockName,
+          type: "stock" as const,
+          invested,
+          current,
+          units: quantity,
+          nav: closingPrice || averageBuyPrice,
+          date: new Date().toISOString().split("T")[0],
+          source: "upload" as const,
+          fileName,
+          broker: "Groww",
+          isin,
+        }
       }
+
+      return null
     })
     .filter((entry): entry is ParsedPortfolioEntry => entry !== null)
 }
