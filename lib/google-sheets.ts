@@ -481,7 +481,7 @@ export async function submitToGoogleSheets(data: any): Promise<boolean> {
   }
 }
 
-// NEW: Enhanced filtering function that considers spending categories
+// NEW: Enhanced filtering function with REFINED SCORING ALGORITHM
 export function filterAndRankCardsWithSpendingCategories(
   cards: CreditCard[],
   userProfile: {
@@ -489,16 +489,26 @@ export function filterAndRankCardsWithSpendingCategories(
     monthlyIncome: number
     cardType: string
     spendingCategories?: string[] // NEW: User's spending categories
+    preferredBanks?: string[] // NEW: User's preferred banks
   },
   topN = 3,
 ): CreditCard[] {
-  const { creditScore, monthlyIncome, cardType, spendingCategories = [] } = userProfile
+  const { creditScore, monthlyIncome, cardType, spendingCategories = [], preferredBanks = [] } = userProfile
 
-  console.log("🔍 SPENDING CATEGORY ENHANCED FILTERING ANALYSIS")
+  console.log("🔍 REFINED SCORING ALGORITHM WITH NEW WEIGHTS")
   console.log("=".repeat(70))
   console.log("👤 User Profile:", userProfile)
   console.log("📊 Total available cards:", cards.length)
   console.log("🛍️ User spending categories:", spendingCategories)
+  console.log("🏦 User preferred banks:", preferredBanks)
+
+  // NEW WEIGHT DISTRIBUTION (Total = 100):
+  console.log("\n🎯 NEW SCORING WEIGHTS:")
+  console.log("🎁 Rewards Rate: 30 points")
+  console.log("🛍️ Category Match: 30 points")
+  console.log("🎉 Sign-up Bonus: 20 points")
+  console.log("💳 Joining Fee: 10 points")
+  console.log("📅 Annual Fee: 10 points")
 
   // Step 1: Basic eligibility filtering (same as before)
   const basicEligibleCards = cards.filter((card) => {
@@ -510,68 +520,90 @@ export function filterAndRankCardsWithSpendingCategories(
 
   console.log(`🎯 Basic eligible cards: ${basicEligibleCards.length}`)
 
-  // Step 2: Calculate composite scores with spending category bonus
-  console.log("\n📊 CALCULATING SCORES WITH SPENDING CATEGORY BONUS:")
+  if (basicEligibleCards.length === 0) {
+    console.log("⚠️ No basic eligible cards found")
+    return []
+  }
+
+  // Step 2: Calculate max values for normalization
+  const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
+  const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
+  const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
+  const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
+
+  console.log("\n📊 NORMALIZATION VALUES:")
+  console.log(`Max Rewards Rate: ${maxRewardsRate}%`)
+  console.log(`Max Sign-up Bonus: ₹${maxSignUpBonus.toLocaleString()}`)
+  console.log(`Max Joining Fee: ₹${maxJoiningFee.toLocaleString()}`)
+  console.log(`Max Annual Fee: ₹${maxAnnualFee.toLocaleString()}`)
+
+  // Step 3: Calculate composite scores with NEW REFINED ALGORITHM
+  console.log("\n📊 CALCULATING SCORES WITH REFINED ALGORITHM:")
   const scoredCards = basicEligibleCards.map((card) => {
-    let score = 0
+    // 1. Rewards Rate Score (0-30 points) - Higher is better
+    const scoreRewards = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 30 : 0
 
-    // Get max values for normalization
-    const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
-    const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
-    const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
-
-    // Base scoring (80% of total score)
-    const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 20 : 20
-    const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 20 : 20
-    const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 20 : 0
-    const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 20 : 0
-
-    score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
-
-    // NEW: Spending category bonus (20% of total score)
-    let categoryBonus = 0
+    // 2. Category Match Score (0-30 points) - % of user categories matched
+    let scoreCategory = 0
     if (spendingCategories.length > 0 && card.spendingCategories.length > 0) {
       const userCategoriesLower = spendingCategories.map((cat) => cat.toLowerCase())
       const matchingCategories = card.spendingCategories.filter((cardCat) =>
         userCategoriesLower.includes(cardCat.toLowerCase()),
       )
-
-      // Calculate bonus based on percentage of matching categories
       const matchPercentage = matchingCategories.length / Math.max(userCategoriesLower.length, 1)
-      categoryBonus = matchPercentage * 20 // Up to 20 points for perfect match
-
-      console.log(`🛍️ ${card.cardName} category analysis:`)
-      console.log(`   Card categories: [${card.spendingCategories.join(", ")}]`)
-      console.log(`   User categories: [${userCategoriesLower.join(", ")}]`)
-      console.log(`   Matching: [${matchingCategories.join(", ")}]`)
-      console.log(`   Match percentage: ${(matchPercentage * 100).toFixed(1)}%`)
-      console.log(`   Category bonus: ${categoryBonus.toFixed(1)}/20`)
+      scoreCategory = matchPercentage * 30
     }
 
-    score += categoryBonus
-    const compositeScore = Math.round(score * 100) / 100
+    // 3. Sign-up Bonus Score (0-20 points) - Higher is better
+    const scoreSignup = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 20 : 0
 
-    console.log(`📊 ${card.cardName}:`)
-    console.log(`   💳 Joining Fee: ₹${card.joiningFee} → Score: ${joiningFeeScore.toFixed(1)}/20`)
-    console.log(`   📅 Annual Fee: ₹${card.annualFee} → Score: ${annualFeeScore.toFixed(1)}/20`)
-    console.log(`   🎁 Rewards Rate: ${card.rewardsRate}% → Score: ${rewardsScore.toFixed(1)}/20`)
-    console.log(`   🎉 Sign-up Bonus: ₹${card.signUpBonus} → Score: ${bonusScore.toFixed(1)}/20`)
-    console.log(`   🛍️ Category Match: → Score: ${categoryBonus.toFixed(1)}/20`)
-    console.log(`   🎯 COMPOSITE SCORE: ${compositeScore}/100`)
+    // 4. Joining Fee Score (0-10 points) - Lower fee is better
+    const scoreJoining = maxJoiningFee > 0 ? ((maxJoiningFee - card.joiningFee) / maxJoiningFee) * 10 : 10
+
+    // 5. Annual Fee Score (0-10 points) - Lower fee is better
+    const scoreAnnual = maxAnnualFee > 0 ? ((maxAnnualFee - card.annualFee) / maxAnnualFee) * 10 : 10
+
+    // Calculate composite score
+    const compositeScore = scoreRewards + scoreCategory + scoreSignup + scoreJoining + scoreAnnual
+
+    // Bank preference bonus (additional 5 points if preferred bank)
+    let bankBonus = 0
+    if (preferredBanks.length > 0 && preferredBanks.includes(card.bank)) {
+      bankBonus = 5
+    }
+
+    const finalScore = Math.round((compositeScore + bankBonus) * 100) / 100
+
+    console.log(`\n📊 ${card.cardName} (${card.bank}):`)
+    console.log(`   🎁 Rewards Rate: ${card.rewardsRate}% → Score: ${scoreRewards.toFixed(1)}/30`)
+    console.log(`   🛍️ Category Match: ${card.spendingCategories.join(", ")} → Score: ${scoreCategory.toFixed(1)}/30`)
+    console.log(`   🎉 Sign-up Bonus: ₹${card.signUpBonus} → Score: ${scoreSignup.toFixed(1)}/20`)
+    console.log(`   💳 Joining Fee: ₹${card.joiningFee} → Score: ${scoreJoining.toFixed(1)}/10`)
+    console.log(`   📅 Annual Fee: ₹${card.annualFee} → Score: ${scoreAnnual.toFixed(1)}/10`)
+    console.log(
+      `   🏦 Bank Bonus: ${bankBonus > 0 ? `+${bankBonus}` : "0"} (Preferred: ${preferredBanks.includes(card.bank)})`,
+    )
+    console.log(`   🎯 FINAL SCORE: ${finalScore}/105`)
 
     return {
       ...card,
-      compositeScore,
-      categoryBonus,
+      compositeScore: finalScore,
+      scoreBreakdown: {
+        rewards: scoreRewards,
+        category: scoreCategory,
+        signup: scoreSignup,
+        joining: scoreJoining,
+        annual: scoreAnnual,
+        bankBonus: bankBonus,
+      },
     }
   })
 
-  // Step 3: Filter by composite score ≥25.0
+  // Step 4: Filter by composite score ≥25.0 (keeping existing threshold)
   const scoreEligibleCards = scoredCards.filter((card) => {
     const meetsScoreThreshold = card.compositeScore >= 25.0
     console.log(
-      `${meetsScoreThreshold ? "✅" : "❌"} ${card.cardName}: Score ${card.compositeScore}/100 ${meetsScoreThreshold ? "≥" : "<"} 25.0`,
+      `${meetsScoreThreshold ? "✅" : "❌"} ${card.cardName}: Score ${card.compositeScore}/105 ${meetsScoreThreshold ? "≥" : "<"} 25.0`,
     )
     return meetsScoreThreshold
   })
@@ -583,13 +615,13 @@ export function filterAndRankCardsWithSpendingCategories(
     return []
   }
 
-  // Step 4: Sort by composite score (highest first) and return top N
+  // Step 5: Sort by composite score (highest first) and return top N
   const sortedCards = scoreEligibleCards.sort((a, b) => b.compositeScore - a.compositeScore).slice(0, topN)
 
-  console.log(`\n🏆 TOP ${topN} SPENDING CATEGORY ENHANCED RECOMMENDATIONS:`)
+  console.log(`\n🏆 TOP ${topN} REFINED ALGORITHM RECOMMENDATIONS:`)
   sortedCards.forEach((card, index) => {
     console.log(
-      `${index + 1}. ${card.cardName}: ${card.compositeScore}/100 (Category Bonus: ${card.categoryBonus?.toFixed(1) || 0}/20)`,
+      `${index + 1}. ${card.cardName}: ${card.compositeScore}/105 (R:${card.scoreBreakdown?.rewards.toFixed(1)} C:${card.scoreBreakdown?.category.toFixed(1)} S:${card.scoreBreakdown?.signup.toFixed(1)} J:${card.scoreBreakdown?.joining.toFixed(1)} A:${card.scoreBreakdown?.annual.toFixed(1)} B:${card.scoreBreakdown?.bankBonus})`,
     )
   })
 

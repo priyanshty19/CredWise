@@ -11,37 +11,16 @@
  */
 
 // Declare necessary variables
+const google = {} // Declare the google variable to fix the lint error
 const ContentService = google.script.runtime.ContentService
 const Utilities = google.script.runtime.Utilities
 const SpreadsheetApp = google.script.runtime.SpreadsheetApp
 const HtmlService = google.script.runtime.HtmlService
-const google = {} // Declare the google variable to fix the lint error
 
 // Configuration
-const SPREADSHEET_ID = "1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw" // Your Google Sheet ID
+const SPREADSHEET_ID = "1rHR5xzCmZZAlIjahAcpXrxwgYMcItVPckTCiOCSZfSo" // Your Google Sheet ID
 const SHEET_NAME = "Form-Submissions" // Sheet tab name
-
-// Column structure for the 18-column layout
-const COLUMNS = {
-  TIMESTAMP: 0, // A: Timestamp
-  MONTHLY_INCOME: 1, // B: Monthly Income
-  MONTHLY_SPENDING: 2, // C: Monthly Spending
-  CREDIT_SCORE_RANGE: 3, // D: Credit Score Range
-  CURRENT_CARDS: 4, // E: Current Cards
-  SPENDING_CATEGORIES: 5, // F: Spending Categories
-  PREFERRED_BANKS: 6, // G: Preferred Banks
-  JOINING_FEE_PREF: 7, // H: Joining Fee Preference
-  SUBMISSION_TYPE: 8, // I: Submission Type
-  USER_AGENT: 9, // J: User Agent
-  CARD_NAME: 10, // K: Card Name (for clicks)
-  BANK_NAME: 11, // L: Bank Name (for clicks)
-  CARD_TYPE: 12, // M: Card Type (for clicks)
-  JOINING_FEE: 13, // N: Joining Fee (for clicks)
-  ANNUAL_FEE: 14, // O: Annual Fee (for clicks)
-  REWARD_RATE: 15, // P: Reward Rate (for clicks)
-  SESSION_ID: 16, // Q: Session ID
-  ADDITIONAL_DATA: 17, // R: Additional Data (JSON)
-}
+const CARD_CLICKS_TAB = "Card-Clicks"
 
 /**
  * Main function to handle POST requests
@@ -95,24 +74,24 @@ function doPost(e) {
     const rowData = new Array(18).fill("") // Initialize with empty strings
 
     // Fill in the data based on column mapping
-    rowData[COLUMNS.TIMESTAMP] = data.timestamp || ""
-    rowData[COLUMNS.MONTHLY_INCOME] = data.monthlyIncome || ""
-    rowData[COLUMNS.MONTHLY_SPENDING] = data.monthlySpending || ""
-    rowData[COLUMNS.CREDIT_SCORE_RANGE] = data.creditScoreRange || ""
-    rowData[COLUMNS.CURRENT_CARDS] = data.currentCards || ""
-    rowData[COLUMNS.SPENDING_CATEGORIES] = data.spendingCategories || ""
-    rowData[COLUMNS.PREFERRED_BANKS] = data.preferredBanks || ""
-    rowData[COLUMNS.JOINING_FEE_PREF] = data.joiningFeePreference || ""
-    rowData[COLUMNS.SUBMISSION_TYPE] = data.submissionType || ""
-    rowData[COLUMNS.USER_AGENT] = data.userAgent || ""
-    rowData[COLUMNS.CARD_NAME] = data.cardName || ""
-    rowData[COLUMNS.BANK_NAME] = data.bankName || ""
-    rowData[COLUMNS.CARD_TYPE] = data.cardType || ""
-    rowData[COLUMNS.JOINING_FEE] = data.joiningFee || ""
-    rowData[COLUMNS.ANNUAL_FEE] = data.annualFee || ""
-    rowData[COLUMNS.REWARD_RATE] = data.rewardRate || ""
-    rowData[COLUMNS.SESSION_ID] = data.sessionId || ""
-    rowData[COLUMNS.ADDITIONAL_DATA] = data.additionalData || ""
+    rowData[0] = data.timestamp || ""
+    rowData[1] = data.monthlyIncome || ""
+    rowData[2] = data.monthlySpending || ""
+    rowData[3] = data.creditScoreRange || ""
+    rowData[4] = data.currentCards || ""
+    rowData[5] = data.spendingCategories || ""
+    rowData[6] = data.preferredBanks || ""
+    rowData[7] = data.joiningFeePreference || ""
+    rowData[8] = data.submissionType || ""
+    rowData[9] = data.userAgent || ""
+    rowData[10] = data.cardName || ""
+    rowData[11] = data.bankName || ""
+    rowData[12] = data.cardType || ""
+    rowData[13] = data.joiningFee || ""
+    rowData[14] = data.annualFee || ""
+    rowData[15] = data.rewardRate || ""
+    rowData[16] = data.sessionId || ""
+    rowData[17] = data.additionalData || ""
 
     console.log("📝 Prepared row data:", rowData)
 
@@ -227,69 +206,125 @@ function setupSheetIfNeeded() {
  */
 function setupCompleteColumnStructure() {
   try {
-    console.log("🏗️ Setting up complete column structure")
+    console.log("🚀 Setting up complete 18-column structure...")
 
     const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID)
-    let sheet = spreadsheet.getSheetByName(SHEET_NAME)
 
-    if (!sheet) {
-      sheet = spreadsheet.insertSheet(SHEET_NAME)
-      console.log("📋 Created new sheet:", SHEET_NAME)
+    // Set up Form-Submissions sheet
+    let formSheet = spreadsheet.getSheetByName(SHEET_NAME)
+    if (!formSheet) {
+      formSheet = spreadsheet.insertSheet(SHEET_NAME)
     }
 
-    // Define the 18-column header structure
-    const headers = [
-      "Timestamp", // A
-      "Monthly Income", // B
-      "Monthly Spending", // C
-      "Credit Score Range", // D
-      "Current Cards", // E
-      "Spending Categories", // F
-      "Preferred Banks", // G
-      "Joining Fee Preference", // H
-      "Submission Type", // I
-      "User Agent", // J
-      "Card Name", // K
-      "Bank Name", // L
-      "Card Type", // M
-      "Joining Fee", // N
-      "Annual Fee", // O
-      "Reward Rate", // P
-      "Session ID", // Q
-      "Additional Data", // R
-    ]
+    // Clear existing content and set up headers
+    formSheet.clear()
+    setupFormSubmissionsHeaders(formSheet)
 
-    // Clear existing content and add headers
-    sheet.clear()
-    sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+    // Set up Card-Clicks sheet
+    let cardClicksSheet = spreadsheet.getSheetByName(CARD_CLICKS_TAB)
+    if (!cardClicksSheet) {
+      cardClicksSheet = spreadsheet.insertSheet(CARD_CLICKS_TAB)
+      setupCardClicksHeaders(cardClicksSheet)
+    }
 
-    // Format the header row
-    const headerRange = sheet.getRange(1, 1, 1, headers.length)
-    headerRange.setFontWeight("bold")
-    headerRange.setBackground("#4285f4")
-    headerRange.setFontColor("white")
-
-    // Auto-resize columns
-    sheet.autoResizeColumns(1, headers.length)
-
-    // Freeze the header row
-    sheet.setFrozenRows(1)
-
-    console.log("✅ Complete column structure set up successfully")
-    console.log("📊 Headers:", headers)
+    console.log("✅ Complete column structure set up successfully!")
+    console.log("📋 Sheet structure:")
+    console.log("   - Form-Submissions: 18 columns (A-R)")
+    console.log("   - Card-Clicks: 18 columns (A-R)")
+    console.log("   - Supports both form submissions and card clicks")
+    console.log("   - Ready for refined scoring algorithm data")
 
     return {
       success: true,
-      message: "Complete 18-column structure created successfully",
-      headers: headers,
+      message: "Complete column structure set up successfully",
+      sheetsCreated: [SHEET_NAME, CARD_CLICKS_TAB],
+      columnsSetup: 18,
     }
   } catch (error) {
     console.error("❌ Error setting up column structure:", error)
     return {
       success: false,
-      error: error.toString(),
+      error: "Failed to set up column structure: " + error.message,
     }
   }
+}
+
+/**
+ * Set up headers for the Form-Submissions sheet (18 columns)
+ */
+function setupFormSubmissionsHeaders(sheet) {
+  const headers = [
+    "Timestamp", // A
+    "Monthly Income", // B
+    "Monthly Spending", // C
+    "Credit Score Range", // D
+    "Current Cards", // E
+    "Spending Categories", // F
+    "Preferred Banks", // G
+    "Joining Fee Preference", // H
+    "Submission Type", // I
+    "User Agent", // J
+    "Card Name", // K
+    "Bank Name", // L
+    "Card Type", // M
+    "Joining Fee", // N
+    "Annual Fee", // O
+    "Reward Rate", // P
+    "Session ID", // Q
+    "Entry Type", // R
+  ]
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+
+  // Format headers
+  const headerRange = sheet.getRange(1, 1, 1, headers.length)
+  headerRange.setFontWeight("bold")
+  headerRange.setBackground("#4285f4")
+  headerRange.setFontColor("white")
+
+  // Auto-resize columns
+  sheet.autoResizeColumns(1, headers.length)
+
+  console.log("✅ Form-Submissions headers set up with 18 columns")
+}
+
+/**
+ * Set up headers for the Card-Clicks sheet (18 columns)
+ */
+function setupCardClicksHeaders(sheet) {
+  const headers = [
+    "Timestamp", // A
+    "Monthly Income", // B
+    "Monthly Spending", // C
+    "Credit Score Range", // D
+    "Current Cards", // E
+    "Spending Categories", // F
+    "Preferred Banks", // G
+    "Joining Fee Preference", // H
+    "Submission Type", // I
+    "User Agent", // J
+    "Card Name", // K
+    "Bank Name", // L
+    "Card Type", // M
+    "Joining Fee", // N
+    "Annual Fee", // O
+    "Reward Rate", // P
+    "Session ID", // Q
+    "Entry Type", // R
+  ]
+
+  sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+
+  // Format headers
+  const headerRange = sheet.getRange(1, 1, 1, headers.length)
+  headerRange.setFontWeight("bold")
+  headerRange.setBackground("#4285f4")
+  headerRange.setFontColor("white")
+
+  // Auto-resize columns
+  sheet.autoResizeColumns(1, headers.length)
+
+  console.log("✅ Card-Clicks headers set up with 18 columns")
 }
 
 /**
@@ -425,4 +460,42 @@ function doGet(e) {
   `
 
   return HtmlService.createHtmlOutput(html)
+}
+
+/**
+ * Utility function to get current timestamp in IST
+ */
+function getCurrentTimestamp() {
+  const now = new Date()
+  const istOffset = 5.5 * 60 * 60 * 1000 // IST is UTC+5:30
+  const istTime = new Date(now.getTime() + istOffset)
+  return istTime.toISOString()
+}
+
+/**
+ * Function to clear all data (keep headers)
+ */
+function clearAllData() {
+  try {
+    console.log("🧹 Clearing all data...")
+
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID)
+    const formSheet = spreadsheet.getSheetByName(SHEET_NAME)
+
+    if (formSheet && formSheet.getLastRow() > 1) {
+      formSheet.getRange(2, 1, formSheet.getLastRow() - 1, formSheet.getLastColumn()).clear()
+      console.log("✅ Form-Submissions data cleared")
+    }
+
+    return {
+      success: true,
+      message: "All data cleared successfully (headers preserved)",
+    }
+  } catch (error) {
+    console.error("❌ Error clearing data:", error)
+    return {
+      success: false,
+      error: "Failed to clear data: " + error.message,
+    }
+  }
 }

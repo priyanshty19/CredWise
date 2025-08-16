@@ -275,7 +275,7 @@ export async function getEnhancedCardRecommendations(
   }
 }
 
-// NEW: Enhanced function for the form with spending categories
+// NEW: Enhanced function for the form with spending categories and refined scoring
 export async function getCardRecommendationsForForm(formData: {
   monthlyIncome: string
   spendingCategories: string[]
@@ -286,7 +286,7 @@ export async function getCardRecommendationsForForm(formData: {
   joiningFeePreference: string
 }) {
   try {
-    console.log("🔄 Processing form data with spending categories:", formData)
+    console.log("🔄 Processing form data with refined scoring algorithm:", formData)
 
     // Convert form data to the format expected by our existing functions
     const creditScore = Number.parseInt(formData.creditScore) || 650
@@ -317,7 +317,7 @@ export async function getCardRecommendationsForForm(formData: {
       }
     }
 
-    // Use the new spending category enhanced filtering
+    // Use the new spending category enhanced filtering with refined scoring
     const recommendations = filterAndRankCardsWithSpendingCategories(
       allCards,
       {
@@ -325,11 +325,12 @@ export async function getCardRecommendationsForForm(formData: {
         monthlyIncome,
         cardType,
         spendingCategories: formData.spendingCategories, // Pass user's spending categories
+        preferredBanks: formData.preferredBanks, // Pass user's preferred banks
       },
       7, // Get top 7 recommendations
     )
 
-    console.log(`✅ Generated ${recommendations.length} recommendations with spending category matching`)
+    console.log(`✅ Generated ${recommendations.length} recommendations with refined scoring algorithm`)
 
     // Log the enhanced form submission to Google Sheets
     try {
@@ -342,7 +343,7 @@ export async function getCardRecommendationsForForm(formData: {
         spendingCategories: formData.spendingCategories,
         preferredBanks: formData.preferredBanks,
         joiningFeePreference: formData.joiningFeePreference,
-        submissionType: "enhanced_form_with_spending_categories",
+        submissionType: "enhanced_form_with_refined_scoring",
         userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Server",
       }
 
@@ -376,8 +377,9 @@ export async function getCardRecommendationsForForm(formData: {
       ],
       bestFor: formData.spendingCategories.slice(0, 3),
       score: Math.round(card.compositeScore),
-      reasoning: `Score: ${card.compositeScore}/100. ${card.spendingCategories.length > 0 ? `Matches your spending in: ${card.spendingCategories.join(", ")}` : "Selected based on optimal balance of fees and rewards."}`,
+      reasoning: `Score: ${card.compositeScore}/105. ${card.spendingCategories.length > 0 ? `Matches your spending in: ${card.spendingCategories.join(", ")}. ` : ""}Refined algorithm prioritizes rewards rate (30%) and category match (30%) for optimal value.`,
       spendingCategories: card.spendingCategories, // Include card's spending categories
+      scoreBreakdown: card.scoreBreakdown, // Include detailed score breakdown
     }))
 
     return {
@@ -389,7 +391,9 @@ export async function getCardRecommendationsForForm(formData: {
         monthlySpending: Number.parseInt(formData.monthlySpending) || 25000,
         creditScore,
         spendingCategories: formData.spendingCategories,
+        preferredBanks: formData.preferredBanks,
       },
+      allCards, // Include all cards for testing component
     }
   } catch (error) {
     console.error("Error in getCardRecommendationsForForm:", error)
