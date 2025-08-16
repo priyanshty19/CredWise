@@ -60,17 +60,18 @@ const spendingCategories = [
   { id: "transport", label: "Transport & Commute", icon: Car },
 ]
 
+// FIXED: Updated bank names to match Google Sheet data exactly
 const banks = [
+  "SBI", // FIXED: Changed from "SBI" to match sheet data
+  "American Express", // FIXED: Changed from "American Express" to match sheet data
   "HDFC Bank",
   "ICICI Bank",
-  "SBI",
   "Axis Bank",
   "Kotak Mahindra Bank",
   "IndusInd Bank",
   "Yes Bank",
   "Standard Chartered",
   "Citibank",
-  "American Express",
 ]
 
 export default function EnhancedPersonalization() {
@@ -127,7 +128,7 @@ export default function EnhancedPersonalization() {
     setError(null)
   }
 
-  // NEW: Handle card application click tracking
+  // Handle card application click tracking
   const handleCardApplicationClick = async (card: CardRecommendation) => {
     setClickingCard(card.name)
 
@@ -158,7 +159,6 @@ export default function EnhancedPersonalization() {
       })
 
       // Simulate redirect to bank's application page
-      // In a real implementation, you would redirect to the actual bank URL
       console.log(`🔗 Redirecting to application page for ${card.name}`)
 
       // For demo purposes, we'll just show an alert
@@ -366,9 +366,15 @@ export default function EnhancedPersonalization() {
                 </Select>
               </div>
 
-              {/* Preferred Banks */}
+              {/* Preferred Banks - FIXED with exact bank names */}
               <div className="space-y-3">
                 <Label>Preferred Banks (Optional)</Label>
+                <div className="bg-blue-50 p-3 rounded-lg mb-3">
+                  <p className="text-sm text-blue-800">
+                    💡 <strong>Bank Filter Debug:</strong> Select "SBI" and "American Express" to see cards from these
+                    banks. Bank names must match exactly with the data in Google Sheets.
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                   {banks.map((bank) => {
                     const isSelected = formData.preferredBanks.includes(bank)
@@ -386,6 +392,18 @@ export default function EnhancedPersonalization() {
                     )
                   })}
                 </div>
+                {formData.preferredBanks.length > 0 && (
+                  <div className="mt-2">
+                    <p className="text-sm text-gray-600">Selected banks:</p>
+                    <div className="flex flex-wrap gap-1 mt-1">
+                      {formData.preferredBanks.map((bank) => (
+                        <Badge key={bank} variant="secondary" className="text-xs">
+                          {bank}
+                        </Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}

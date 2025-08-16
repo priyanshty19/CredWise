@@ -2,51 +2,44 @@
 
 ## Recommended Column Headers
 
-To properly organize both form submissions and card application clicks, here are the suggested column names:
+Your Google Sheet should have the following 18 columns with these exact names:
 
-### Column Headers (Row 1):
-| Column | Header Name | Description |
-|--------|-------------|-------------|
-| A | **Timestamp** | Date and time of submission/click |
-| B | **Data_Type_1** | Monthly Income OR Card Name |
-| C | **Data_Type_2** | Monthly Spending OR Bank Name |
-| D | **Data_Type_3** | Credit Score Range OR Card Type |
-| E | **Data_Type_4** | Current Cards Count OR Joining Fee |
-| F | **Data_Type_5** | Spending Categories OR Annual Fee |
-| G | **Data_Type_6** | Preferred Banks OR Reward Rate |
-| H | **Data_Type_7** | Joining Fee Preference OR Session ID |
-| I | **Submission_Type** | Type of data (enhanced_form/card_application_click) |
-| J | **User_Agent** | Browser/device information |
-| K | **IP_Address** | User's IP address (optional) |
+| Column | Name | Description | Used For |
+|--------|------|-------------|----------|
+| A | Timestamp | Date and time of submission | Both |
+| B | Monthly_Income | User's monthly income in ₹ | Form submissions |
+| C | Monthly_Spending | Monthly credit card spending | Form submissions |
+| D | Credit_Score_Range | Credit score range (e.g., "750-850") | Form submissions |
+| E | Current_Cards_Count | Number of existing credit cards | Form submissions |
+| F | Spending_Categories | Comma-separated spending categories | Form submissions |
+| G | Preferred_Banks | Comma-separated preferred banks | Form submissions |
+| H | Joining_Fee_Preference | Fee preference (no_fee, low_fee, any_amount) | Form submissions |
+| I | Card_Name | Name of the credit card clicked | Card clicks |
+| J | Bank_Name | Bank name of the clicked card | Card clicks |
+| K | Card_Type | Type of card (Cashback, Travel, etc.) | Card clicks |
+| L | Joining_Fee | Joining fee amount | Card clicks |
+| M | Annual_Fee | Annual fee amount | Card clicks |
+| N | Reward_Rate | Reward rate description | Card clicks |
+| O | Session_ID | Unique session identifier | Card clicks |
+| P | Submission_Type | Type of data (enhanced_form, card_application_click) | Both |
+| Q | User_Agent | Browser/device information | Both |
+| R | IP_Address | User's IP address | Both |
 
-## Better Alternative: Separate Columns for Each Data Type
+## Data Flow
 
-For clearer analytics, I recommend these specific column headers:
+### Form Submissions
+- Columns B-H contain form data
+- Columns I-O are empty
+- Submission_Type = "enhanced_form"
 
-### Enhanced Column Structure:
-| Column | Header Name | Form Data | Click Data |
-|--------|-------------|-----------|------------|
-| A | **Timestamp** | Submission time | Click time |
-| B | **Monthly_Income** | User's income | (empty) |
-| C | **Monthly_Spending** | Credit card spending | (empty) |
-| D | **Credit_Score_Range** | Score range | (empty) |
-| E | **Current_Cards_Count** | Number of cards | (empty) |
-| F | **Spending_Categories** | Categories list | (empty) |
-| G | **Preferred_Banks** | Bank preferences | (empty) |
-| H | **Joining_Fee_Preference** | Fee preference | (empty) |
-| I | **Card_Name** | (empty) | Full card name |
-| J | **Bank_Name** | (empty) | Issuing bank |
-| K | **Card_Type** | (empty) | Card category |
-| L | **Joining_Fee** | (empty) | One-time fee |
-| M | **Annual_Fee** | (empty) | Yearly fee |
-| N | **Reward_Rate** | (empty) | Reward description |
-| O | **Session_ID** | (empty) | Unique session |
-| P | **Submission_Type** | enhanced_form | card_application_click |
-| Q | **User_Agent** | Browser info | Browser info |
-| R | **IP_Address** | User IP | User IP |
+### Card Application Clicks
+- Columns B-H are empty
+- Columns I-O contain card data
+- Submission_Type = "card_application_click"
 
-This structure provides:
-✅ **Clear Data Separation**: Form data vs Click data in separate columns
-✅ **Easy Analytics**: Filter by Submission_Type to analyze each data type
-✅ **Complete Tracking**: All relevant information captured
-✅ **Future-Proof**: Easy to add more columns as needed
+## Setup Instructions
+
+1. Open your Google Sheet
+2. Add these headers to row 1
+3. Format the header row (bold, colored background)
+4. Run the `setupColumnHeaders()` function in Apps Script to automate this

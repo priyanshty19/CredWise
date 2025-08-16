@@ -24,7 +24,7 @@ interface EnhancedUserSubmission {
   submissionType: "enhanced_form"
 }
 
-// NEW: Card Application Click Tracking
+// Card Application Click Tracking
 interface CardApplicationClick {
   timestamp: string
   cardName: string
@@ -56,20 +56,21 @@ export async function submitUserDataToGoogleSheets(submission: UserSubmission): 
       )
     }
 
-    // Prepare the payload
+    // Prepare the payload with FIXED structure
     const payload = {
       timestamp: submission.timestamp,
-      creditScore: submission.creditScore,
-      monthlyIncome: submission.monthlyIncome,
-      cardType: submission.cardType,
-      preferredBrand: submission.preferredBrand || "Any",
-      maxJoiningFee: submission.maxJoiningFee?.toString() || "Any",
-      topN: submission.topN,
+      monthlyIncome: submission.monthlyIncome, // FIXED: was creditScore
+      monthlySpending: "", // Empty for basic submissions
+      creditScoreRange: submission.creditScore.toString(), // FIXED: convert to string
+      currentCards: "", // Empty for basic submissions
+      spendingCategories: "", // Empty for basic submissions
+      preferredBanks: submission.preferredBrand || "Any", // FIXED: map preferredBrand to preferredBanks
+      joiningFeePreference: submission.maxJoiningFee?.toString() || "Any", // FIXED: map maxJoiningFee
       submissionType: submission.submissionType,
       userAgent: submission.userAgent || "Unknown",
     }
 
-    console.log("📦 Payload being sent:", payload)
+    console.log("📦 FIXED Payload being sent:", payload)
 
     // Submit via Google Apps Script with enhanced error handling
     const response = await fetch(APPS_SCRIPT_URL, {
@@ -83,7 +84,6 @@ export async function submitUserDataToGoogleSheets(submission: UserSubmission): 
 
     console.log("📡 Apps Script response status:", response.status)
     console.log("📡 Apps Script response URL:", response.url)
-    console.log("📡 Apps Script response headers:", Object.fromEntries(response.headers.entries()))
 
     // Check if we got redirected (common Apps Script issue)
     const wasRedirected = response.url !== APPS_SCRIPT_URL
@@ -109,7 +109,6 @@ export async function submitUserDataToGoogleSheets(submission: UserSubmission): 
         } else {
           console.warn("⚠️ Apps Script returned success=false:", result.error)
           // Even if success=false, if we got a valid JSON response, the data might still be there
-          // Let's verify by checking the sheet
           return await verifySubmissionInSheet(submission)
         }
       } catch (parseError) {
@@ -117,7 +116,6 @@ export async function submitUserDataToGoogleSheets(submission: UserSubmission): 
         console.log("📄 Response text:", responseText)
 
         // If response is not JSON but status is OK, the data might still be submitted
-        // This is common when Apps Script doesn't return proper JSON
         if (response.status === 200 || response.status === 302) {
           console.log("🔍 Verifying if data was actually submitted to sheet...")
           return await verifySubmissionInSheet(submission)
@@ -130,8 +128,6 @@ export async function submitUserDataToGoogleSheets(submission: UserSubmission): 
       if (responseText.includes("Moved Temporarily") || responseText.includes("302")) {
         console.warn("⚠️ Apps Script redirect detected, but checking if data was submitted anyway...")
 
-        // Even with redirect errors, data might still be submitted
-        // This is a common Apps Script behavior
         const dataSubmitted = await verifySubmissionInSheet(submission)
         if (dataSubmitted) {
           console.log("✅ Data was successfully submitted despite redirect error!")
@@ -164,7 +160,6 @@ export async function submitUserDataToGoogleSheets(submission: UserSubmission): 
     console.error("❌ Error submitting user data via Apps Script:", error)
 
     // Before throwing the error, let's check if the data was actually submitted
-    // This handles cases where the submission works but the response is malformed
     try {
       console.log("🔍 Final check: Verifying if data was submitted despite error...")
       const dataSubmitted = await verifySubmissionInSheet(submission)
@@ -192,7 +187,7 @@ export async function submitEnhancedFormData(submission: EnhancedUserSubmission)
       )
     }
 
-    // Prepare the enhanced payload
+    // Prepare the enhanced payload with FIXED structure
     const payload = {
       timestamp: submission.timestamp,
       monthlyIncome: submission.monthlyIncome,
@@ -246,7 +241,7 @@ export async function submitEnhancedFormData(submission: EnhancedUserSubmission)
   }
 }
 
-// NEW: Card Application Click Tracking Function
+// Card Application Click Tracking Function
 export async function trackCardApplicationClick(clickData: CardApplicationClick): Promise<boolean> {
   try {
     console.log("🎯 Tracking card application click via Google Apps Script...")
@@ -316,7 +311,7 @@ function generateSessionId(): string {
   return `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
 }
 
-// New function to verify if the submission actually made it to the sheet
+// Function to verify if the submission actually made it to the sheet
 async function verifySubmissionInSheet(submission: UserSubmission): Promise<boolean> {
   try {
     console.log("🔍 Verifying submission in Google Sheet...")
@@ -330,7 +325,7 @@ async function verifySubmissionInSheet(submission: UserSubmission): Promise<bool
     await new Promise((resolve) => setTimeout(resolve, 2000))
 
     // Fetch recent data from the sheet
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SUBMISSIONS_SHEET_ID}/values/${SUBMISSIONS_TAB_NAME}!A:I?key=${API_KEY}`
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SUBMISSIONS_SHEET_ID}/values/${SUBMISSIONS_TAB_NAME}!A:R?key=${API_KEY}`
 
     const response = await fetch(url, {
       method: "GET",
@@ -359,9 +354,8 @@ async function verifySubmissionInSheet(submission: UserSubmission): Promise<bool
 
     const submissionFound = recentRows.some((row: any[]) => {
       // Check if this row matches our submission
-      const rowCreditScore = Number.parseInt(row[1])
-      const rowIncome = Number.parseInt(row[2])
-      const rowCardType = row[3]
+      const rowCreditScore = row[3] // Credit_Score_Range column
+      const rowIncome = Number.parseInt(row[1]) // Monthly_Income column
       const rowTimestamp = row[0]
 
       // Check if the timestamp is within the last 5 minutes and other fields match
@@ -371,9 +365,8 @@ async function verifySubmissionInSheet(submission: UserSubmission): Promise<bool
 
       return (
         timeDiff < 5 * 60 * 1000 && // Within 5 minutes
-        rowCreditScore === submission.creditScore &&
-        rowIncome === submission.monthlyIncome &&
-        rowCardType === submission.cardType
+        rowCreditScore === submission.creditScore.toString() &&
+        rowIncome === submission.monthlyIncome
       )
     })
 
@@ -390,7 +383,7 @@ async function verifySubmissionInSheet(submission: UserSubmission): Promise<bool
   }
 }
 
-// Keep the analytics function unchanged (uses API key for read operations)
+// Analytics function with enhanced click tracking
 export async function getSubmissionAnalytics(): Promise<{
   totalSubmissions: number
   cardTypeDistribution: Record<string, number>
@@ -410,7 +403,7 @@ export async function getSubmissionAnalytics(): Promise<{
     }
 
     // Fetch all submission data (read operations work with API keys)
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SUBMISSIONS_SHEET_ID}/values/${SUBMISSIONS_TAB_NAME}!A:K?key=${API_KEY}`
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SUBMISSIONS_SHEET_ID}/values/${SUBMISSIONS_TAB_NAME}!A:R?key=${API_KEY}`
 
     console.log("🔗 Fetching analytics from:", url)
 
@@ -452,12 +445,12 @@ export async function getSubmissionAnalytics(): Promise<{
 
     // Separate form submissions from card application clicks
     const formSubmissions = rows.filter((row) => {
-      const submissionType = row[8] || row[7] // Check both possible positions
+      const submissionType = row[15] // Column P: Submission_Type
       return submissionType !== "card_application_click"
     })
 
     const cardClicks = rows.filter((row) => {
-      const submissionType = row[8] || row[7] // Check both possible positions
+      const submissionType = row[15] // Column P: Submission_Type
       return submissionType === "card_application_click"
     })
 
@@ -470,21 +463,17 @@ export async function getSubmissionAnalytics(): Promise<{
         try {
           return {
             timestamp: row[0] || "",
-            creditScore: Number.parseInt(row[1]) || 0,
-            monthlyIncome: Number.parseInt(row[2]) || 0,
-            cardType: row[3] || "",
-            preferredBrand: row[4] || "",
-            maxJoiningFee: row[5] || "",
-            topN: Number.parseInt(row[6]) || 0,
-            submissionType: row[7] || "",
-            userAgent: row[8] || "",
+            monthlyIncome: Number.parseInt(row[1]) || 0,
+            creditScoreRange: row[3] || "",
+            submissionType: row[15] || "",
+            userAgent: row[16] || "",
           }
         } catch (error) {
           console.warn(`⚠️ Error parsing form submission row ${index + 2}:`, error, row)
           return null
         }
       })
-      .filter((sub): sub is NonNullable<typeof sub> => sub !== null && sub.creditScore > 0)
+      .filter((sub): sub is NonNullable<typeof sub> => sub !== null && sub.monthlyIncome > 0)
 
     // Parse card click data
     const clickAnalytics = cardClicks
@@ -492,14 +481,11 @@ export async function getSubmissionAnalytics(): Promise<{
         try {
           return {
             timestamp: row[0] || "",
-            cardName: row[1] || "",
-            bankName: row[2] || "",
-            cardType: row[3] || "",
-            joiningFee: Number.parseInt(row[4]) || 0,
-            annualFee: Number.parseInt(row[5]) || 0,
-            rewardRate: row[6] || "",
-            submissionType: row[7] || "",
-            userAgent: row[8] || "",
+            cardName: row[8] || "", // Column I: Card_Name
+            bankName: row[9] || "", // Column J: Bank_Name
+            cardType: row[10] || "", // Column K: Card_Type
+            submissionType: row[15] || "",
+            userAgent: row[16] || "",
           }
         } catch (error) {
           console.warn(`⚠️ Error parsing card click row ${index + 2}:`, error, row)
@@ -513,20 +499,15 @@ export async function getSubmissionAnalytics(): Promise<{
 
     const totalSubmissions = submissions.length
 
-    // Calculate card type distribution
+    // Calculate card type distribution from credit score ranges
     const cardTypeDistribution = submissions.reduce((acc: Record<string, number>, sub) => {
-      if (sub.cardType) {
-        acc[sub.cardType] = (acc[sub.cardType] || 0) + 1
+      if (sub.creditScoreRange) {
+        acc[sub.creditScoreRange] = (acc[sub.creditScoreRange] || 0) + 1
       }
       return acc
     }, {})
 
     // Calculate averages
-    const avgCreditScore =
-      submissions.length > 0
-        ? Math.round(submissions.reduce((sum, sub) => sum + sub.creditScore, 0) / submissions.length)
-        : 0
-
     const avgIncome =
       submissions.length > 0
         ? Math.round(submissions.reduce((sum, sub) => sum + sub.monthlyIncome, 0) / submissions.length)
@@ -551,7 +532,7 @@ export async function getSubmissionAnalytics(): Promise<{
     const analyticsResult = {
       totalSubmissions,
       cardTypeDistribution,
-      avgCreditScore,
+      avgCreditScore: 0, // Not applicable with new structure
       avgIncome,
       recentSubmissions,
       cardApplicationClicks: clickAnalytics.length,

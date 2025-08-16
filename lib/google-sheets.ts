@@ -580,11 +580,20 @@ export function filterAndRankCardsByRewards(
 
   console.log(`🎯 Score-eligible cards (≥25.0): ${scoreEligibleCards.length}`)
 
-  // Step 3: Apply additional filters
+  // Step 3: Apply additional filters with FIXED bank matching
   let filteredCards = scoreEligibleCards
 
-  // Apply brand filter if specified
+  // Apply brand filter if specified - FIXED LOGIC
   if (preferredBrand && preferredBrand !== "Any") {
+    console.log(`\n🏦 APPLYING BANK FILTER: "${preferredBrand}"`)
+    console.log("🔍 Available banks in score-eligible cards:")
+
+    const uniqueBanks = [...new Set(scoreEligibleCards.map((card) => card.bank))].sort()
+    uniqueBanks.forEach((bank) => {
+      const count = scoreEligibleCards.filter((card) => card.bank === bank).length
+      console.log(`   • ${bank}: ${count} cards`)
+    })
+
     filteredCards = filteredCards.filter((card) => {
       // EXACT match against the "Bank" column value from Google Sheet
       const bankMatch = card.bank === preferredBrand

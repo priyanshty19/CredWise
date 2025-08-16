@@ -1,84 +1,64 @@
-# Setup Instructions for Enhanced Google Sheets Structure
+# Setup Instructions for Enhanced CredWise Tracking
 
-## Step 1: Update Column Headers
+## Step 1: Update Google Apps Script
 
-Run this function in your Google Apps Script to set up proper column headers:
+1. Open your Google Apps Script project
+2. Replace the existing code with the new enhanced script
+3. Save the project
+4. Deploy as a web app (if not already deployed)
 
+## Step 2: Set Up Column Headers
+
+Run this function in Apps Script:
 \`\`\`javascript
 setupColumnHeaders()
 \`\`\`
 
-This will create the following column structure:
+This will create 18 properly named columns in your Google Sheet.
 
-| Column | Header Name | Purpose |
-|--------|-------------|---------|
-| A | Timestamp | Date/time of submission or click |
-| B | Monthly_Income | User's monthly income (forms only) |
-| C | Monthly_Spending | User's credit card spending (forms only) |
-| D | Credit_Score_Range | User's credit score range (forms only) |
-| E | Current_Cards_Count | Number of current cards (forms only) |
-| F | Spending_Categories | Comma-separated spending categories (forms only) |
-| G | Preferred_Banks | Comma-separated preferred banks (forms only) |
-| H | Joining_Fee_Preference | Fee preference (forms only) |
-| I | Card_Name | Full name of the credit card (clicks only) |
-| J | Bank_Name | Issuing bank name (clicks only) |
-| K | Card_Type | Card category/type (clicks only) |
-| L | Joining_Fee | One-time joining fee amount (clicks only) |
-| M | Annual_Fee | Annual fee amount (clicks only) |
-| N | Reward_Rate | Reward rate description (clicks only) |
-| O | Session_ID | Unique session identifier (clicks only) |
-| P | Submission_Type | Type: "enhanced_form" or "card_application_click" |
-| Q | User_Agent | Browser/device information |
-| R | IP_Address | User's IP address |
+## Step 3: Test the Setup
 
-## Step 2: Test the Setup
-
-### Test Form Submission:
+### Test Form Submissions
 \`\`\`javascript
 testFormSubmission()
 \`\`\`
 
-### Test Card Click Tracking:
+### Test Card Click Tracking
 \`\`\`javascript
 testCardApplicationClick()
 \`\`\`
 
-### Analyze Current Data:
+### Analyze Current Data
 \`\`\`javascript
 analyzeDataStructure()
 \`\`\`
 
-## Step 3: Migrate Existing Data (if needed)
+## Step 4: Verify Data Flow
 
-If you have existing data that needs to be preserved:
+1. Submit a test form through your website
+2. Click on a card application button
+3. Check your Google Sheet for both types of data
+4. Verify the data appears in the correct columns
 
-\`\`\`javascript
-migrateToNewStructure()
-\`\`\`
+## Troubleshooting
 
-This will:
-- Create a backup of your existing data
-- Set up the new column structure
-- Preserve all historical data
+### If Data Isn't Appearing:
+1. Check Apps Script execution logs
+2. Verify the sheet ID in the script matches your sheet
+3. Ensure the sheet name is "Sheet1" (or update the script)
+4. Check that the web app is deployed with proper permissions
 
-## Benefits of New Structure:
+### If Bank Filtering Isn't Working:
+1. Check the bank names in your Google Sheet data
+2. Ensure exact matches between form selections and sheet data
+3. Verify the filtering logic in the recommendation functions
 
-✅ **Clear Data Separation**: Form data and click data in separate columns
-✅ **Easy Analytics**: Filter by Submission_Type to analyze each data type
-✅ **Complete Tracking**: All relevant information captured with proper labels
-✅ **Scalable**: Easy to add more columns or data types in the future
-✅ **Professional**: Proper column names for better data management
+## Column Mapping Reference
 
-## Sample Data Examples:
-
-### Form Submission Row:
-\`\`\`
-2024-01-15 10:30:00 | 75000 | 35000 | 750-850 | 2 | dining,travel | HDFC,ICICI | low_fee | | | | | | | | enhanced_form | Mozilla/5.0... | 192.168.1.100
-\`\`\`
-
-### Card Application Click Row:
-\`\`\`
-2024-01-15 10:35:00 | | | | | | | | HDFC Regalia Gold | HDFC Bank | Premium | 2500 | 2500 | 2-4% rewards | session_123 | card_application_click | Mozilla/5.0... | 192.168.1.101
-\`\`\`
-
-This structure provides complete visibility into both user profiles and their card application behavior!
+| Column | Name | Purpose |
+|--------|------|---------|
+| A | Timestamp | When the action occurred |
+| B-H | Form Data | User preferences and profile |
+| I-O | Card Data | Details of clicked cards |
+| P | Submission_Type | Distinguishes form vs click data |
+| Q-R | Metadata | Technical tracking info |
