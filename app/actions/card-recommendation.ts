@@ -7,7 +7,6 @@ import {
   filterAndRankCardsWithSpendingCategories,
 } from "@/lib/google-sheets"
 import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
-import { getCardRecommendationsForForm as getCardRecommendationsForFormOriginal } from "@/lib/google-sheets"
 
 interface CardSubmission {
   creditScore: number
@@ -29,7 +28,7 @@ interface RecommendationResult {
   scoreEligibleCardsFound?: number
 }
 
-// Simple submission logging function (since the Google Sheets submission is having import issues)
+// Simple submission logging function
 async function logUserSubmission(data: {
   creditScore: number
   monthlyIncome: number
@@ -49,9 +48,6 @@ async function logUserSubmission(data: {
       submissionType: data.submissionType,
       userAgent: data.userAgent || "Unknown",
     })
-
-    // In a production environment, you could send this to an analytics service
-    // or use a different submission method
   } catch (error) {
     console.error("⚠️ Failed to log user submission:", error)
   }
@@ -81,48 +77,6 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
       topN,
     )
 
-    // Calculate score-eligible cards count for reward-based logic
-    const basicEligibleCards = allCards.filter((card) => {
-      const meetsCredit = card.creditScoreRequirement === 0 || data.creditScore >= card.creditScoreRequirement
-      const meetsIncome = card.monthlyIncomeRequirement === 0 || data.monthlyIncome >= card.monthlyIncomeRequirement
-      const matchesType = card.cardType === data.cardType
-      return meetsCredit && meetsIncome && matchesType
-    })
-
-    // Calculate composite scores for basic eligible cards
-    const scoredCards = basicEligibleCards.map((card) => {
-      let score = 0
-
-      const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
-      const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-      const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
-      const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
-
-      const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
-      const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
-      const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
-      const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
-
-      score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
-      const compositeScore = Math.round(score * 100) / 100
-
-      return {
-        ...card,
-        compositeScore,
-      }
-    })
-
-    // Count cards that meet the ≥25.0 score threshold
-    const scoreEligibleCards = scoredCards.filter((card) => card.compositeScore >= 25.0)
-    const scoreEligibleCount = scoreEligibleCards.length
-
-    console.log(`📊 ELIGIBILITY SUMMARY:`)
-    console.log(`- Total cards in database: ${allCards.length}`)
-    console.log(`- Basic eligible cards: ${basicEligibleCards.length}`)
-    console.log(`- Score-eligible cards (≥25.0): ${scoreEligibleCount}`)
-    console.log(`- Cards shown (Top ${topN}): ${recommendations.length}`)
-    console.log(`- Additional cards available for reward-based: ${Math.max(0, scoreEligibleCount - topN)}`)
-
     // Log user data submission
     try {
       await logUserSubmission({
@@ -137,14 +91,13 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
       console.log("✅ User data logged successfully")
     } catch (submissionError) {
       console.error("⚠️ Failed to log user data:", submissionError)
-      // Don't fail the recommendation request if logging fails
     }
 
     // Generate explanation text
     const filterCriteria = `Filtered for cards matching: Credit Score ≥ ${data.creditScore}, Monthly Income ≥ ₹${data.monthlyIncome.toLocaleString()}, Card Type: ${data.cardType}, Composite Score ≥ 25.0`
 
     const scoringLogic =
-      "Ranked by composite score considering: Low joining fees (25%), Low annual fees (25%), High rewards rate (25%), High sign-up bonus (25%). Only cards with composite score ≥25.0 are considered eligible."
+      "NEW ALGORITHM: Rewards Rate (30%) + Category Match (30%) + Sign-up Bonus (20%) + Joining Fee (10%) + Annual Fee (5%) + Bank Match (5%) = 100%. Only cards with composite score ≥25.0 are considered eligible."
 
     return {
       success: true,
@@ -152,7 +105,7 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
         cardName: card.cardName,
         bank: card.bank,
         features: card.features,
-        reason: `Score: ${card.compositeScore}/100. ${card.description || "Selected based on optimal balance of low fees and high rewards for your profile."}`,
+        reason: `Score: ${card.compositeScore}/100. ${card.description || "Selected based on new refined scoring algorithm optimizing rewards and category matches."}`,
         rating: Math.min(5, Math.max(1, Math.round(card.compositeScore / 20))),
         joiningFee: card.joiningFee,
         annualFee: card.annualFee,
@@ -164,8 +117,7 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
       filterCriteria,
       scoringLogic,
       totalCardsConsidered: allCards.length,
-      eligibleCardsFound: basicEligibleCards.length,
-      scoreEligibleCardsFound: scoreEligibleCount,
+      eligibleCardsFound: recommendations.length,
     }
   } catch (error) {
     console.error("Error getting card recommendations:", error)
@@ -192,7 +144,7 @@ export async function getEnhancedCardRecommendations(
       }
     }
 
-    // Use REWARD-BASED filtering instead of composite scoring
+    // Use NEW SCORING ALGORITHM
     const topN = data.topN || 3
 
     // Handle the "any" value for maxJoiningFee - convert to undefined for no filtering
@@ -229,7 +181,6 @@ export async function getEnhancedCardRecommendations(
       console.log("✅ Enhanced user data logged successfully")
     } catch (submissionError) {
       console.error("⚠️ Failed to log enhanced user data:", submissionError)
-      // Don't fail the recommendation request if logging fails
     }
 
     // Enhanced filter criteria description
@@ -243,9 +194,9 @@ export async function getEnhancedCardRecommendations(
       filterCriteria += `, Max Joining Fee: ₹${processedMaxJoiningFee.toLocaleString()}`
     }
 
-    // Updated scoring logic description for reward-based approach
+    // Updated scoring logic description
     const scoringLogic =
-      "Ranked PURELY by highest reward rates (no composite scoring) - cards with highest cashback/rewards percentage appear first. Only cards with composite score ≥25.0 are considered eligible."
+      "NEW ALGORITHM with reward-based ranking: Rewards Rate (30%) + Category Match (30%) + Sign-up Bonus (20%) + Joining Fee (10%) + Annual Fee (5%) + Bank Match (5%) = 100%. Cards ranked by highest reward rates within eligible set."
 
     return {
       success: true,
@@ -253,13 +204,13 @@ export async function getEnhancedCardRecommendations(
         cardName: card.cardName,
         bank: card.bank,
         features: card.features,
-        reason: `Reward Rate: ${card.rewardsRate}%. ${card.description || "Selected for having one of the highest reward rates in your category."}`,
-        rating: Math.min(5, Math.max(1, Math.round(card.rewardsRate))), // Rating based on reward rate
+        reason: `Reward Rate: ${card.rewardsRate}%. ${card.description || "Selected for having one of the highest reward rates in your category with new scoring algorithm."}`,
+        rating: Math.min(5, Math.max(1, Math.round(card.rewardsRate))),
         joiningFee: card.joiningFee,
         annualFee: card.annualFee,
         rewardsRate: card.rewardsRate,
         signUpBonus: card.signUpBonus,
-        compositeScore: card.compositeScore, // Keep the actual composite score
+        compositeScore: card.compositeScore,
         monthlyIncomeRequirement: card.monthlyIncomeRequirement,
       })),
       filterCriteria,
@@ -276,7 +227,7 @@ export async function getEnhancedCardRecommendations(
   }
 }
 
-// Enhanced function for the form with spending categories and refined scoring
+// Enhanced function for the form with spending categories and NEW refined scoring
 export async function getCardRecommendationsForFormRefined(formData: {
   monthlyIncome: string
   spendingCategories: string[]
@@ -287,7 +238,7 @@ export async function getCardRecommendationsForFormRefined(formData: {
   joiningFeePreference: string
 }) {
   try {
-    console.log("🔄 Processing form data with refined scoring algorithm:", formData)
+    console.log("🔄 Processing form data with NEW refined scoring algorithm:", formData)
 
     // Convert form data to the format expected by our existing functions
     const creditScore = Number.parseInt(formData.creditScore) || 650
@@ -305,7 +256,7 @@ export async function getCardRecommendationsForFormRefined(formData: {
       `🎯 Determined card type: ${cardType} based on spending categories: [${formData.spendingCategories.join(", ")}]`,
     )
 
-    // Fetch all cards to use the new spending category enhanced filtering
+    // Fetch all cards from database - NO HARDCODED DATA
     const allCards = await fetchCreditCards()
 
     if (allCards.length === 0) {
@@ -318,20 +269,20 @@ export async function getCardRecommendationsForFormRefined(formData: {
       }
     }
 
-    // Use the new spending category enhanced filtering with refined scoring
+    // Use the NEW spending category enhanced filtering with NEW scoring algorithm
     const recommendations = filterAndRankCardsWithSpendingCategories(
       allCards,
       {
         creditScore,
         monthlyIncome,
         cardType,
-        spendingCategories: formData.spendingCategories, // Pass user's spending categories
-        preferredBanks: formData.preferredBanks, // Pass user's preferred banks
+        spendingCategories: formData.spendingCategories,
+        preferredBanks: formData.preferredBanks,
       },
       7, // Get top 7 recommendations
     )
 
-    console.log(`✅ Generated ${recommendations.length} recommendations with refined scoring algorithm`)
+    console.log(`✅ Generated ${recommendations.length} recommendations with NEW scoring algorithm`)
 
     // Log the enhanced form submission to Google Sheets
     try {
@@ -344,7 +295,7 @@ export async function getCardRecommendationsForFormRefined(formData: {
         spendingCategories: formData.spendingCategories,
         preferredBanks: formData.preferredBanks,
         joiningFeePreference: formData.joiningFeePreference,
-        submissionType: "enhanced_form_with_refined_scoring",
+        submissionType: "enhanced_form_with_new_scoring_algorithm",
         userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Server",
       }
 
@@ -358,7 +309,6 @@ export async function getCardRecommendationsForFormRefined(formData: {
       }
     } catch (submissionError) {
       console.error("❌ Error submitting enhanced form data:", submissionError)
-      // Don't fail the recommendation request if logging fails
     }
 
     // Transform the recommendations to match the expected format
@@ -378,9 +328,9 @@ export async function getCardRecommendationsForFormRefined(formData: {
       ],
       bestFor: formData.spendingCategories.slice(0, 3),
       score: Math.round(card.compositeScore),
-      reasoning: `Score: ${card.compositeScore}/105. ${card.spendingCategories.length > 0 ? `Matches your spending in: ${card.spendingCategories.join(", ")}. ` : ""}Refined algorithm prioritizes rewards rate (30%) and category match (30%) for optimal value.`,
-      spendingCategories: card.spendingCategories, // Include card's spending categories
-      scoreBreakdown: card.scoreBreakdown, // Include detailed score breakdown
+      reasoning: `Score: ${card.compositeScore}/100. ${card.spendingCategories.length > 0 ? `Matches your spending in: ${card.spendingCategories.join(", ")}. ` : ""}NEW algorithm prioritizes rewards rate (30%) and category match (30%) with bank preference bonus (5%).`,
+      spendingCategories: card.spendingCategories,
+      scoreBreakdown: card.scoreBreakdown,
     }))
 
     return {

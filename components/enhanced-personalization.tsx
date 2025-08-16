@@ -1,8 +1,6 @@
 "use client"
 
-import type { React } from "react"
-
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
@@ -11,47 +9,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Separator } from "@/components/ui/separator"
-import { AlertCircle, CreditCard, TrendingUp, Building2, Eye, EyeOff, Search, Loader2 } from 'lucide-react'
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { AlertCircle, CreditCard, TrendingUp, Building2, Eye, EyeOff, Search, Loader2 } from "lucide-react"
+import { AlertDescription } from "@/components/ui/alert"
 import { submitEnhancedFormData, trackCardApplicationClick } from "@/lib/google-sheets-submissions"
-import { fetchCreditCards } from "@/lib/google-sheets"
+import { fetchCreditCards, fetchAvailableSpendingCategories } from "@/lib/google-sheets"
 
-const SPENDING_CATEGORIES = [
-  { id: "dining", label: "Dining & Restaurants" },
-  { id: "grocery", label: "Grocery & Supermarkets" },
-  { id: "fuel", label: "Fuel & Gas Stations" },
-  { id: "online_shopping", label: "Online Shopping" },
-  { id: "travel", label: "Travel & Hotels" },
-  { id: "movies", label: "Movies & Entertainment" },
-  { id: "bill_payments", label: "Bill Payments & Utilities" },
-  { id: "shopping", label: "Shopping & Retail" },
-  { id: "amazon", label: "Amazon Purchases" },
-  { id: "luxury", label: "Luxury & Premium Services" },
-  { id: "concierge", label: "Concierge Services" },
-  { id: "golf", label: "Golf & Sports" },
-  { id: "entertainment", label: "Entertainment" },
-  { id: "departmental_stores", label: "Departmental Stores" },
-  { id: "health", label: "Health & Wellness" },
-  { id: "pharmacy", label: "Pharmacy & Medical" },
-  { id: "airlines", label: "Airlines & Flight Booking" },
-  { id: "hotels", label: "Hotels & Accommodation" },
-  { id: "railways", label: "Railways & Train Booking" },
-  { id: "sports", label: "Sports & Fitness" },
-  { id: "fashion", label: "Fashion & Apparel" },
-  { id: "wellness", label: "Wellness & Spa" },
-  { id: "business", label: "Business Expenses" },
-  { id: "corporate", label: "Corporate Spending" },
-  { id: "student", label: "Student Expenses" },
-  { id: "youth", label: "Youth & Lifestyle" },
-  { id: "customizable", label: "Customizable Categories" },
-  { id: "instant", label: "Instant Approval" },
-  { id: "digital", label: "Digital Services" },
-  { id: "international", label: "International Transactions" },
-  { id: "regional", label: "Regional Benefits" },
-  { id: "microfinance", label: "Microfinance Services" },
-  { id: "small_finance", label: "Small Finance Benefits" },
-]
-
+// Bank options - these are static UI options, not card data
 const BANK_OPTIONS = [
   { id: "sbi", label: "SBI" },
   { id: "hdfc", label: "HDFC Bank" },
@@ -117,29 +80,31 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
   const [allCards, setAllCards] = useState<any[]>([])
   const [isLoadingCards, setIsLoadingCards] = useState(false)
   const [filteredCards, setFilteredCards] = useState<any[]>([])
+  const [availableCategories, setAvailableCategories] = useState<string[]>([])
 
-  // Load all cards when component mounts or when search term changes
-  import("react").useEffect(() => {
-    const loadCards = async () => {
+  // Load all cards and categories when component mounts
+  useEffect(() => {
+    const loadData = async () => {
       if (allCards.length === 0) {
         setIsLoadingCards(true)
         try {
-          const fetchedCards = await fetchCreditCards()
+          const [fetchedCards, categories] = await Promise.all([fetchCreditCards(), fetchAvailableSpendingCategories()])
           setAllCards(fetchedCards)
+          setAvailableCategories(categories)
           setFilteredCards(fetchedCards.slice(0, 20)) // Show first 20 cards initially
         } catch (error) {
-          console.error("Error loading cards:", error)
+          console.error("Error loading data:", error)
         } finally {
           setIsLoadingCards(false)
         }
       }
     }
 
-    loadCards()
+    loadData()
   }, [allCards.length])
 
   // Filter cards based on search term
-  import("react").useEffect(() => {
+  useEffect(() => {
     if (searchTerm.trim() === "") {
       setFilteredCards(allCards.slice(0, 20)) // Show first 20 cards when no search
     } else {
@@ -156,13 +121,13 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
 
   const handleCardSelect = (card: any) => {
     setSelectedCard(card)
-    
-    // Calculate test results for the selected card
-    const testResults = testCard(card)
+
+    // Calculate test results for the selected card using the new scoring algorithm
+    const testResults = testCardWithNewScoring(card)
     setSelectedCard({ ...card, testResults })
   }
 
-  const testCard = (card: any) => {
+  const testCardWithNewScoring = (card: any) => {
     // Determine card type based on spending categories
     const cardType = formData.spendingCategories?.includes("travel")
       ? "Travel"
@@ -172,8 +137,12 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
 
     const results = {
       basicEligibility: {
-        creditScore: card.creditScoreRequirement === 0 || getCreditScoreValue(formData.creditScoreRange) >= card.creditScoreRequirement,
-        income: card.monthlyIncomeRequirement === 0 || Number.parseInt(formData.monthlyIncome) >= card.monthlyIncomeRequirement,
+        creditScore:
+          card.creditScoreRequirement === 0 ||
+          getCreditScoreValue(formData.creditScoreRange) >= card.creditScoreRequirement,
+        income:
+          card.monthlyIncomeRequirement === 0 ||
+          Number.parseInt(formData.monthlyIncome) >= card.monthlyIncomeRequirement,
         cardType: card.cardType === cardType,
       },
       bankMatch: formData.preferredBanks?.some((bank) => card.bank.toLowerCase().includes(bank.toLowerCase())) || false,
@@ -194,23 +163,34 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
       },
     }
 
-    // Calculate composite score using the same logic as the main algorithm
+    // NEW SCORING ALGORITHM with updated weights (0-100 total)
     const maxRewardsRate = 15 // Reasonable max for normalization
     const maxSignUpBonus = 100000 // Reasonable max for normalization
     const maxJoiningFee = 50000 // Reasonable max for normalization
     const maxAnnualFee = 60000 // Reasonable max for normalization
 
+    // Rewards Rate Score (0-30 points)
     const scoreRewards = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 30 : 0
-    const scoreCategory =
-      results.categoryMatch.matches.length > 0
-        ? (results.categoryMatch.matches.length / Math.max(results.categoryMatch.userCategories.length, 1)) * 30
-        : 0
-    const scoreSignup = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 20 : 0
-    const scoreJoining = maxJoiningFee > 0 ? ((maxJoiningFee - card.joiningFee) / maxJoiningFee) * 10 : 10
-    const scoreAnnual = maxAnnualFee > 0 ? ((maxAnnualFee - card.annualFee) / maxAnnualFee) * 10 : 10
-    const bankBonus = results.bankMatch ? 5 : 0
 
-    const compositeScore = scoreRewards + scoreCategory + scoreSignup + scoreJoining + scoreAnnual + bankBonus
+    // Category Match Score (0-30 points)
+    const scoreCategory =
+      results.categoryMatch.matches.length > 0 && results.categoryMatch.userCategories.length > 0
+        ? (results.categoryMatch.matches.length / results.categoryMatch.userCategories.length) * 30
+        : 0
+
+    // Sign-up Bonus Score (0-20 points)
+    const scoreSignup = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 20 : 0
+
+    // Joining Fee Score (0-10 points) - Lower fee is better
+    const scoreJoining = maxJoiningFee > 0 ? ((maxJoiningFee - card.joiningFee) / maxJoiningFee) * 10 : 10
+
+    // Annual Fee Score (0-5 points) - Lower fee is better
+    const scoreAnnual = maxAnnualFee > 0 ? ((maxAnnualFee - card.annualFee) / maxAnnualFee) * 5 : 5
+
+    // Bank Match Score (0-5 points) - NEW: Dedicated bank preference bonus
+    const scoreBank = results.bankMatch ? 5 : 0
+
+    const compositeScore = scoreRewards + scoreCategory + scoreSignup + scoreJoining + scoreAnnual + scoreBank
 
     return {
       ...results,
@@ -221,7 +201,7 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
         signup: scoreSignup,
         joining: scoreJoining,
         annual: scoreAnnual,
-        bankBonus,
+        bank: scoreBank,
       },
       passesThreshold: compositeScore >= 25.0,
       isRecommended: cards.some((rec) => rec.card.cardName === card.cardName),
@@ -308,14 +288,14 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                   {filteredCards.map((card) => {
                     const scoredCard = cards.find((c) => c.card.cardName === card.cardName)
                     const isSelected = selectedCard?.id === card.id
-                    
+
                     return (
                       <div
                         key={card.id}
                         onClick={() => handleCardSelect(card)}
                         className={`p-3 rounded cursor-pointer transition-colors ${
-                          isSelected 
-                            ? "bg-blue-100 border-blue-300 border" 
+                          isSelected
+                            ? "bg-blue-100 border-blue-300 border"
                             : "hover:bg-gray-50 border border-transparent"
                         }`}
                       >
@@ -326,9 +306,7 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                               {card.bank} • {card.cardType} • {card.rewardsRate}% rewards
                             </div>
                             {card.description && (
-                              <div className="text-xs text-gray-500 mt-1 truncate">
-                                {card.description}
-                              </div>
+                              <div className="text-xs text-gray-500 mt-1 truncate">{card.description}</div>
                             )}
                           </div>
                           <div className="text-right ml-4">
@@ -350,9 +328,7 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
             )}
 
             {searchTerm && filteredCards.length === 0 && !isLoadingCards && (
-              <div className="text-center py-4 text-gray-500">
-                No cards found matching "{searchTerm}"
-              </div>
+              <div className="text-center py-4 text-gray-500">No cards found matching "{searchTerm}"</div>
             )}
           </div>
 
@@ -382,9 +358,7 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                           <span>Credit Score:</span>
                           <span
                             className={
-                              selectedCard.testResults.basicEligibility.creditScore
-                                ? "text-green-600"
-                                : "text-red-600"
+                              selectedCard.testResults.basicEligibility.creditScore ? "text-green-600" : "text-red-600"
                             }
                           >
                             {selectedCard.testResults.basicEligibility.creditScore ? "✅ Pass" : "❌ Fail"}
@@ -426,30 +400,37 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                       </div>
                     </div>
 
-                    {/* Refined Scoring Breakdown */}
+                    {/* NEW SCORING BREAKDOWN with updated weights */}
                     <div>
                       <h4 className="font-semibold mb-3 flex items-center gap-2">
                         <TrendingUp className="h-4 w-4" />
-                        Refined Scoring Breakdown
+                        New Scoring Breakdown (0-100)
                       </h4>
                       <div className="space-y-2">
                         <div className="flex justify-between">
                           <span>🎁 Rewards Rate (30):</span>
-                          <span className="font-medium">{selectedCard.testResults.scoreBreakdown.rewards.toFixed(1)}</span>
+                          <span className="font-medium">
+                            {selectedCard.testResults.scoreBreakdown.rewards.toFixed(1)}
+                          </span>
                         </div>
                         <div className="text-xs text-gray-600">Card Rate: {selectedCard.rewardsRate}%</div>
 
                         <div className="flex justify-between">
                           <span>🛍️ Category Match (30):</span>
-                          <span className="font-medium">{selectedCard.testResults.scoreBreakdown.category.toFixed(1)}</span>
+                          <span className="font-medium">
+                            {selectedCard.testResults.scoreBreakdown.category.toFixed(1)}
+                          </span>
                         </div>
                         <div className="text-xs text-gray-600">
-                          Matches: {selectedCard.testResults.categoryMatch.matches.length}/{formData.spendingCategories.length} categories
+                          Matches: {selectedCard.testResults.categoryMatch.matches.length}/
+                          {formData.spendingCategories.length} categories
                         </div>
 
                         <div className="flex justify-between">
                           <span>🎉 Sign-up Bonus (20):</span>
-                          <span className="font-medium">{selectedCard.testResults.scoreBreakdown.signup.toFixed(1)}</span>
+                          <span className="font-medium">
+                            {selectedCard.testResults.scoreBreakdown.signup.toFixed(1)}
+                          </span>
                         </div>
                         <div className="text-xs text-gray-600">
                           Bonus: ₹{selectedCard.signUpBonus?.toLocaleString()}
@@ -457,23 +438,23 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
 
                         <div className="flex justify-between">
                           <span>💳 Joining Fee (10):</span>
-                          <span className="font-medium">{selectedCard.testResults.scoreBreakdown.joining.toFixed(1)}</span>
+                          <span className="font-medium">
+                            {selectedCard.testResults.scoreBreakdown.joining.toFixed(1)}
+                          </span>
                         </div>
-                        <div className="text-xs text-gray-600">
-                          Fee: ₹{selectedCard.joiningFee?.toLocaleString()}
-                        </div>
+                        <div className="text-xs text-gray-600">Fee: ₹{selectedCard.joiningFee?.toLocaleString()}</div>
 
                         <div className="flex justify-between">
-                          <span>📅 Annual Fee (10):</span>
-                          <span className="font-medium">{selectedCard.testResults.scoreBreakdown.annual.toFixed(1)}</span>
+                          <span>📅 Annual Fee (5):</span>
+                          <span className="font-medium">
+                            {selectedCard.testResults.scoreBreakdown.annual.toFixed(1)}
+                          </span>
                         </div>
-                        <div className="text-xs text-gray-600">
-                          Fee: ₹{selectedCard.annualFee?.toLocaleString()}
-                        </div>
+                        <div className="text-xs text-gray-600">Fee: ₹{selectedCard.annualFee?.toLocaleString()}</div>
 
                         <div className="flex justify-between">
-                          <span>🏦 Bank Bonus (5):</span>
-                          <span className="font-medium">{selectedCard.testResults.scoreBreakdown.bankBonus.toFixed(1)}</span>
+                          <span>🏦 Bank Match (5):</span>
+                          <span className="font-medium">{selectedCard.testResults.scoreBreakdown.bank.toFixed(1)}</span>
                         </div>
                         <div className="text-xs text-gray-600">
                           {selectedCard.testResults.bankMatch ? "Preferred bank" : "Not preferred"}
@@ -482,7 +463,7 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                         <Separator />
                         <div className="flex justify-between font-bold text-lg">
                           <span>Total Score:</span>
-                          <span>{selectedCard.testResults.compositeScore.toFixed(1)}/105</span>
+                          <span>{selectedCard.testResults.compositeScore.toFixed(1)}/100</span>
                         </div>
                         <div className="text-xs text-gray-600">Threshold: 25.0 points (for recommendations)</div>
                       </div>
@@ -498,7 +479,7 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                         <div className="flex flex-wrap gap-1 mt-1">
                           {formData.spendingCategories.map((cat) => (
                             <Badge key={cat} variant="outline">
-                              {SPENDING_CATEGORIES.find((c) => c.id === cat)?.label}
+                              {cat}
                             </Badge>
                           ))}
                         </div>
@@ -509,19 +490,26 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                           {(selectedCard.spendingCategories || []).map((tag: string) => (
                             <Badge
                               key={tag}
-                              variant={selectedCard.testResults.categoryMatch.matches.includes(tag) ? "default" : "secondary"}
+                              variant={
+                                selectedCard.testResults.categoryMatch.matches.includes(tag) ? "default" : "secondary"
+                              }
                             >
-                              {SPENDING_CATEGORIES.find((c) => c.id === tag)?.label || tag}
+                              {tag}
                             </Badge>
                           ))}
                         </div>
                       </div>
                     </div>
                     <div className="mt-2 text-sm">
-                      <span className="font-medium">Match Rate:</span> {selectedCard.testResults.categoryMatch.matches.length}/
-                      {formData.spendingCategories.length} categories (
+                      <span className="font-medium">Match Rate:</span>{" "}
+                      {selectedCard.testResults.categoryMatch.matches.length}/{formData.spendingCategories.length}{" "}
+                      categories (
                       {formData.spendingCategories.length > 0
-                        ? ((selectedCard.testResults.categoryMatch.matches.length / formData.spendingCategories.length) * 100).toFixed(0)
+                        ? (
+                            (selectedCard.testResults.categoryMatch.matches.length /
+                              formData.spendingCategories.length) *
+                            100
+                          ).toFixed(0)
                         : 0}
                       %)
                     </div>
@@ -553,26 +541,28 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                   {/* Final Verdict */}
                   <div className="mt-6 p-4 rounded-lg bg-gray-50">
                     <h4 className="font-semibold mb-2">Final Verdict</h4>
-                    <div className={`text-lg font-bold ${
-                      selectedCard.testResults.passesThreshold && 
-                      selectedCard.testResults.basicEligibility.creditScore && 
-                      selectedCard.testResults.basicEligibility.income && 
+                    <div
+                      className={`text-lg font-bold ${
+                        selectedCard.testResults.passesThreshold &&
+                        selectedCard.testResults.basicEligibility.creditScore &&
+                        selectedCard.testResults.basicEligibility.income &&
+                        selectedCard.testResults.basicEligibility.cardType
+                          ? "text-green-600"
+                          : "text-red-600"
+                      }`}
+                    >
+                      {selectedCard.testResults.passesThreshold &&
+                      selectedCard.testResults.basicEligibility.creditScore &&
+                      selectedCard.testResults.basicEligibility.income &&
                       selectedCard.testResults.basicEligibility.cardType
-                        ? "text-green-600" 
-                        : "text-red-600"
-                    }`}>
-                      {selectedCard.testResults.passesThreshold && 
-                       selectedCard.testResults.basicEligibility.creditScore && 
-                       selectedCard.testResults.basicEligibility.income && 
-                       selectedCard.testResults.basicEligibility.cardType
-                        ? "✅ ELIGIBLE" 
+                        ? "✅ ELIGIBLE"
                         : "❌ NOT ELIGIBLE"}
                     </div>
                     <div className="text-sm mt-1">
-                      {selectedCard.testResults.passesThreshold && 
-                       selectedCard.testResults.basicEligibility.creditScore && 
-                       selectedCard.testResults.basicEligibility.income && 
-                       selectedCard.testResults.basicEligibility.cardType
+                      {selectedCard.testResults.passesThreshold &&
+                      selectedCard.testResults.basicEligibility.creditScore &&
+                      selectedCard.testResults.basicEligibility.income &&
+                      selectedCard.testResults.basicEligibility.cardType
                         ? `This card passes all eligibility checks and scores ${selectedCard.testResults.compositeScore.toFixed(
                             1,
                           )} points. ${
@@ -638,29 +628,32 @@ function getCreditScoreValue(range: string): number {
   }
 }
 
-const calculateRefinedScore = (
+// NEW SCORING ALGORITHM with updated weights (0-100 total)
+const calculateNewRefinedScore = (
   card: any,
   userCategories: string[],
   preferredBanks: string[],
   maxValues: { rewards: number; signup: number; joining: number; annual: number },
 ) => {
   // 1. Rewards Rate Score (0-30 points)
-  const rewardsScore = (card.rewardsRate / maxValues.rewards) * 30
+  const rewardsScore = maxValues.rewards > 0 ? (card.rewardsRate / maxValues.rewards) * 30 : 0
 
   // 2. Category Match Score (0-30 points)
-  const matchingCategories = (card.spendingCategories || []).filter((tag: string) => userCategories.includes(tag))
+  const matchingCategories = (card.spendingCategories || []).filter((tag: string) =>
+    userCategories.map((cat) => cat.toLowerCase()).includes(tag.toLowerCase()),
+  )
   const categoryScore = userCategories.length > 0 ? (matchingCategories.length / userCategories.length) * 30 : 0
 
   // 3. Sign-up Bonus Score (0-20 points)
-  const signupScore = (card.signUpBonus / maxValues.signup) * 20
+  const signupScore = maxValues.signup > 0 ? (card.signUpBonus / maxValues.signup) * 20 : 0
 
   // 4. Joining Fee Score (0-10 points) - Lower fee = higher score
-  const joiningScore = ((maxValues.joining - card.joiningFee) / maxValues.joining) * 10
+  const joiningScore = maxValues.joining > 0 ? ((maxValues.joining - card.joiningFee) / maxValues.joining) * 10 : 10
 
-  // 5. Annual Fee Score (0-10 points) - Lower fee = higher score
-  const annualScore = ((maxValues.annual - card.annualFee) / maxValues.annual) * 10
+  // 5. Annual Fee Score (0-5 points) - Lower fee = higher score
+  const annualScore = maxValues.annual > 0 ? ((maxValues.annual - card.annualFee) / maxValues.annual) * 5 : 5
 
-  // 6. Bank Preference Bonus (0-5 points)
+  // 6. Bank Preference Score (0-5 points) - NEW: Dedicated bank preference bonus
   const bankScore = preferredBanks.some((bank) => card.bank.toLowerCase().includes(bank.toLowerCase())) ? 5 : 0
 
   const totalScore = rewardsScore + categoryScore + signupScore + joiningScore + annualScore + bankScore
@@ -718,6 +711,21 @@ export default function EnhancedPersonalization() {
   const [totalCards, setTotalCards] = useState(0)
   const [showTester, setShowTester] = useState(false)
   const [allScoredCards, setAllScoredCards] = useState<ScoredCard[]>([])
+  const [availableCategories, setAvailableCategories] = useState<string[]>([])
+
+  // Load available spending categories from database
+  useEffect(() => {
+    const loadCategories = async () => {
+      try {
+        const categories = await fetchAvailableSpendingCategories()
+        setAvailableCategories(categories)
+      } catch (error) {
+        console.error("Error loading spending categories:", error)
+      }
+    }
+
+    loadCategories()
+  }, [])
 
   const handleInputChange = (field: keyof FormData, value: string | string[]) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -746,7 +754,7 @@ export default function EnhancedPersonalization() {
     try {
       // Fetch cards from database
       const allCards = await fetchCreditCards()
-      
+
       if (allCards.length === 0) {
         setError("No cards found in database. Please try again later.")
         return
@@ -760,10 +768,10 @@ export default function EnhancedPersonalization() {
         annual: Math.max(...allCards.map((c: any) => c.annualFee)),
       }
 
-      // Score and filter all cards
+      // Score and filter all cards using NEW SCORING ALGORITHM
       const scoredCards: ScoredCard[] = allCards.map((card: any) => {
         const eligibility = checkEligibility(card, formData)
-        const scoring = calculateRefinedScore(card, formData.spendingCategories, formData.preferredBanks, maxValues)
+        const scoring = calculateNewRefinedScore(card, formData.spendingCategories, formData.preferredBanks, maxValues)
 
         return {
           card,
@@ -781,19 +789,8 @@ export default function EnhancedPersonalization() {
       // Sort by score (highest first) and take top 7
       const topRecommendations = eligibleCards.sort((a, b) => b.score - a.score).slice(0, 7)
 
-      // Prioritize cards from preferred banks
-      const preferredBankCards = scoredCards.filter((card) =>
-        formData.preferredBanks.some((bank) => card.card.bank.toLowerCase().includes(bank.toLowerCase())),
-      )
-      const otherCards = scoredCards.filter(
-        (card) => !formData.preferredBanks.some((bank) => card.card.bank.toLowerCase().includes(bank.toLowerCase())),
-      )
-
-      // Ensure preferred bank cards are included, even if they don't meet the score threshold
-      const combinedRecommendations = [...preferredBankCards, ...topRecommendations].slice(0, 7)
-
       setAllScoredCards(scoredCards)
-      setRecommendations(combinedRecommendations)
+      setRecommendations(topRecommendations)
       setTotalCards(allCards.length)
       setUserProfile({
         monthlyIncome: Number.parseInt(formData.monthlyIncome),
@@ -813,7 +810,7 @@ export default function EnhancedPersonalization() {
         spendingCategories: formData.spendingCategories,
         preferredBanks: formData.preferredBanks,
         joiningFeePreference: formData.joiningFeePreference,
-        submissionType: "enhanced_personalization",
+        submissionType: "enhanced_personalization_new_scoring",
         userAgent: navigator.userAgent,
       }
 
@@ -877,8 +874,12 @@ export default function EnhancedPersonalization() {
     <div className="max-w-4xl mx-auto p-6 space-y-8">
       <div className="text-center">
         <h1 className="text-3xl font-bold mb-2">🎯 Enhanced Card Personalization</h1>
-        <p className="text-gray-600">Get personalized credit card recommendations with our refined scoring algorithm</p>
-        <p className="text-sm text-gray-500 mt-1">Data fetched live from our database!</p>
+        <p className="text-gray-600">
+          Get personalized credit card recommendations with our new refined scoring algorithm
+        </p>
+        <p className="text-sm text-gray-500 mt-1">
+          New Scoring: Rewards (30%) + Categories (30%) + Bonus (20%) + Fees (15%) + Bank Match (5%) = 100%
+        </p>
       </div>
 
       <Card>
@@ -953,28 +954,35 @@ export default function EnhancedPersonalization() {
               </div>
             </div>
 
-            {/* Spending Categories */}
+            {/* Spending Categories - Loaded from Database */}
             <div>
               <Label>Primary Spending Categories (Select all that apply)</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2 max-h-48 overflow-y-auto">
-                {SPENDING_CATEGORIES.map((category) => (
-                  <div key={category.id} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={category.id}
-                      checked={formData.spendingCategories.includes(category.id)}
-                      onCheckedChange={(checked) => handleCategoryChange(category.id, checked as boolean)}
-                    />
-                    <Label htmlFor={category.id} className="text-sm">
-                      {category.label}
-                    </Label>
-                  </div>
-                ))}
-              </div>
+              {availableCategories.length > 0 ? (
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2 max-h-48 overflow-y-auto">
+                  {availableCategories.map((category) => (
+                    <div key={category} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={category}
+                        checked={formData.spendingCategories.includes(category)}
+                        onCheckedChange={(checked) => handleCategoryChange(category, checked as boolean)}
+                      />
+                      <Label htmlFor={category} className="text-sm capitalize">
+                        {category.replace(/_/g, " ")}
+                      </Label>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 mt-2 text-sm text-gray-600">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  Loading spending categories from database...
+                </div>
+              )}
             </div>
 
             {/* Preferred Banks */}
             <div>
-              <Label>Preferred Banks (Optional)</Label>
+              <Label>Preferred Banks (Optional - 5 point bonus each)</Label>
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2 max-h-32 overflow-y-auto">
                 {BANK_OPTIONS.map((bank) => (
                   <div key={bank.id} className="flex items-center space-x-2">
@@ -1057,9 +1065,9 @@ export default function EnhancedPersonalization() {
               <div className="flex items-center gap-2">
                 <TrendingUp className="h-4 w-4" />
                 <AlertDescription>
-                  Cards are ranked using our refined algorithm: Rewards Rate (30%) + Category Match (30%) + Sign-up Bonus
-                  (20%) + Fees (20%). Only showing cards with score ≥ 25.0. Analyzed from {totalCards} total
-                  cards fetched live from database.
+                  <strong>NEW SCORING ALGORITHM:</strong> Rewards Rate (30%) + Category Match (30%) + Sign-up Bonus
+                  (20%) + Joining Fee (10%) + Annual Fee (5%) + Bank Match (5%) = 100%. Only showing cards with score ≥
+                  25.0. Analyzed from {totalCards} total cards fetched live from database.
                 </AlertDescription>
               </div>
             </CardContent>
@@ -1075,12 +1083,50 @@ export default function EnhancedPersonalization() {
                         <Badge variant="secondary">#{index + 1}</Badge>
                         <h3 className="text-xl font-bold">{scoredCard.card.cardName}</h3>
                         <Badge variant="outline">{scoredCard.card.bank}</Badge>
+                        {formData.preferredBanks.some((bank) =>
+                          scoredCard.card.bank.toLowerCase().includes(bank.toLowerCase()),
+                        ) && (
+                          <Badge variant="default" className="bg-blue-600">
+                            Preferred Bank +5
+                          </Badge>
+                        )}
                       </div>
                       <p className="text-gray-600">{scoredCard.card.description}</p>
                     </div>
                     <div className="text-right">
                       <div className="text-2xl font-bold text-blue-600">{scoredCard.score.toFixed(1)}</div>
-                      <div className="text-sm text-gray-500">Score</div>
+                      <div className="text-sm text-gray-500">Score/100</div>
+                    </div>
+                  </div>
+
+                  {/* Score Breakdown */}
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                    <h4 className="font-semibold mb-2 text-sm">Score Breakdown:</h4>
+                    <div className="grid grid-cols-3 md:grid-cols-6 gap-2 text-xs">
+                      <div className="text-center">
+                        <div className="font-bold">{scoredCard.scoreBreakdown.rewards.toFixed(1)}</div>
+                        <div className="text-gray-600">Rewards</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold">{scoredCard.scoreBreakdown.category.toFixed(1)}</div>
+                        <div className="text-gray-600">Category</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold">{scoredCard.scoreBreakdown.signup.toFixed(1)}</div>
+                        <div className="text-gray-600">Bonus</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold">{scoredCard.scoreBreakdown.joining.toFixed(1)}</div>
+                        <div className="text-gray-600">Join Fee</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold">{scoredCard.scoreBreakdown.annual.toFixed(1)}</div>
+                        <div className="text-gray-600">Annual</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold">{scoredCard.scoreBreakdown.bank.toFixed(1)}</div>
+                        <div className="text-gray-600">Bank</div>
+                      </div>
                     </div>
                   </div>
 
@@ -1106,7 +1152,7 @@ export default function EnhancedPersonalization() {
                   <div className="flex flex-wrap gap-2 mb-4">
                     {scoredCard.categoryMatches.map((category) => (
                       <Badge key={category} variant="default">
-                        {SPENDING_CATEGORIES.find((c) => c.id === category)?.label || category}
+                        {category.replace(/_/g, " ")}
                       </Badge>
                     ))}
                   </div>
