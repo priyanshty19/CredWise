@@ -406,3 +406,19 @@ export async function getCardRecommendationsForForm(formData: {
     }
   }
 }
+
+export async function getRecommendations(formData: FormData) {
+  try {
+    const result = await getCardRecommendationsForForm(formData)
+    return result
+  } catch (error: any) {
+    console.error("Error in getRecommendations server action:", error)
+    return {
+      success: false,
+      error: "Failed to generate recommendations. Please try again.",
+      recommendations: [],
+      totalCards: 0,
+      userProfile: null,
+    }
+  }
+}
