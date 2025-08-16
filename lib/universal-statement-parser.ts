@@ -1,4 +1,4 @@
-// Platform-specific header configurations from the attachment
+// Platform header definitions for automatic detection
 export const PLATFORM_HEADERS = {
   GROWW: {
     stocks: [
@@ -21,24 +21,33 @@ export const PLATFORM_HEADERS = {
       "Units",
       "Invested Value",
       "Current Value",
-      "Unrealised P&L",
+      "P&L",
     ],
   },
   ZERODHA: {
     stocks: ["Instrument", "Qty.", "Avg. cost", "LTP", "Cur. val", "P&L", "Net chg.", "Day chg."],
-    mf: ["Fund", "ISIN", "Units", "Avg. cost", "LTP", "Cur. val", "P&L", "Day chg."],
+    mf: ["Fund", "ISIN", "Folio", "Units", "Avg. cost", "Current NAV", "Current value", "P&L", "% change"],
   },
   ANGEL_ONE: {
-    stocks: ["Symbol", "Product", "Quantity", "Average Price", "LTP", "Market Value", "Unrealized P&L", "Realized P&L"],
+    stocks: ["Symbol", "Product", "Quantity", "Average Price", "LTP", "Market Value", "P&L", "% P&L"],
     mf: ["Scheme Name", "Folio Number", "Units", "Purchase Price", "Current NAV", "Current Value", "Gain/Loss"],
   },
   HDFC_SECURITIES: {
     stocks: ["Security Name", "ISIN", "Quantity", "Rate", "Market Price", "Market Value", "Unrealized Gain/Loss"],
-    mf: ["Fund Name", "Folio", "Units", "Purchase NAV", "Current NAV", "Current Value", "Gain/Loss Amount"],
+    mf: [
+      "Fund Name",
+      "Folio",
+      "Units",
+      "Purchase NAV",
+      "Current NAV",
+      "Investment Value",
+      "Current Value",
+      "Gain/Loss",
+    ],
   },
   ICICI_DIRECT: {
     stocks: ["Stock Name", "Symbol", "Quantity", "Avg Rate", "Current Price", "Current Value", "Unrealized P&L"],
-    mf: ["Scheme", "Folio", "Units", "Avg NAV", "Current NAV", "Market Value", "P&L"],
+    mf: ["Scheme", "Folio", "Units", "Avg NAV", "Current NAV", "Invested Amount", "Current Amount", "Gain/Loss"],
   },
 }
 
@@ -49,53 +58,45 @@ export interface ParsedHolding {
   quantity: number
   avgPrice: number
   currentPrice: number
+  investedValue: number
   currentValue: number
   pnl: number
   pnlPercentage: number
-  type: "stock" | "mf"
+  type: "stock" | "mutual_fund"
   platform: string
   folio?: string
   category?: string
-  amc?: string
 }
 
 export interface ParsedPortfolio {
   holdings: ParsedHolding[]
   summary: {
     totalInvested: number
-    currentValue: number
+    totalCurrent: number
     totalPnL: number
     totalPnLPercentage: number
     stocksCount: number
-    mfCount: number
-    platform: string
+    mutualFundsCount: number
   }
-  metadata: {
-    fileName: string
-    parsedAt: string
-    platform: string
-    dataSource: "file" | "manual"
-  }
+  platform: string
+  parseDate: string
+  errors: string[]
 }
 
 // Detect platform based on headers
 export function detectPlatform(headers: string[]): string | null {
   const normalizedHeaders = headers.map((h) => h.trim().toLowerCase())
 
-  // Check each platform's header patterns
-  for (const [platform, config] of Object.entries(PLATFORM_HEADERS)) {
-    const stockHeaders = config.stocks.map((h) => h.toLowerCase())
-    const mfHeaders = config.mf.map((h) => h.toLowerCase())
+  for (const [platform, platformHeaders] of Object.entries(PLATFORM_HEADERS)) {
+    // Check stocks headers
+    const stocksMatch = platformHeaders.stocks.some((header) =>
+      normalizedHeaders.some((h) => h.includes(header.toLowerCase())),
+    )
 
-    // Check if significant portion of headers match
-    const stockMatches = stockHeaders.filter((h) =>
-      normalizedHeaders.some((nh) => nh.includes(h) || h.includes(nh)),
-    ).length
+    // Check mutual funds headers
+    const mfMatch = platformHeaders.mf.some((header) => normalizedHeaders.some((h) => h.includes(header.toLowerCase())))
 
-    const mfMatches = mfHeaders.filter((h) => normalizedHeaders.some((nh) => nh.includes(h) || h.includes(nh))).length
-
-    // If more than 50% headers match, consider it a match
-    if (stockMatches >= stockHeaders.length * 0.5 || mfMatches >= mfHeaders.length * 0.5) {
+    if (stocksMatch || mfMatch) {
       return platform
     }
   }
@@ -104,282 +105,362 @@ export function detectPlatform(headers: string[]): string | null {
 }
 
 // Parse numeric value from string
-function parseNumeric(value: any): number {
+function parseNumericValue(value: any): number {
   if (typeof value === "number") return value
   if (!value || value === "" || value === "N/A" || value === "-") return 0
 
-  const str = value
-    .toString()
-    .replace(/[₹,\s]/g, "")
-    .replace(/[()]/g, "-")
-  const num = Number.parseFloat(str)
-  return isNaN(num) ? 0 : num
+  const stringValue = value.toString().replace(/[₹,\s]/g, "")
+  const parsed = Number.parseFloat(stringValue)
+  return isNaN(parsed) ? 0 : parsed
 }
 
-// Parse Groww format
-function parseGrowwData(rows: any[][], headers: string[], type: "stocks" | "mf"): ParsedHolding[] {
+// Parse Groww statement
+function parseGrowwStatement(data: any[][]): ParsedHolding[] {
   const holdings: ParsedHolding[] = []
-  const expectedHeaders = PLATFORM_HEADERS.GROWW[type]
 
-  // Create header mapping
-  const headerMap: { [key: string]: number } = {}
-  expectedHeaders.forEach((expectedHeader) => {
-    const index = headers.findIndex(
-      (h) =>
-        h.toLowerCase().includes(expectedHeader.toLowerCase()) ||
-        expectedHeader.toLowerCase().includes(h.toLowerCase()),
-    )
-    if (index !== -1) {
-      headerMap[expectedHeader] = index
-    }
-  })
+  if (data.length < 2) return holdings
 
-  rows.forEach((row) => {
-    if (!row || row.length === 0) return
+  const headers = data[0].map((h) => h.toString().trim())
+  const rows = data.slice(1)
+
+  // Detect if this is stocks or mutual funds based on headers
+  const isStocks = headers.some((h) =>
+    ["Stock Name", "ISIN", "Average buy price"].some((stockHeader) =>
+      h.toLowerCase().includes(stockHeader.toLowerCase()),
+    ),
+  )
+
+  for (const row of rows) {
+    if (!row || row.length < 3) continue
 
     try {
-      if (type === "stocks") {
+      if (isStocks) {
+        // Parse stock data
         const holding: ParsedHolding = {
-          name: row[headerMap["Stock Name"]] || "",
-          symbol: row[headerMap["Stock Name"]] || "",
-          isin: row[headerMap["ISIN"]] || "",
-          quantity: parseNumeric(row[headerMap["Quantity"]]),
-          avgPrice: parseNumeric(row[headerMap["Average buy price"]]),
-          currentPrice: parseNumeric(row[headerMap["Closing price"]]),
-          currentValue: parseNumeric(row[headerMap["Closing value"]]),
-          pnl: parseNumeric(row[headerMap["Unrealised P&L"]]),
+          name: row[0]?.toString() || "",
+          isin: row[1]?.toString() || "",
+          quantity: parseNumericValue(row[2]),
+          avgPrice: parseNumericValue(row[3]),
+          investedValue: parseNumericValue(row[4]),
+          currentPrice: parseNumericValue(row[5]),
+          currentValue: parseNumericValue(row[6]),
+          pnl: parseNumericValue(row[7]),
           pnlPercentage: 0,
           type: "stock",
           platform: "GROWW",
         }
 
         // Calculate P&L percentage
-        const invested = holding.quantity * holding.avgPrice
-        if (invested > 0) {
-          holding.pnlPercentage = (holding.pnl / invested) * 100
+        if (holding.investedValue > 0) {
+          holding.pnlPercentage = (holding.pnl / holding.investedValue) * 100
         }
 
-        if (holding.name && holding.quantity > 0) {
+        if (holding.name) {
           holdings.push(holding)
         }
       } else {
+        // Parse mutual fund data
         const holding: ParsedHolding = {
-          name: row[headerMap["Scheme Name"]] || "",
-          quantity: parseNumeric(row[headerMap["Units"]]),
-          avgPrice: 0, // Calculate from invested value and units
-          currentPrice: 0, // Calculate from current value and units
-          currentValue: parseNumeric(row[headerMap["Current Value"]]),
-          pnl: parseNumeric(row[headerMap["Unrealised P&L"]]),
+          name: row[0]?.toString() || "",
+          category: row[2]?.toString() || "",
+          folio: row[4]?.toString() || "",
+          quantity: parseNumericValue(row[6]),
+          investedValue: parseNumericValue(row[7]),
+          currentValue: parseNumericValue(row[8]),
+          pnl: parseNumericValue(row[9]),
+          avgPrice: 0,
+          currentPrice: 0,
           pnlPercentage: 0,
-          type: "mf",
+          type: "mutual_fund",
           platform: "GROWW",
-          folio: row[headerMap["Folio No."]] || "",
-          category: row[headerMap["Category"]] || "",
-          amc: row[headerMap["AMC"]] || "",
         }
 
-        const investedValue = parseNumeric(row[headerMap["Invested Value"]])
+        // Calculate average price and current price for MF
         if (holding.quantity > 0) {
-          holding.avgPrice = investedValue / holding.quantity
+          holding.avgPrice = holding.investedValue / holding.quantity
           holding.currentPrice = holding.currentValue / holding.quantity
         }
 
         // Calculate P&L percentage
-        if (investedValue > 0) {
-          holding.pnlPercentage = (holding.pnl / investedValue) * 100
+        if (holding.investedValue > 0) {
+          holding.pnlPercentage = (holding.pnl / holding.investedValue) * 100
         }
 
-        if (holding.name && holding.quantity > 0) {
+        if (holding.name) {
           holdings.push(holding)
         }
       }
     } catch (error) {
-      console.warn("Error parsing row:", error, row)
+      console.warn("Error parsing Groww row:", error, row)
     }
-  })
+  }
 
   return holdings
 }
 
-// Parse Zerodha format
-function parseZerodhaData(rows: any[][], headers: string[], type: "stocks" | "mf"): ParsedHolding[] {
+// Parse Zerodha statement
+function parseZerodhaStatement(data: any[][]): ParsedHolding[] {
   const holdings: ParsedHolding[] = []
-  const expectedHeaders = PLATFORM_HEADERS.ZERODHA[type]
 
-  // Create header mapping
-  const headerMap: { [key: string]: number } = {}
-  expectedHeaders.forEach((expectedHeader) => {
-    const index = headers.findIndex(
-      (h) =>
-        h.toLowerCase().includes(expectedHeader.toLowerCase()) ||
-        expectedHeader.toLowerCase().includes(h.toLowerCase()),
-    )
-    if (index !== -1) {
-      headerMap[expectedHeader] = index
-    }
-  })
+  if (data.length < 2) return holdings
 
-  rows.forEach((row) => {
-    if (!row || row.length === 0) return
+  const headers = data[0].map((h) => h.toString().trim())
+  const rows = data.slice(1)
+
+  // Detect if this is stocks or mutual funds
+  const isStocks = headers.some((h) =>
+    ["Instrument", "Qty.", "Avg. cost"].some((stockHeader) => h.toLowerCase().includes(stockHeader.toLowerCase())),
+  )
+
+  for (const row of rows) {
+    if (!row || row.length < 3) continue
 
     try {
-      if (type === "stocks") {
+      if (isStocks) {
+        // Parse stock data
+        const quantity = parseNumericValue(row[1])
+        const avgCost = parseNumericValue(row[2])
+        const ltp = parseNumericValue(row[3])
+        const currentValue = parseNumericValue(row[4])
+        const pnl = parseNumericValue(row[5])
+
         const holding: ParsedHolding = {
-          name: row[headerMap["Instrument"]] || "",
-          symbol: row[headerMap["Instrument"]] || "",
-          quantity: parseNumeric(row[headerMap["Qty."]]),
-          avgPrice: parseNumeric(row[headerMap["Avg. cost"]]),
-          currentPrice: parseNumeric(row[headerMap["LTP"]]),
-          currentValue: parseNumeric(row[headerMap["Cur. val"]]),
-          pnl: parseNumeric(row[headerMap["P&L"]]),
+          name: row[0]?.toString() || "",
+          quantity,
+          avgPrice: avgCost,
+          currentPrice: ltp,
+          investedValue: quantity * avgCost,
+          currentValue,
+          pnl,
           pnlPercentage: 0,
           type: "stock",
           platform: "ZERODHA",
         }
 
         // Calculate P&L percentage
-        const invested = holding.quantity * holding.avgPrice
-        if (invested > 0) {
-          holding.pnlPercentage = (holding.pnl / invested) * 100
+        if (holding.investedValue > 0) {
+          holding.pnlPercentage = (holding.pnl / holding.investedValue) * 100
         }
 
-        if (holding.name && holding.quantity > 0) {
+        if (holding.name) {
           holdings.push(holding)
         }
       } else {
+        // Parse mutual fund data
+        const units = parseNumericValue(row[3])
+        const avgCost = parseNumericValue(row[4])
+        const currentNAV = parseNumericValue(row[5])
+        const currentValue = parseNumericValue(row[6])
+        const pnl = parseNumericValue(row[7])
+
         const holding: ParsedHolding = {
-          name: row[headerMap["Fund"]] || "",
-          isin: row[headerMap["ISIN"]] || "",
-          quantity: parseNumeric(row[headerMap["Units"]]),
-          avgPrice: parseNumeric(row[headerMap["Avg. cost"]]),
-          currentPrice: parseNumeric(row[headerMap["LTP"]]),
-          currentValue: parseNumeric(row[headerMap["Cur. val"]]),
-          pnl: parseNumeric(row[headerMap["P&L"]]),
+          name: row[0]?.toString() || "",
+          isin: row[1]?.toString() || "",
+          folio: row[2]?.toString() || "",
+          quantity: units,
+          avgPrice: avgCost,
+          currentPrice: currentNAV,
+          investedValue: units * avgCost,
+          currentValue,
+          pnl,
           pnlPercentage: 0,
-          type: "mf",
+          type: "mutual_fund",
           platform: "ZERODHA",
         }
 
         // Calculate P&L percentage
-        const invested = holding.quantity * holding.avgPrice
-        if (invested > 0) {
-          holding.pnlPercentage = (holding.pnl / invested) * 100
+        if (holding.investedValue > 0) {
+          holding.pnlPercentage = (holding.pnl / holding.investedValue) * 100
         }
 
-        if (holding.name && holding.quantity > 0) {
+        if (holding.name) {
           holdings.push(holding)
         }
       }
     } catch (error) {
-      console.warn("Error parsing row:", error, row)
+      console.warn("Error parsing Zerodha row:", error, row)
     }
-  })
+  }
+
+  return holdings
+}
+
+// Generic parser for other platforms
+function parseGenericStatement(data: any[][], platform: string): ParsedHolding[] {
+  const holdings: ParsedHolding[] = []
+
+  if (data.length < 2) return holdings
+
+  const headers = data[0].map((h) => h.toString().trim().toLowerCase())
+  const rows = data.slice(1)
+
+  // Try to identify common column patterns
+  const nameIndex = headers.findIndex(
+    (h) => h.includes("name") || h.includes("symbol") || h.includes("instrument") || h.includes("security"),
+  )
+  const quantityIndex = headers.findIndex((h) => h.includes("quantity") || h.includes("qty") || h.includes("units"))
+  const avgPriceIndex = headers.findIndex(
+    (h) => h.includes("avg") || h.includes("average") || h.includes("cost") || h.includes("rate"),
+  )
+  const currentPriceIndex = headers.findIndex(
+    (h) => h.includes("current") || h.includes("ltp") || h.includes("market") || h.includes("nav"),
+  )
+  const pnlIndex = headers.findIndex(
+    (h) => h.includes("p&l") || h.includes("pnl") || h.includes("gain") || h.includes("loss"),
+  )
+
+  for (const row of rows) {
+    if (!row || row.length < 3) continue
+
+    try {
+      const name = nameIndex >= 0 ? row[nameIndex]?.toString() || "" : row[0]?.toString() || ""
+      const quantity = quantityIndex >= 0 ? parseNumericValue(row[quantityIndex]) : parseNumericValue(row[1])
+      const avgPrice = avgPriceIndex >= 0 ? parseNumericValue(row[avgPriceIndex]) : parseNumericValue(row[2])
+      const currentPrice =
+        currentPriceIndex >= 0 ? parseNumericValue(row[currentPriceIndex]) : parseNumericValue(row[3])
+      const pnl = pnlIndex >= 0 ? parseNumericValue(row[pnlIndex]) : 0
+
+      const investedValue = quantity * avgPrice
+      const currentValue = quantity * currentPrice
+      const calculatedPnL = pnl || currentValue - investedValue
+
+      const holding: ParsedHolding = {
+        name,
+        quantity,
+        avgPrice,
+        currentPrice,
+        investedValue,
+        currentValue,
+        pnl: calculatedPnL,
+        pnlPercentage: investedValue > 0 ? (calculatedPnL / investedValue) * 100 : 0,
+        type: headers.some((h) => h.includes("fund") || h.includes("scheme")) ? "mutual_fund" : "stock",
+        platform,
+      }
+
+      if (holding.name && holding.quantity > 0) {
+        holdings.push(holding)
+      }
+    } catch (error) {
+      console.warn(`Error parsing ${platform} row:`, error, row)
+    }
+  }
 
   return holdings
 }
 
 // Main parsing function
-export async function parseUniversalStatement(data: any[][], fileName: string): Promise<ParsedPortfolio> {
-  if (!data || data.length === 0) {
-    throw new Error("No data provided")
-  }
-
-  // Extract headers (first row)
-  const headers = data[0].map((h) => h?.toString().trim() || "")
-  const dataRows = data.slice(1).filter((row) => row && row.some((cell) => cell !== null && cell !== ""))
-
-  console.log("📊 Parsing Universal Statement:", fileName)
-  console.log("📋 Headers found:", headers)
-  console.log("📊 Data rows:", dataRows.length)
-
-  // Detect platform
-  const platform = detectPlatform(headers)
-  console.log("🔍 Detected platform:", platform || "UNKNOWN")
-
-  if (!platform) {
-    throw new Error("Unable to detect platform format. Please ensure the file contains proper headers.")
-  }
-
+export function parseUniversalStatement(data: any[][], filename?: string): ParsedPortfolio {
+  const errors: string[] = []
   let holdings: ParsedHolding[] = []
+  let detectedPlatform = "UNKNOWN"
 
-  // Parse based on detected platform
-  switch (platform) {
-    case "GROWW":
-      // Try to detect if it's stocks or MF based on headers
-      const hasStockHeaders = PLATFORM_HEADERS.GROWW.stocks.some((h) =>
-        headers.some((header) => header.toLowerCase().includes(h.toLowerCase())),
-      )
-      const hasMFHeaders = PLATFORM_HEADERS.GROWW.mf.some((h) =>
-        headers.some((header) => header.toLowerCase().includes(h.toLowerCase())),
-      )
-
-      if (hasStockHeaders) {
-        holdings = parseGrowwData(dataRows, headers, "stocks")
-      } else if (hasMFHeaders) {
-        holdings = parseGrowwData(dataRows, headers, "mf")
+  try {
+    if (!data || data.length < 2) {
+      errors.push("Invalid or empty data provided")
+      return {
+        holdings: [],
+        summary: {
+          totalInvested: 0,
+          totalCurrent: 0,
+          totalPnL: 0,
+          totalPnLPercentage: 0,
+          stocksCount: 0,
+          mutualFundsCount: 0,
+        },
+        platform: detectedPlatform,
+        parseDate: new Date().toISOString(),
+        errors,
       }
-      break
+    }
 
-    case "ZERODHA":
-      const hasZerodhaStockHeaders = PLATFORM_HEADERS.ZERODHA.stocks.some((h) =>
-        headers.some((header) => header.toLowerCase().includes(h.toLowerCase())),
-      )
-      const hasZerodhaMFHeaders = PLATFORM_HEADERS.ZERODHA.mf.some((h) =>
-        headers.some((header) => header.toLowerCase().includes(h.toLowerCase())),
-      )
+    // Detect platform from headers
+    const headers = data[0].map((h) => h?.toString() || "")
+    const platform = detectPlatform(headers)
 
-      if (hasZerodhaStockHeaders) {
-        holdings = parseZerodhaData(dataRows, headers, "stocks")
-      } else if (hasZerodhaMFHeaders) {
-        holdings = parseZerodhaData(dataRows, headers, "mf")
+    if (platform) {
+      detectedPlatform = platform
+      console.log(`Detected platform: ${platform}`)
+
+      // Parse based on detected platform
+      switch (platform) {
+        case "GROWW":
+          holdings = parseGrowwStatement(data)
+          break
+        case "ZERODHA":
+          holdings = parseZerodhaStatement(data)
+          break
+        default:
+          holdings = parseGenericStatement(data, platform)
       }
-      break
+    } else {
+      // Try generic parsing
+      console.log("Platform not detected, using generic parser")
+      holdings = parseGenericStatement(data, "GENERIC")
+      detectedPlatform = "GENERIC"
+    }
 
-    default:
-      throw new Error(`Platform ${platform} parsing not yet implemented`)
-  }
+    // Calculate summary
+    const totalInvested = holdings.reduce((sum, h) => sum + h.investedValue, 0)
+    const totalCurrent = holdings.reduce((sum, h) => sum + h.currentValue, 0)
+    const totalPnL = totalCurrent - totalInvested
+    const totalPnLPercentage = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0
 
-  if (holdings.length === 0) {
-    throw new Error("No valid holdings found in the file")
-  }
+    const stocksCount = holdings.filter((h) => h.type === "stock").length
+    const mutualFundsCount = holdings.filter((h) => h.type === "mutual_fund").length
 
-  // Calculate summary
-  const totalInvested = holdings.reduce((sum, h) => sum + h.quantity * h.avgPrice, 0)
-  const currentValue = holdings.reduce((sum, h) => sum + h.currentValue, 0)
-  const totalPnL = holdings.reduce((sum, h) => sum + h.pnl, 0)
-  const totalPnLPercentage = totalInvested > 0 ? (totalPnL / totalInvested) * 100 : 0
+    console.log(`Parsed ${holdings.length} holdings from ${detectedPlatform}`)
+    console.log(`Stocks: ${stocksCount}, Mutual Funds: ${mutualFundsCount}`)
+    console.log(`Total Invested: ₹${totalInvested.toLocaleString()}`)
+    console.log(`Total Current: ₹${totalCurrent.toLocaleString()}`)
+    console.log(`Total P&L: ₹${totalPnL.toLocaleString()} (${totalPnLPercentage.toFixed(2)}%)`)
 
-  const stocksCount = holdings.filter((h) => h.type === "stock").length
-  const mfCount = holdings.filter((h) => h.type === "mf").length
+    return {
+      holdings,
+      summary: {
+        totalInvested,
+        totalCurrent,
+        totalPnL,
+        totalPnLPercentage,
+        stocksCount,
+        mutualFundsCount,
+      },
+      platform: detectedPlatform,
+      parseDate: new Date().toISOString(),
+      errors,
+    }
+  } catch (error) {
+    console.error("Error in parseUniversalStatement:", error)
+    errors.push(`Parsing error: ${error instanceof Error ? error.message : "Unknown error"}`)
 
-  console.log("✅ Parsing complete:", {
-    holdings: holdings.length,
-    stocks: stocksCount,
-    mf: mfCount,
-    totalInvested,
-    currentValue,
-    totalPnL,
-  })
-
-  return {
-    holdings,
-    summary: {
-      totalInvested,
-      currentValue,
-      totalPnL,
-      totalPnLPercentage,
-      stocksCount,
-      mfCount,
-      platform,
-    },
-    metadata: {
-      fileName,
-      parsedAt: new Date().toISOString(),
-      platform,
-      dataSource: "file",
-    },
+    return {
+      holdings: [],
+      summary: {
+        totalInvested: 0,
+        totalCurrent: 0,
+        totalPnL: 0,
+        totalPnLPercentage: 0,
+        stocksCount: 0,
+        mutualFundsCount: 0,
+      },
+      platform: detectedPlatform,
+      parseDate: new Date().toISOString(),
+      errors,
+    }
   }
 }
 
-// Export utility functions
-export { parseNumeric }
+// Helper function to format currency
+export function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-IN", {
+    style: "currency",
+    currency: "INR",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(amount)
+}
+
+// Helper function to format percentage
+export function formatPercentage(percentage: number): string {
+  const sign = percentage >= 0 ? "+" : ""
+  return `${sign}${percentage.toFixed(2)}%`
+}

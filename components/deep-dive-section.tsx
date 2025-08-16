@@ -1,170 +1,166 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import { TrendingUp, Target, Settings, BarChart3, PieChart, Calendar, DollarSign, Info } from "lucide-react"
+import { Badge } from "@/components/ui/badge"
+import { TrendingUp, Target, Settings, AlertCircle, CheckCircle } from "lucide-react"
 import { PortfolioAnalysis } from "./portfolio-analysis"
 
-interface DeepDiveSectionProps {
-  className?: string
-}
-
-export default function DeepDiveSection({ className }: DeepDiveSectionProps) {
+export function DeepDiveSection() {
   const [activeTab, setActiveTab] = useState("portfolio")
 
   return (
-    <div className={`space-y-6 ${className}`}>
-      {/* Header */}
-      <div className="text-center space-y-4">
-        <h1 className="text-4xl font-bold text-gray-900">Deep Dive Financial Analysis</h1>
-        <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-          Comprehensive tools to analyze your investments, plan your goals, and manage your funds with AI-powered
-          insights.
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+      <div className="container mx-auto px-4 py-8">
+        {/* Header */}
+        <div className="text-center mb-8">
+          <h1 className="text-4xl font-bold text-gray-900 mb-4">Deep Dive Financial Analysis</h1>
+          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
+            Comprehensive analysis tools for your investment portfolio, financial goals, and fund management
+          </p>
+        </div>
 
-      {/* Main Tabs */}
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3 mb-8">
-          <TabsTrigger value="portfolio" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Portfolio Analysis
-          </TabsTrigger>
-          <TabsTrigger value="goals" className="flex items-center gap-2" disabled>
-            <Target className="h-4 w-4" />
-            Goal Planner
-            <Badge variant="secondary" className="ml-2 text-xs">
-              Soon
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="funds" className="flex items-center gap-2" disabled>
-            <Settings className="h-4 w-4" />
-            Fund Management
-            <Badge variant="secondary" className="ml-2 text-xs">
-              Soon
-            </Badge>
-          </TabsTrigger>
-        </TabsList>
+        {/* Main Tabs */}
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+          <TabsList className="grid w-full grid-cols-3 mb-8">
+            <TabsTrigger value="portfolio" className="flex items-center gap-2">
+              <TrendingUp className="h-4 w-4" />
+              Portfolio Analysis
+              <Badge variant="default" className="ml-2">
+                Active
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="goals" className="flex items-center gap-2" disabled>
+              <Target className="h-4 w-4" />
+              Goal Planner
+              <Badge variant="secondary" className="ml-2">
+                Soon
+              </Badge>
+            </TabsTrigger>
+            <TabsTrigger value="funds" className="flex items-center gap-2" disabled>
+              <Settings className="h-4 w-4" />
+              Fund Management
+              <Badge variant="secondary" className="ml-2">
+                Soon
+              </Badge>
+            </TabsTrigger>
+          </TabsList>
 
-        {/* Portfolio Analysis Tab */}
-        <TabsContent value="portfolio" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5 text-blue-600" />
-                Portfolio Analysis
-              </CardTitle>
-              <p className="text-gray-600">
-                Upload your investment statements from any platform and get comprehensive analysis with AI-powered
-                insights.
-              </p>
-            </CardHeader>
-            <CardContent>
-              <PortfolioAnalysis />
-            </CardContent>
-          </Card>
-        </TabsContent>
+          {/* Portfolio Analysis Tab - ACTIVE */}
+          <TabsContent value="portfolio" className="space-y-6">
+            <PortfolioAnalysis />
+          </TabsContent>
 
-        {/* Goal Planner Tab */}
-        <TabsContent value="goals" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5 text-green-600" />
-                Goal Planner
-                <Badge variant="secondary" className="ml-2">
-                  Coming Soon
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="py-12">
-              <div className="text-center space-y-4">
-                <div className="mx-auto w-16 h-16 bg-green-100 rounded-full flex items-center justify-center">
-                  <Target className="h-8 w-8 text-green-600" />
+          {/* Goal Planner Tab - COMING SOON */}
+          <TabsContent value="goals" className="space-y-6">
+            <Card className="border-dashed border-2 border-gray-300">
+              <CardHeader className="text-center py-12">
+                <div className="mx-auto w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mb-4">
+                  <Target className="h-8 w-8 text-blue-600" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900">Financial Goal Planning</h3>
-                <p className="text-gray-600 max-w-md mx-auto">
-                  Set and track your financial goals with personalized investment strategies and timeline
-                  recommendations.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8 max-w-2xl mx-auto">
-                  <div className="p-4 border rounded-lg">
-                    <Calendar className="h-6 w-6 text-blue-600 mb-2" />
-                    <h4 className="font-medium">Timeline Planning</h4>
-                    <p className="text-sm text-gray-600">Set target dates for your goals</p>
+                <CardTitle className="text-2xl text-gray-900">Goal Planner</CardTitle>
+                <CardDescription className="text-lg max-w-md mx-auto">
+                  Set and track your financial goals with personalized investment strategies and timeline planning.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="text-center pb-12">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                    <AlertCircle className="h-4 w-4" />
+                    Coming Soon
                   </div>
-                  <div className="p-4 border rounded-lg">
-                    <DollarSign className="h-6 w-6 text-green-600 mb-2" />
-                    <h4 className="font-medium">Investment Strategy</h4>
-                    <p className="text-sm text-gray-600">Get personalized recommendations</p>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <TrendingUp className="h-6 w-6 text-purple-600 mb-2" />
-                    <h4 className="font-medium">Progress Tracking</h4>
-                    <p className="text-sm text-gray-600">Monitor your goal achievements</p>
-                  </div>
+                  <p className="text-sm text-gray-500 max-w-lg mx-auto">
+                    We're working on advanced goal planning features including SIP calculators, retirement planning, and
+                    milestone tracking.
+                  </p>
                 </div>
-              </div>
-            </CardContent>
-          </Card>
-        </TabsContent>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Fund Management Tab */}
-        <TabsContent value="funds" className="space-y-6">
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Settings className="h-5 w-5 text-purple-600" />
-                Fund Management
-                <Badge variant="secondary" className="ml-2">
-                  Coming Soon
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="py-12">
-              <div className="text-center space-y-4">
-                <div className="mx-auto w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center">
+          {/* Fund Management Tab - COMING SOON */}
+          <TabsContent value="funds" className="space-y-6">
+            <Card className="border-dashed border-2 border-gray-300">
+              <CardHeader className="text-center py-12">
+                <div className="mx-auto w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mb-4">
                   <Settings className="h-8 w-8 text-purple-600" />
                 </div>
-                <h3 className="text-xl font-semibold text-gray-900">Advanced Fund Management</h3>
-                <p className="text-gray-600 max-w-md mx-auto">
-                  Optimize your mutual fund portfolio with rebalancing suggestions and performance analytics.
-                </p>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mt-8 max-w-2xl mx-auto">
-                  <div className="p-4 border rounded-lg">
-                    <PieChart className="h-6 w-6 text-blue-600 mb-2" />
-                    <h4 className="font-medium">Portfolio Rebalancing</h4>
-                    <p className="text-sm text-gray-600">Optimize asset allocation</p>
+                <CardTitle className="text-2xl text-gray-900">Fund Management</CardTitle>
+                <CardDescription className="text-lg max-w-md mx-auto">
+                  Advanced portfolio rebalancing, tax optimization, and fund selection tools.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="text-center pb-12">
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
+                    <AlertCircle className="h-4 w-4" />
+                    Coming Soon
                   </div>
-                  <div className="p-4 border rounded-lg">
-                    <BarChart3 className="h-6 w-6 text-green-600 mb-2" />
-                    <h4 className="font-medium">Performance Analytics</h4>
-                    <p className="text-sm text-gray-600">Detailed fund analysis</p>
-                  </div>
-                  <div className="p-4 border rounded-lg">
-                    <TrendingUp className="h-6 w-6 text-purple-600 mb-2" />
-                    <h4 className="font-medium">Risk Assessment</h4>
-                    <p className="text-sm text-gray-600">Evaluate portfolio risk</p>
-                  </div>
+                  <p className="text-sm text-gray-500 max-w-lg mx-auto">
+                    Professional-grade fund management tools including portfolio rebalancing, tax-loss harvesting, and
+                    performance attribution analysis.
+                  </p>
                 </div>
+              </CardContent>
+            </Card>
+          </TabsContent>
+        </Tabs>
+
+        {/* Feature Preview Cards */}
+        <div className="mt-12 grid md:grid-cols-3 gap-6">
+          <Card className="border-l-4 border-l-green-500">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <CheckCircle className="h-5 w-5 text-green-600" />
+                <CardTitle className="text-lg">Portfolio Analysis</CardTitle>
               </div>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li>• Universal statement parser</li>
+                <li>• Multi-platform support</li>
+                <li>• Real-time P&L tracking</li>
+                <li>• Asset allocation insights</li>
+              </ul>
             </CardContent>
           </Card>
-        </TabsContent>
-      </Tabs>
 
-      {/* Feature Status */}
-      <Alert className="bg-blue-50 border-blue-200">
-        <Info className="h-4 w-4 text-blue-600" />
-        <AlertDescription className="text-blue-800">
-          <strong>Portfolio Analysis</strong> is now live with universal statement parsing support.
-          <strong> Goal Planner</strong> and <strong>Fund Management</strong> features are coming soon with advanced AI
-          capabilities.
-        </AlertDescription>
-      </Alert>
+          <Card className="border-l-4 border-l-blue-500">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Target className="h-5 w-5 text-blue-600" />
+                <CardTitle className="text-lg">Goal Planning</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li>• SIP calculators</li>
+                <li>• Retirement planning</li>
+                <li>• Goal-based investing</li>
+                <li>• Timeline optimization</li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card className="border-l-4 border-l-purple-500">
+            <CardHeader>
+              <div className="flex items-center gap-2">
+                <Settings className="h-5 w-5 text-purple-600" />
+                <CardTitle className="text-lg">Fund Management</CardTitle>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <ul className="space-y-2 text-sm text-gray-600">
+                <li>• Portfolio rebalancing</li>
+                <li>• Tax optimization</li>
+                <li>• Performance analysis</li>
+                <li>• Risk assessment</li>
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
     </div>
   )
 }

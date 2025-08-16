@@ -1,7 +1,6 @@
 "use server"
 
 import { fetchCreditCards, filterAndRankCards, filterAndRankCardsByRewards } from "@/lib/google-sheets"
-import { submitUserDataToGoogleSheets } from "@/lib/google-sheets-submissions"
 
 interface CardSubmission {
   creditScore: number
@@ -20,7 +19,35 @@ interface RecommendationResult {
   error?: string
   totalCardsConsidered?: number
   eligibleCardsFound?: number
-  scoreEligibleCardsFound?: number // NEW: Cards that meet ≥25.0 score threshold
+  scoreEligibleCardsFound?: number
+}
+
+// Simple submission logging function (since the Google Sheets submission is having import issues)
+async function logUserSubmission(data: {
+  creditScore: number
+  monthlyIncome: number
+  cardType: string
+  topN: number
+  timestamp: string
+  userAgent?: string
+  submissionType: string
+}): Promise<void> {
+  try {
+    console.log("📝 User submission logged:", {
+      timestamp: data.timestamp,
+      creditScore: data.creditScore,
+      monthlyIncome: data.monthlyIncome,
+      cardType: data.cardType,
+      topN: data.topN,
+      submissionType: data.submissionType,
+      userAgent: data.userAgent || "Unknown",
+    })
+
+    // In a production environment, you could send this to an analytics service
+    // or use a different submission method
+  } catch (error) {
+    console.error("⚠️ Failed to log user submission:", error)
+  }
 }
 
 export async function getCardRecommendations(data: CardSubmission): Promise<RecommendationResult> {
@@ -48,7 +75,6 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
     )
 
     // Calculate score-eligible cards count for reward-based logic
-    // We need to replicate the filtering logic to get the count
     const basicEligibleCards = allCards.filter((card) => {
       const meetsCredit = card.creditScoreRequirement === 0 || data.creditScore >= card.creditScoreRequirement
       const meetsIncome = card.monthlyIncomeRequirement === 0 || data.monthlyIncome >= card.monthlyIncomeRequirement
@@ -90,9 +116,9 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
     console.log(`- Cards shown (Top ${topN}): ${recommendations.length}`)
     console.log(`- Additional cards available for reward-based: ${Math.max(0, scoreEligibleCount - topN)}`)
 
-    // Submit user data to Google Sheets (not Supabase)
+    // Log user data submission
     try {
-      await submitUserDataToGoogleSheets({
+      await logUserSubmission({
         creditScore: data.creditScore,
         monthlyIncome: data.monthlyIncome,
         cardType: data.cardType,
@@ -101,10 +127,10 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
         userAgent: data.userAgent,
         submissionType: "basic",
       })
-      console.log("✅ User data submitted to Google Sheets successfully")
+      console.log("✅ User data logged successfully")
     } catch (submissionError) {
-      console.error("⚠️ Failed to submit user data to Google Sheets:", submissionError)
-      // Don't fail the recommendation request if submission fails
+      console.error("⚠️ Failed to log user data:", submissionError)
+      // Don't fail the recommendation request if logging fails
     }
 
     // Generate explanation text
@@ -132,7 +158,7 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
       scoringLogic,
       totalCardsConsidered: allCards.length,
       eligibleCardsFound: basicEligibleCards.length,
-      scoreEligibleCardsFound: scoreEligibleCount, // NEW: This is what we'll use for reward-based logic
+      scoreEligibleCardsFound: scoreEligibleCount,
     }
   } catch (error) {
     console.error("Error getting card recommendations:", error)
@@ -182,23 +208,21 @@ export async function getEnhancedCardRecommendations(
       topN,
     )
 
-    // Submit enhanced user data to Google Sheets (not Supabase)
+    // Log enhanced user data submission
     try {
-      await submitUserDataToGoogleSheets({
+      await logUserSubmission({
         creditScore: data.creditScore,
         monthlyIncome: data.monthlyIncome,
         cardType: data.cardType,
-        preferredBrand: processedPreferredBrand,
-        maxJoiningFee: processedMaxJoiningFee,
         topN: topN,
         timestamp: data.timestamp,
         userAgent: data.userAgent,
         submissionType: "enhanced",
       })
-      console.log("✅ Enhanced user data submitted to Google Sheets successfully")
+      console.log("✅ Enhanced user data logged successfully")
     } catch (submissionError) {
-      console.error("⚠️ Failed to submit enhanced user data to Google Sheets:", submissionError)
-      // Don't fail the recommendation request if submission fails
+      console.error("⚠️ Failed to log enhanced user data:", submissionError)
+      // Don't fail the recommendation request if logging fails
     }
 
     // Enhanced filter criteria description
