@@ -11,7 +11,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, FileText, Plus, AlertCircle, CheckCircle, X, BarChart3, PieChart } from "lucide-react"
+import { Upload, FileText, Plus, AlertCircle, CheckCircle, X, BarChart3, PieChart, Loader2 } from "lucide-react"
 import {
   parsePortfolioFiles,
   addManualPortfolioEntry,
@@ -30,7 +30,7 @@ export default function PortfolioAnalysis({ onDataUpdate }: PortfolioAnalysisPro
   const [portfolioSummary, setPortfolioSummary] = useState<PortfolioSummary | null>(null)
   const [uploadStatus, setUploadStatus] = useState<{
     isUploading: boolean
-    results: Array<{ fileName: string; broker?: string; count: number; success: boolean }>
+    results: Array<{ fileName: string; broker?: string; count: number; success: boolean; error?: string }>
     error?: string
   }>({
     isUploading: false,
@@ -110,12 +110,26 @@ export default function PortfolioAnalysis({ onDataUpdate }: PortfolioAnalysisPro
       const result = await addManualPortfolioEntry(formData)
 
       if (result.success && result.data) {
-        setPortfolioEntries((prev) => [...prev, result.data])
+        const updatedEntries = [...portfolioEntries, result.data]
+        setPortfolioEntries(updatedEntries)
 
         // Recalculate summary with new entry
-        const updatedEntries = [...portfolioEntries, result.data]
-        // We'll need to recalculate the summary here
+        const totalInvested = updatedEntries.reduce((sum, entry) => sum + entry.quantity * entry.avgPrice, 0)
+        const totalValue = updatedEntries.reduce((sum, entry) => sum + entry.currentValue, 0)
+        const totalGainLoss = totalValue - totalInvested
+        const totalGainLossPercentage = totalInvested > 0 ? (totalGainLoss / totalInvested) * 100 : 0
 
+        const updatedSummary: PortfolioSummary = {
+          totalEntries: updatedEntries.length,
+          totalInvested,
+          totalValue,
+          totalGainLoss,
+          totalGainLossPercentage,
+          byType: {},
+          byBroker: {},
+        }
+
+        setPortfolioSummary(updatedSummary)
         setManualEntryStatus({ isAdding: false, success: true })
 
         // Reset form
@@ -184,13 +198,17 @@ export default function PortfolioAnalysis({ onDataUpdate }: PortfolioAnalysisPro
             <CardContent className="space-y-4">
               <div className="text-sm text-gray-600 space-y-2">
                 <p>
-                  <strong>Supported formats:</strong> CSV files from major Indian brokers
+                  <strong>Supported formats:</strong> CSV files from major Indian brokers and platforms
                 </p>
                 <div className="grid grid-cols-2 gap-2 text-xs">
                   <div>✅ Zerodha Console exports</div>
                   <div>✅ Groww portfolio CSV</div>
                   <div>✅ HDFC Securities holdings</div>
                   <div>✅ Angel One portfolio</div>
+                  <div>✅ Kuvera exports</div>
+                  <div>✅ Coin (Zerodha MF) exports</div>
+                  <div>✅ Paytm Money exports</div>
+                  <div>✅ Generic CSV formats</div>
                 </div>
               </div>
 
@@ -207,12 +225,13 @@ export default function PortfolioAnalysis({ onDataUpdate }: PortfolioAnalysisPro
                     className="mt-1"
                     disabled={uploadStatus.isUploading}
                   />
+                  <p className="text-xs text-gray-500 mt-1">You can select multiple files to upload at once</p>
                 </div>
 
                 <Button type="submit" disabled={uploadStatus.isUploading} className="w-full">
                   {uploadStatus.isUploading ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Processing Files...
                     </>
                   ) : (
@@ -253,7 +272,10 @@ export default function PortfolioAnalysis({ onDataUpdate }: PortfolioAnalysisPro
                               {result.broker && ` • Detected: ${result.broker}`}
                             </div>
                           ) : (
-                            <div className="text-xs text-red-700">❌ Failed to parse</div>
+                            <div className="text-xs text-red-700">
+                              ❌ Failed to parse
+                              {result.error && `: ${result.error}`}
+                            </div>
                           )}
                         </div>
                       </div>
@@ -268,6 +290,17 @@ export default function PortfolioAnalysis({ onDataUpdate }: PortfolioAnalysisPro
                   )}
                 </div>
               )}
+
+              {/* File Format Help */}
+              <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                <h4 className="font-medium text-blue-900 mb-2">💡 File Upload Tips:</h4>
+                <ul className="text-sm text-blue-800 space-y-1">
+                  <li>• Export your portfolio as CSV from your broker's website</li>
+                  <li>• Make sure the file contains columns like: Scheme Name, Units, NAV, Current Value</li>
+                  <li>• If parsing fails, try exporting with different settings or contact support</li>
+                  <li>• You can upload multiple files from different brokers at once</li>
+                </ul>
+              </div>
             </CardContent>
           </Card>
         </TabsContent>
@@ -352,7 +385,7 @@ export default function PortfolioAnalysis({ onDataUpdate }: PortfolioAnalysisPro
                 <Button type="submit" disabled={manualEntryStatus.isAdding} className="w-full">
                   {manualEntryStatus.isAdding ? (
                     <>
-                      <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                       Adding Entry...
                     </>
                   ) : (

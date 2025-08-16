@@ -45,43 +45,62 @@ export async function parsePortfolioFiles(formData: FormData) {
 
     const allEntries: PortfolioEntry[] = []
     const errors: string[] = []
-    const processingResults: Array<{ fileName: string; broker?: string; count: number; success: boolean }> = []
+    const processingResults: Array<{
+      fileName: string
+      broker?: string
+      count: number
+      success: boolean
+      error?: string
+    }> = []
 
     for (const file of files) {
-      const result = await parsePortfolioFile(file)
+      try {
+        const result = await parsePortfolioFile(file)
 
-      if (result.success) {
-        const convertedEntries: PortfolioEntry[] = result.data.map((entry) => ({
-          id: entry.id,
-          name: entry.name,
-          type: entry.type,
-          quantity: entry.units,
-          avgPrice: entry.invested / entry.units,
-          currentPrice: entry.nav,
-          currentValue: entry.current,
-          gainLoss: entry.current - entry.invested,
-          gainLossPercentage: entry.invested > 0 ? ((entry.current - entry.invested) / entry.invested) * 100 : 0,
-          date: entry.date,
-          source: entry.source,
-          fileName: entry.fileName,
-          broker: entry.broker,
-          folio: entry.folio,
-          isin: entry.isin,
-        }))
+        if (result.success && result.data.length > 0) {
+          const convertedEntries: PortfolioEntry[] = result.data.map((entry) => ({
+            id: entry.id,
+            name: entry.name,
+            type: entry.type,
+            quantity: entry.units,
+            avgPrice: entry.invested / entry.units,
+            currentPrice: entry.nav,
+            currentValue: entry.current,
+            gainLoss: entry.current - entry.invested,
+            gainLossPercentage: entry.invested > 0 ? ((entry.current - entry.invested) / entry.invested) * 100 : 0,
+            date: entry.date,
+            source: entry.source,
+            fileName: entry.fileName,
+            broker: entry.broker,
+            folio: entry.folio,
+            isin: entry.isin,
+          }))
 
-        allEntries.push(...convertedEntries)
-        processingResults.push({
-          fileName: file.name,
-          broker: result.broker,
-          count: result.totalParsed,
-          success: true,
-        })
-      } else {
-        errors.push(`${file.name}: ${result.errors.join(", ")}`)
+          allEntries.push(...convertedEntries)
+          processingResults.push({
+            fileName: file.name,
+            broker: result.broker,
+            count: result.totalParsed,
+            success: true,
+          })
+        } else {
+          const errorMessage = result.errors.length > 0 ? result.errors.join(", ") : "Unknown parsing error"
+          errors.push(`${file.name}: ${errorMessage}`)
+          processingResults.push({
+            fileName: file.name,
+            count: 0,
+            success: false,
+            error: errorMessage,
+          })
+        }
+      } catch (fileError) {
+        const errorMessage = fileError instanceof Error ? fileError.message : "Unknown file processing error"
+        errors.push(`${file.name}: ${errorMessage}`)
         processingResults.push({
           fileName: file.name,
           count: 0,
           success: false,
+          error: errorMessage,
         })
       }
     }
@@ -166,6 +185,13 @@ export async function addManualPortfolioEntry(formData: FormData) {
       return {
         success: false,
         error: "All fields are required",
+      }
+    }
+
+    if (quantity <= 0 || avgPrice <= 0 || currentPrice <= 0) {
+      return {
+        success: false,
+        error: "Quantity and prices must be greater than 0",
       }
     }
 
