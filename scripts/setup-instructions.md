@@ -1,134 +1,201 @@
-# Enhanced Google Apps Script Setup Instructions
+# Enhanced CredWise Setup Instructions
 
-## Step 1: Update Your Apps Script
+## 🚀 Complete Setup Guide
 
-1. **Open Google Apps Script**: Go to [script.google.com](https://script.google.com)
-2. **Find your existing project** or create a new one
-3. **Replace the entire Code.gs file** with the content from `enhanced-google-apps-script.js`
-4. **Save the project** (Ctrl+S or Cmd+S)
+### 1. Google Apps Script Setup
 
-## Step 2: Set Up Your Google Sheet Structure
+1. **Open Google Apps Script**
+   - Go to [script.google.com](https://script.google.com)
+   - Click "New Project"
 
-### Option A: Automatic Setup (Recommended)
-1. In the Apps Script editor, run the `setupColumnHeaders()` function:
-   - Click on the function dropdown
-   - Select `setupColumnHeaders`
-   - Click the "Run" button (▶️)
-   - Authorize permissions if prompted
+2. **Replace Default Code**
+   - Delete the default `myFunction()` code
+   - Copy and paste the entire `enhanced-google-apps-script.js` code
 
-### Option B: Manual Setup
-If you prefer to set up manually, create these 18 columns in your Google Sheet:
+3. **Update Configuration**
+   - Change `SPREADSHEET_ID` to your Google Sheet ID: `1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw`
+   - Keep `SHEET_NAME` as `'Form-Submissions'`
 
-| Column | Header | Description |
-|--------|--------|-------------|
+4. **Run Setup Function**
+   \`\`\`javascript
+   // Run this function once to set up the sheet structure
+   setupCompleteColumnStructure()
+   \`\`\`
+
+5. **Deploy as Web App**
+   - Click "Deploy" → "New Deployment"
+   - Choose "Web app" as type
+   - Set execute as: "Me"
+   - Set access to: "Anyone"
+   - Click "Deploy"
+   - Copy the deployment URL
+
+6. **Add Environment Variable**
+   \`\`\`bash
+   NEXT_PUBLIC_APPS_SCRIPT_URL=https://script.google.com/macros/s/AKfycbxICw4o9GbH59pQYDTmY_d9R0XdNGGuoOejbFRmGtdfqayd8Q6EpRArs6XigY3QjKa5/exec
+   \`\`\`
+
+### 2. Google Sheets Setup
+
+1. **Open Your Submission Sheet**
+   - Go to: https://docs.google.com/spreadsheets/d/1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw/edit
+
+2. **Verify Sheet Structure**
+   - Should have 18 columns (A-R)
+   - Headers should be properly formatted
+   - If not, run `setupCompleteColumnStructure()` in Apps Script
+
+3. **Set Permissions**
+   - Make sure the sheet is accessible to your Apps Script
+   - Share with your Google account if needed
+
+### 3. Card Data Sheet Setup
+
+1. **Open Your Card Data Sheet**
+   - Go to: https://docs.google.com/spreadsheets/d/1rHR5xzCmZZAlIjahAcpXrxwgYMcItVPckTCiOCSZfSo/edit
+
+2. **Verify Column L (Spending Category)**
+   - Should contain comma-separated spending categories
+   - Examples: "dining, fuel, shopping", "travel, entertainment"
+
+3. **Update Environment Variable**
+   \`\`\`bash
+   NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY=your_api_key_here
+   \`\`\`
+
+### 4. Testing the Setup
+
+1. **Test Apps Script Connection**
+   - Run `testScriptDirectly()` in Apps Script editor
+   - Check console logs for success/error messages
+
+2. **Test Card Click Tracking**
+   - Run `testCardClickTracking()` in Apps Script editor
+   - Verify data appears in your submission sheet
+
+3. **Test Form Submission**
+   - Fill out the form in your app
+   - Submit and check if data appears in Google Sheets
+
+4. **Test SBI Card Logic**
+   - Use the card tester component
+   - Check why SBI Cashback card might not appear
+
+### 5. Debugging SBI Card Issue
+
+The card tester will help identify why SBI Cashback card isn't appearing:
+
+1. **Check Card Data**
+   - Verify SBI Cashback card exists in your card data sheet
+   - Check exact spelling of card name and bank name
+
+2. **Check Eligibility Criteria**
+   - Credit score requirement vs user's score
+   - Income requirement vs user's income
+   - Card type matching (Cashback)
+
+3. **Check Bank Filter**
+   - Ensure "SBI" is selected in preferred banks
+   - Verify exact bank name matching
+
+4. **Check Composite Score**
+   - Card must have score ≥25.0 to be eligible
+   - Check scoring components (fees, rewards, bonus)
+
+### 6. Column Structure (18 Columns)
+
+| Column | Name | Description |
+|--------|------|-------------|
 | A | Timestamp | When the submission occurred |
-| B | Monthly_Income | User's monthly income |
-| C | Monthly_Spending | User's monthly credit card spending |
-| D | Credit_Score_Range | User's credit score range |
-| E | Current_Cards | Number of current credit cards |
-| F | Spending_Categories | Primary spending categories |
-| G | Preferred_Banks | User's preferred banks |
-| H | Joining_Fee_Preference | Joining fee preference |
-| I | User_Agent | Browser/device information |
-| J | Card_Name | Name of clicked card (for click tracking) |
-| K | Bank_Name | Bank of clicked card |
-| L | Card_Type | Type of clicked card |
-| M | Joining_Fee | Joining fee of clicked card |
-| N | Annual_Fee | Annual fee of clicked card |
-| O | Reward_Rate | Reward rate of clicked card |
-| P | Submission_Type | Type of submission (form/click) |
-| Q | Session_ID | Session identifier |
-| R | Notes | Additional notes |
+| B | Monthly Income | User's monthly income |
+| C | Monthly Spending | User's monthly credit card spending |
+| D | Credit Score Range | User's credit score range |
+| E | Current Cards | Number of current credit cards |
+| F | Spending Categories | Comma-separated spending categories |
+| G | Preferred Banks | Comma-separated preferred banks |
+| H | Joining Fee Preference | User's joining fee preference |
+| I | Submission Type | Type of submission (form/click) |
+| J | User Agent | Browser/device information |
+| K | Card Name | Name of clicked card (for clicks) |
+| L | Bank Name | Bank of clicked card (for clicks) |
+| M | Card Type | Type of clicked card (for clicks) |
+| N | Joining Fee | Joining fee of clicked card |
+| O | Annual Fee | Annual fee of clicked card |
+| P | Reward Rate | Reward rate of clicked card |
+| Q | Session ID | Unique session identifier |
+| R | Additional Data | JSON data for extra information |
 
-## Step 3: Deploy the Apps Script
+### 7. Troubleshooting
 
-1. **Click "Deploy"** in the top-right corner
-2. **Choose "New deployment"**
-3. **Set the type** to "Web app"
-4. **Configure settings**:
-   - Description: "CredWise Enhanced Submission Handler"
-   - Execute as: "Me"
-   - Who has access: "Anyone"
-5. **Click "Deploy"**
-6. **Copy the Web App URL** - you'll need this for your environment variables
+**Common Issues:**
 
-## Step 4: Update Environment Variables
+1. **Apps Script URL not working**
+   - Redeploy the web app
+   - Check permissions are set to "Anyone"
+   - Verify the URL is correct
 
-Add this to your `.env.local` file:
-\`\`\`
-NEXT_PUBLIC_APPS_SCRIPT_URL=your_web_app_url_here
-\`\`\`
+2. **Data not appearing in sheets**
+   - Check Apps Script execution logs
+   - Verify sheet permissions
+   - Run test functions to debug
 
-## Step 5: Test the Setup
+3. **SBI cards not showing**
+   - Use the card tester component
+   - Check console logs for detailed eligibility analysis
+   - Verify bank name matching exactly
 
-### Test 1: Direct Script Test
-1. In Apps Script editor, run `testScriptDirectly()`
-2. Check the execution log for success messages
-3. Verify data appears in your Google Sheet
+4. **CORS errors**
+   - Apps Script should handle CORS automatically
+   - If issues persist, check deployment settings
 
-### Test 2: Mock POST Test
-1. Run `testWithMockPostData()`
-2. Check the execution log
-3. Verify the response structure
+### 8. Success Indicators
 
-### Test 3: Live Application Test
-1. Use your application to submit a form
-2. Check browser console for submission logs
-3. Verify data appears in Google Sheet
+✅ **Setup Complete When:**
+- Apps Script deploys successfully
+- Test functions run without errors
+- Form submissions appear in Google Sheets
+- Card clicks are tracked properly
+- SBI cards appear in recommendations when criteria are met
+- Card tester shows detailed eligibility analysis
+- Console logs show proper data flow
 
-## Step 6: Verify Data Structure
-
-Run `checkSheetStructure()` to verify:
-- Sheet has 18 columns
-- Headers are correctly set
-- Sample data is properly formatted
-
-## Troubleshooting
-
-### Common Issues:
-
-1. **"Sheet not found" error**:
-   - Make sure your sheet has a tab named "Form-Submissions"
-   - Or run `setupColumnHeaders()` to create it automatically
-
-2. **Permission errors**:
-   - Re-authorize the script permissions
-   - Make sure the deployment has "Anyone" access
-
-3. **Data not appearing**:
-   - Check the Apps Script execution log
-   - Verify the Web App URL in your environment variables
-   - Test with the mock functions first
-
-4. **Column mismatch**:
-   - Run `migrateExistingData()` to update structure
-   - Or manually add missing columns
-
-### Debug Functions:
-
-- `testScriptDirectly()` - Test without HTTP requests
-- `testWithMockPostData()` - Test with simulated POST data
-- `checkSheetStructure()` - Verify sheet structure
-- `setupColumnHeaders()` - Set up proper headers
-- `migrateExistingData()` - Update existing sheets
-
-## Expected Results
+### 9. Next Steps
 
 After successful setup:
-- ✅ Form submissions logged with user preferences
-- ✅ Card application clicks tracked separately
-- ✅ All data properly structured in 18 columns
-- ✅ Both submission types identifiable by `Submission_Type` column
 
-## Data Types You'll See:
+1. **Monitor Data Collection**
+   - Check Google Sheets regularly for new submissions
+   - Analyze user preferences and behavior patterns
+   - Use data to improve recommendations
 
-1. **Form Submissions**: `submission_type = "enhanced_form"`
-   - Contains user profile data (income, spending, preferences)
-   - Card-specific columns will be empty
+2. **Optimize Card Logic**
+   - Use tester component to fine-tune eligibility criteria
+   - Adjust scoring weights based on user feedback
+   - Add more spending categories as needed
 
-2. **Card Clicks**: `submission_type = "card_application_click"`
-   - Contains clicked card details
-   - User profile columns will be empty
-   - Includes session tracking
+3. **Production Deployment**
+   - Remove or hide the tester component
+   - Set up proper error monitoring
+   - Configure analytics tracking
 
-This enhanced structure allows for comprehensive analytics on both user preferences and card application behavior.
+### 10. Support
+
+If you encounter issues:
+
+1. **Check Console Logs**
+   - Browser developer tools for frontend issues
+   - Apps Script editor for backend issues
+
+2. **Use Test Functions**
+   - `testScriptDirectly()` for basic connectivity
+   - `testCardClickTracking()` for click tracking
+   - `checkSheetStructure()` for sheet validation
+
+3. **Debug with Card Tester**
+   - Shows exactly why cards pass or fail eligibility
+   - Provides detailed scoring breakdown
+   - Helps identify data mismatches
+
+---
+
+**Important:** The card tester component is designed for debugging only. Remove it before production deployment to maintain a clean user experience.

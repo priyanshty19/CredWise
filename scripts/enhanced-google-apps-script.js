@@ -1,336 +1,219 @@
 /**
  * Enhanced Google Apps Script for CredWise Card Page
- * Handles both form submissions and card application click tracking
- * Updated for 18-column structure with comprehensive data capture
+ * Handles form submissions and card application clicks with comprehensive logging
+ *
+ * Setup Instructions:
+ * 1. Create a new Google Apps Script project
+ * 2. Replace the default code with this script
+ * 3. Run setupCompleteColumnStructure() once to set up the sheet
+ * 4. Deploy as web app with execute permissions for "Anyone"
+ * 5. Copy the deployment URL to your environment variables
  */
 
-// Configuration
-const SHEET_ID = "1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw" // Your submission sheet ID
-const SHEET_NAME = "Sheet1" // Make sure this tab exists in your Google Sheet
-const MAX_RETRIES = 3
-const RETRY_DELAY = 1000 // 1 second
+// Declare necessary variables
+const ContentService = google.script.runtime.ContentService
+const Utilities = google.script.runtime.Utilities
+const SpreadsheetApp = google.script.runtime.SpreadsheetApp
+const HtmlService = google.script.runtime.HtmlService
+const google = {} // Declare the google variable to fix the lint error
 
-// Declare variables
-const ContentService = google.script.content
-const SpreadsheetApp = google.script.spreadsheet
-const Utilities = google.script.utilities
+// Configuration
+const SPREADSHEET_ID = "1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw" // Your Google Sheet ID
+const SHEET_NAME = "Form-Submissions" // Sheet tab name
+
+// Column structure for the 18-column layout
+const COLUMNS = {
+  TIMESTAMP: 0, // A: Timestamp
+  MONTHLY_INCOME: 1, // B: Monthly Income
+  MONTHLY_SPENDING: 2, // C: Monthly Spending
+  CREDIT_SCORE_RANGE: 3, // D: Credit Score Range
+  CURRENT_CARDS: 4, // E: Current Cards
+  SPENDING_CATEGORIES: 5, // F: Spending Categories
+  PREFERRED_BANKS: 6, // G: Preferred Banks
+  JOINING_FEE_PREF: 7, // H: Joining Fee Preference
+  SUBMISSION_TYPE: 8, // I: Submission Type
+  USER_AGENT: 9, // J: User Agent
+  CARD_NAME: 10, // K: Card Name (for clicks)
+  BANK_NAME: 11, // L: Bank Name (for clicks)
+  CARD_TYPE: 12, // M: Card Type (for clicks)
+  JOINING_FEE: 13, // N: Joining Fee (for clicks)
+  ANNUAL_FEE: 14, // O: Annual Fee (for clicks)
+  REWARD_RATE: 15, // P: Reward Rate (for clicks)
+  SESSION_ID: 16, // Q: Session ID
+  ADDITIONAL_DATA: 17, // R: Additional Data (JSON)
+}
 
 /**
  * Main function to handle POST requests
- * This is the entry point for all submissions
  */
 function doPost(e) {
-  console.log("📨 Received POST request")
-
   try {
+    console.log("📨 Received POST request")
+
     // Parse the request data
     let data
     try {
-      if (!e || !e.postData || !e.postData.contents) {
-        throw new Error("No POST data received")
-      }
-
-      const contents = e.postData.contents
-      console.log("📦 Raw request contents:", contents)
-      data = JSON.parse(contents)
-      console.log("✅ Parsed data successfully:", data)
+      data = JSON.parse(e.postData.contents)
+      console.log("📋 Parsed data:", JSON.stringify(data, null, 2))
     } catch (parseError) {
-      console.error("❌ Error parsing request data:", parseError)
+      console.error("❌ Error parsing JSON:", parseError)
       return ContentService.createTextOutput(
         JSON.stringify({
           success: false,
-          error: "Invalid JSON data",
+          error: "Invalid JSON format",
           details: parseError.toString(),
         }),
       ).setMimeType(ContentService.MimeType.JSON)
     }
 
-    // Process the submission
-    const result = processSubmission(data)
+    // Validate required fields
+    if (!data.timestamp || !data.submissionType) {
+      console.error("❌ Missing required fields")
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          success: false,
+          error: "Missing required fields: timestamp and submissionType",
+        }),
+      ).setMimeType(ContentService.MimeType.JSON)
+    }
 
-    // Return the result
-    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON)
+    // Get or create the spreadsheet and sheet
+    const result = setupSheetIfNeeded()
+    if (!result.success) {
+      console.error("❌ Sheet setup failed:", result.error)
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          success: false,
+          error: "Sheet setup failed: " + result.error,
+        }),
+      ).setMimeType(ContentService.MimeType.JSON)
+    }
+
+    const sheet = result.sheet
+
+    // Prepare row data for 18-column structure
+    const rowData = new Array(18).fill("") // Initialize with empty strings
+
+    // Fill in the data based on column mapping
+    rowData[COLUMNS.TIMESTAMP] = data.timestamp || ""
+    rowData[COLUMNS.MONTHLY_INCOME] = data.monthlyIncome || ""
+    rowData[COLUMNS.MONTHLY_SPENDING] = data.monthlySpending || ""
+    rowData[COLUMNS.CREDIT_SCORE_RANGE] = data.creditScoreRange || ""
+    rowData[COLUMNS.CURRENT_CARDS] = data.currentCards || ""
+    rowData[COLUMNS.SPENDING_CATEGORIES] = data.spendingCategories || ""
+    rowData[COLUMNS.PREFERRED_BANKS] = data.preferredBanks || ""
+    rowData[COLUMNS.JOINING_FEE_PREF] = data.joiningFeePreference || ""
+    rowData[COLUMNS.SUBMISSION_TYPE] = data.submissionType || ""
+    rowData[COLUMNS.USER_AGENT] = data.userAgent || ""
+    rowData[COLUMNS.CARD_NAME] = data.cardName || ""
+    rowData[COLUMNS.BANK_NAME] = data.bankName || ""
+    rowData[COLUMNS.CARD_TYPE] = data.cardType || ""
+    rowData[COLUMNS.JOINING_FEE] = data.joiningFee || ""
+    rowData[COLUMNS.ANNUAL_FEE] = data.annualFee || ""
+    rowData[COLUMNS.REWARD_RATE] = data.rewardRate || ""
+    rowData[COLUMNS.SESSION_ID] = data.sessionId || ""
+    rowData[COLUMNS.ADDITIONAL_DATA] = data.additionalData || ""
+
+    console.log("📝 Prepared row data:", rowData)
+
+    // Add the row to the sheet with retry logic
+    let success = false
+    let lastError = null
+
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      try {
+        console.log(`📤 Attempt ${attempt} to append row`)
+        sheet.appendRow(rowData)
+        console.log("✅ Row appended successfully")
+        success = true
+        break
+      } catch (error) {
+        console.error(`❌ Attempt ${attempt} failed:`, error)
+        lastError = error
+        if (attempt < 3) {
+          Utilities.sleep(1000) // Wait 1 second before retry
+        }
+      }
+    }
+
+    if (!success) {
+      console.error("❌ All append attempts failed")
+      return ContentService.createTextOutput(
+        JSON.stringify({
+          success: false,
+          error: "Failed to append data after 3 attempts",
+          details: lastError ? lastError.toString() : "Unknown error",
+        }),
+      ).setMimeType(ContentService.MimeType.JSON)
+    }
+
+    // Return success response
+    const response = {
+      success: true,
+      message: "Data submitted successfully",
+      timestamp: new Date().toISOString(),
+      submissionType: data.submissionType,
+      rowsInSheet: sheet.getLastRow(),
+    }
+
+    console.log("✅ Success response:", response)
+
+    return ContentService.createTextOutput(JSON.stringify(response)).setMimeType(ContentService.MimeType.JSON)
   } catch (error) {
-    console.error("❌ Error in doPost:", error)
+    console.error("❌ Unexpected error in doPost:", error)
     return ContentService.createTextOutput(
       JSON.stringify({
         success: false,
-        error: "Internal server error",
+        error: "Unexpected server error",
         details: error.toString(),
+        stack: error.stack,
       }),
     ).setMimeType(ContentService.MimeType.JSON)
   }
 }
 
 /**
- * Process the submission data and write to Google Sheets
+ * Setup the sheet with proper structure if it doesn't exist
  */
-function processSubmission(data) {
-  console.log("🔄 Processing submission:", data)
-
+function setupSheetIfNeeded() {
   try {
-    // Get the target spreadsheet by ID
-    const spreadsheet = SpreadsheetApp.openById(SHEET_ID)
-    console.log("📊 Got spreadsheet:", spreadsheet.getName())
+    console.log("🔧 Setting up sheet if needed")
 
-    // Get or create the target sheet
+    let spreadsheet
+    try {
+      spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID)
+      console.log("📊 Opened spreadsheet:", spreadsheet.getName())
+    } catch (error) {
+      console.error("❌ Cannot open spreadsheet:", error)
+      return {
+        success: false,
+        error: "Cannot access spreadsheet with ID: " + SPREADSHEET_ID,
+      }
+    }
+
+    // Get or create the sheet
     let sheet = spreadsheet.getSheetByName(SHEET_NAME)
+
     if (!sheet) {
-      console.log(`📋 Creating new sheet: ${SHEET_NAME}`)
+      console.log("📋 Creating new sheet:", SHEET_NAME)
       sheet = spreadsheet.insertSheet(SHEET_NAME)
-      setupColumnHeaders(sheet)
     }
 
-    console.log("📋 Using sheet:", sheet.getName())
-
-    // Prepare the row data for the 18-column structure
-    const rowData = [
-      data.timestamp || new Date().toISOString(), // A: Timestamp
-      data.monthlyIncome || "", // B: Monthly_Income
-      data.monthlySpending || "", // C: Monthly_Spending
-      data.creditScoreRange || "", // D: Credit_Score_Range
-      data.currentCards || "", // E: Current_Cards
-      data.spendingCategories || "", // F: Spending_Categories
-      data.preferredBanks || "", // G: Preferred_Banks
-      data.joiningFeePreference || "", // H: Joining_Fee_Preference
-      data.userAgent || "", // I: User_Agent
-      data.cardName || "", // J: Card_Name
-      data.bankName || "", // K: Bank_Name
-      data.cardType || "", // L: Card_Type
-      data.joiningFee || "", // M: Joining_Fee
-      data.annualFee || "", // N: Annual_Fee
-      data.rewardRate || "", // O: Reward_Rate
-      data.submissionType || "unknown", // P: Submission_Type
-      data.sessionId || "", // Q: Session_ID
-      data.notes || "", // R: Notes
-    ]
-
-    console.log("📝 Prepared row data:", rowData)
-
-    // Write the data to the sheet with retry logic
-    const writeResult = writeDataWithRetry(sheet, rowData)
-
-    if (writeResult.success) {
-      console.log("✅ Data written successfully to row:", writeResult.row)
-      return {
-        success: true,
-        message: "Data submitted successfully",
-        row: writeResult.row,
-        timestamp: rowData[0],
-        sheetName: SHEET_NAME,
-        sheetId: SHEET_ID,
-      }
-    } else {
-      console.error("❌ Failed to write data:", writeResult.error)
-      return {
-        success: false,
-        error: "Failed to write data to sheet",
-        details: writeResult.error,
-      }
-    }
-  } catch (error) {
-    console.error("❌ Error processing submission:", error)
-    return {
-      success: false,
-      error: "Error processing submission",
-      details: error.toString(),
-    }
-  }
-}
-
-/**
- * Write data to sheet with retry logic
- */
-function writeDataWithRetry(sheet, rowData, retryCount = 0) {
-  try {
-    // Get the next available row
+    // Check if headers exist
     const lastRow = sheet.getLastRow()
-    const nextRow = lastRow + 1
+    console.log("📏 Sheet has", lastRow, "rows")
 
-    console.log(`📍 Writing to row ${nextRow} (last row was ${lastRow})`)
-
-    // Write the data
-    const range = sheet.getRange(nextRow, 1, 1, rowData.length)
-    range.setValues([rowData])
-
-    console.log("✅ Data written successfully")
-
-    return {
-      success: true,
-      row: nextRow,
-    }
-  } catch (error) {
-    console.error(`❌ Error writing data (attempt ${retryCount + 1}):`, error)
-
-    if (retryCount < MAX_RETRIES) {
-      console.log(`🔄 Retrying in ${RETRY_DELAY}ms...`)
-      Utilities.sleep(RETRY_DELAY)
-      return writeDataWithRetry(sheet, rowData, retryCount + 1)
-    } else {
-      return {
-        success: false,
-        error: error.toString(),
-      }
-    }
-  }
-}
-
-/**
- * Set up column headers for the 18-column structure
- */
-function setupColumnHeaders(sheet) {
-  console.log("📋 Setting up column headers")
-
-  const headers = [
-    "Timestamp", // A
-    "Monthly_Income", // B
-    "Monthly_Spending", // C
-    "Credit_Score_Range", // D
-    "Current_Cards", // E
-    "Spending_Categories", // F
-    "Preferred_Banks", // G
-    "Joining_Fee_Preference", // H
-    "User_Agent", // I
-    "Card_Name", // J
-    "Bank_Name", // K
-    "Card_Type", // L
-    "Joining_Fee", // M
-    "Annual_Fee", // N
-    "Reward_Rate", // O
-    "Submission_Type", // P
-    "Session_ID", // Q
-    "Notes", // R
-  ]
-
-  // Set the headers in the first row
-  const headerRange = sheet.getRange(1, 1, 1, headers.length)
-  headerRange.setValues([headers])
-
-  // Format the header row
-  headerRange.setFontWeight("bold")
-  headerRange.setBackground("#E8F0FE")
-
-  // Auto-resize columns
-  sheet.autoResizeColumns(1, headers.length)
-
-  console.log("✅ Column headers set up successfully")
-}
-
-/**
- * Test function to verify the script is working
- * Run this manually in the Apps Script editor
- */
-function testScriptDirectly() {
-  console.log("🧪 Testing script directly")
-
-  const testData = {
-    timestamp: new Date().toISOString(),
-    monthlyIncome: "75000",
-    monthlySpending: "30000",
-    creditScoreRange: "750-850",
-    currentCards: "2",
-    spendingCategories: "dining, fuel, groceries",
-    preferredBanks: "SBI, American Express",
-    joiningFeePreference: "low_fee",
-    submissionType: "direct_test",
-    userAgent: "Test User Agent",
-    cardName: "",
-    bankName: "",
-    cardType: "",
-    joiningFee: "",
-    annualFee: "",
-    rewardRate: "",
-    sessionId: "test_session_123",
-    notes: "Direct script test",
-  }
-
-  const result = processSubmission(testData)
-  console.log("🧪 Test result:", result)
-
-  return result
-}
-
-/**
- * Test function with mock POST data
- */
-function testWithMockPostData() {
-  console.log("🧪 Testing with mock POST data")
-
-  const mockEvent = {
-    postData: {
-      contents: JSON.stringify({
-        timestamp: new Date().toISOString(),
-        monthlyIncome: "60000",
-        monthlySpending: "25000",
-        creditScoreRange: "650-749",
-        currentCards: "1",
-        spendingCategories: "travel, shopping",
-        preferredBanks: "HDFC Bank, ICICI Bank",
-        joiningFeePreference: "no_fee",
-        submissionType: "mock_post_test",
-        userAgent: "Mock Test User Agent",
-        cardName: "Test Card",
-        bankName: "Test Bank",
-        cardType: "Cashback",
-        joiningFee: "0",
-        annualFee: "500",
-        rewardRate: "2%",
-        sessionId: "mock_session_456",
-        notes: "Mock POST test",
-      }),
-    },
-  }
-
-  const result = doPost(mockEvent)
-  const response = JSON.parse(result.getContent())
-  console.log("🧪 Mock POST test result:", response)
-
-  return response
-}
-
-/**
- * Check and display current sheet structure
- */
-function checkSheetStructure() {
-  console.log("🔍 Checking sheet structure")
-
-  try {
-    const spreadsheet = SpreadsheetApp.openById(SHEET_ID)
-    console.log("📊 Spreadsheet:", spreadsheet.getName())
-
-    const sheet = spreadsheet.getSheetByName(SHEET_NAME)
-    if (!sheet) {
-      console.log(`❌ Sheet "${SHEET_NAME}" not found`)
-      return {
-        success: false,
-        error: `Sheet "${SHEET_NAME}" not found`,
-      }
-    }
-
-    const lastRow = sheet.getLastRow()
-    const lastCol = sheet.getLastColumn()
-
-    console.log(`📐 Sheet dimensions: ${lastRow} rows x ${lastCol} columns`)
-
-    if (lastRow > 0) {
-      const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
-      console.log("📋 Current headers:", headers)
-
-      if (lastRow > 1) {
-        const sampleData = sheet.getRange(2, 1, Math.min(3, lastRow - 1), lastCol).getValues()
-        console.log("📊 Sample data (first 3 rows):", sampleData)
-      }
+    if (lastRow === 0) {
+      console.log("📝 Adding headers to empty sheet")
+      setupCompleteColumnStructure()
     }
 
     return {
       success: true,
-      rows: lastRow,
-      columns: lastCol,
-      sheetName: SHEET_NAME,
-      sheetId: SHEET_ID,
+      sheet: sheet,
     }
   } catch (error) {
-    console.error("❌ Error checking sheet structure:", error)
+    console.error("❌ Error in setupSheetIfNeeded:", error)
     return {
       success: false,
       error: error.toString(),
@@ -339,70 +222,116 @@ function checkSheetStructure() {
 }
 
 /**
- * Set up the complete column structure (run this once)
+ * Set up the complete 18-column structure
+ * Run this function once manually to initialize the sheet
  */
 function setupCompleteColumnStructure() {
-  console.log("🔧 Setting up complete column structure")
-
   try {
-    const spreadsheet = SpreadsheetApp.openById(SHEET_ID)
+    console.log("🏗️ Setting up complete column structure")
+
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID)
     let sheet = spreadsheet.getSheetByName(SHEET_NAME)
 
     if (!sheet) {
-      console.log(`📋 Creating new sheet: ${SHEET_NAME}`)
       sheet = spreadsheet.insertSheet(SHEET_NAME)
+      console.log("📋 Created new sheet:", SHEET_NAME)
     }
 
-    setupColumnHeaders(sheet)
+    // Define the 18-column header structure
+    const headers = [
+      "Timestamp", // A
+      "Monthly Income", // B
+      "Monthly Spending", // C
+      "Credit Score Range", // D
+      "Current Cards", // E
+      "Spending Categories", // F
+      "Preferred Banks", // G
+      "Joining Fee Preference", // H
+      "Submission Type", // I
+      "User Agent", // J
+      "Card Name", // K
+      "Bank Name", // L
+      "Card Type", // M
+      "Joining Fee", // N
+      "Annual Fee", // O
+      "Reward Rate", // P
+      "Session ID", // Q
+      "Additional Data", // R
+    ]
 
-    console.log("✅ Complete column structure setup complete")
-    return { success: true, message: "Complete column structure setup complete" }
+    // Clear existing content and add headers
+    sheet.clear()
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers])
+
+    // Format the header row
+    const headerRange = sheet.getRange(1, 1, 1, headers.length)
+    headerRange.setFontWeight("bold")
+    headerRange.setBackground("#4285f4")
+    headerRange.setFontColor("white")
+
+    // Auto-resize columns
+    sheet.autoResizeColumns(1, headers.length)
+
+    // Freeze the header row
+    sheet.setFrozenRows(1)
+
+    console.log("✅ Complete column structure set up successfully")
+    console.log("📊 Headers:", headers)
+
+    return {
+      success: true,
+      message: "Complete 18-column structure created successfully",
+      headers: headers,
+    }
   } catch (error) {
-    console.error("❌ Error setting up complete column structure:", error)
-    return { success: false, error: error.toString() }
+    console.error("❌ Error setting up column structure:", error)
+    return {
+      success: false,
+      error: error.toString(),
+    }
   }
 }
 
 /**
- * Test form submission with spending categories
+ * Test function to verify the script works
  */
-function testFormSubmissionWithSpendingCategories() {
-  console.log("🧪 Testing form submission with spending categories")
+function testScriptDirectly() {
+  console.log("🧪 Testing script directly")
 
-  const testFormData = {
+  const testData = {
     timestamp: new Date().toISOString(),
-    monthlyIncome: "80000",
-    monthlySpending: "35000",
+    monthlyIncome: 100000,
+    monthlySpending: 25000,
     creditScoreRange: "750-850",
-    currentCards: "2",
-    spendingCategories: "dining, travel, fuel, shopping",
-    preferredBanks: "SBI, HDFC Bank, American Express",
+    currentCards: "3",
+    spendingCategories: "dining, shopping, fuel",
+    preferredBanks: "SBI, HDFC Bank",
     joiningFeePreference: "any_amount",
-    submissionType: "enhanced_form_with_spending_categories",
-    userAgent: "Test Form User Agent",
-    cardName: "",
-    bankName: "",
-    cardType: "",
-    joiningFee: "",
-    annualFee: "",
-    rewardRate: "",
-    sessionId: "",
-    notes: "Test form submission with spending categories",
+    submissionType: "direct_test",
+    userAgent: "Test Agent",
+    sessionId: "test_session_" + Date.now(),
+    additionalData: JSON.stringify({ testRun: true }),
   }
 
-  const result = processSubmission(testFormData)
-  console.log("🧪 Form submission test result:", result)
+  const mockEvent = {
+    postData: {
+      contents: JSON.stringify(testData),
+    },
+  }
 
-  return result
+  const result = doPost(mockEvent)
+  console.log("🧪 Test result:", result.getContent())
+
+  return JSON.parse(result.getContent())
 }
 
 /**
- * Test card application click tracking
+ * Test function with card click data
  */
-function testCardApplicationClickTracking() {
-  console.log("🧪 Testing card application click tracking")
+function testCardClickTracking() {
+  console.log("🧪 Testing card click tracking")
 
-  const testClickData = {
+  const testData = {
     timestamp: new Date().toISOString(),
     monthlyIncome: "",
     monthlySpending: "",
@@ -412,19 +341,88 @@ function testCardApplicationClickTracking() {
     preferredBanks: "",
     joiningFeePreference: "",
     submissionType: "card_application_click",
-    userAgent: "Test Click User Agent",
-    cardName: "HDFC Millennia Credit Card",
-    bankName: "HDFC Bank",
+    userAgent: "Test Agent",
+    cardName: "SBI Card CashBack",
+    bankName: "SBI",
     cardType: "Cashback",
-    joiningFee: "1000",
-    annualFee: "1000",
-    rewardRate: "2.5%",
-    sessionId: "test_click_session_789",
-    notes: "Test card application click tracking",
+    joiningFee: 500,
+    annualFee: 999,
+    rewardRate: "5% cashback",
+    sessionId: "click_test_" + Date.now(),
+    additionalData: JSON.stringify({ clickTest: true }),
   }
 
-  const result = processSubmission(testClickData)
-  console.log("🧪 Click tracking test result:", result)
+  const mockEvent = {
+    postData: {
+      contents: JSON.stringify(testData),
+    },
+  }
 
-  return result
+  const result = doPost(mockEvent)
+  console.log("🧪 Click test result:", result.getContent())
+
+  return JSON.parse(result.getContent())
+}
+
+/**
+ * Check current sheet structure
+ */
+function checkSheetStructure() {
+  try {
+    const spreadsheet = SpreadsheetApp.openById(SPREADSHEET_ID)
+    const sheet = spreadsheet.getSheetByName(SHEET_NAME)
+
+    if (!sheet) {
+      console.log("❌ Sheet does not exist")
+      return { exists: false }
+    }
+
+    const lastRow = sheet.getLastRow()
+    const lastCol = sheet.getLastColumn()
+
+    console.log("📊 Sheet structure:")
+    console.log("- Rows:", lastRow)
+    console.log("- Columns:", lastCol)
+
+    if (lastRow > 0) {
+      const headers = sheet.getRange(1, 1, 1, lastCol).getValues()[0]
+      console.log("- Headers:", headers)
+
+      if (lastRow > 1) {
+        const sampleData = sheet.getRange(2, 1, Math.min(3, lastRow - 1), lastCol).getValues()
+        console.log("- Sample data:", sampleData)
+      }
+    }
+
+    return {
+      exists: true,
+      rows: lastRow,
+      columns: lastCol,
+      headers: lastRow > 0 ? sheet.getRange(1, 1, 1, lastCol).getValues()[0] : [],
+    }
+  } catch (error) {
+    console.error("❌ Error checking sheet structure:", error)
+    return { error: error.toString() }
+  }
+}
+
+/**
+ * Handle GET requests for testing
+ */
+function doGet(e) {
+  const html = `
+    <html>
+      <body>
+        <h2>CredWise Apps Script Status</h2>
+        <p>Script is running successfully!</p>
+        <p>Timestamp: ${new Date().toISOString()}</p>
+        <p>Spreadsheet ID: ${SPREADSHEET_ID}</p>
+        <p>Sheet Name: ${SHEET_NAME}</p>
+        <hr>
+        <p>To test the script, use the testScriptDirectly() function in the Apps Script editor.</p>
+      </body>
+    </html>
+  `
+
+  return HtmlService.createHtmlOutput(html)
 }
