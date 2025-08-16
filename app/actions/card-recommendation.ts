@@ -7,6 +7,7 @@ import {
   filterAndRankCardsWithSpendingCategories,
 } from "@/lib/google-sheets"
 import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
+import { getCardRecommendationsForForm as getCardRecommendationsForFormOriginal } from "@/lib/google-sheets"
 
 interface CardSubmission {
   creditScore: number
@@ -275,8 +276,8 @@ export async function getEnhancedCardRecommendations(
   }
 }
 
-// NEW: Enhanced function for the form with spending categories and refined scoring
-export async function getCardRecommendationsForForm(formData: {
+// Enhanced function for the form with spending categories and refined scoring
+export async function getCardRecommendationsForFormRefined(formData: {
   monthlyIncome: string
   spendingCategories: string[]
   monthlySpending: string
@@ -409,7 +410,7 @@ export async function getCardRecommendationsForForm(formData: {
 
 export async function getRecommendations(formData: FormData) {
   try {
-    const result = await getCardRecommendationsForForm(formData)
+    const result = await getCardRecommendationsForFormRefined(formData)
     return result
   } catch (error: any) {
     console.error("Error in getRecommendations server action:", error)
