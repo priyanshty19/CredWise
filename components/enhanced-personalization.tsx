@@ -93,13 +93,6 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
     return () => clearTimeout(timeoutId)
   }, [searchTerm, cards])
 
-  // Auto-select card if exact match
-  useEffect(() => {
-    if (searchResults.length === 1) {
-      handleCardSelect(searchResults[0])
-    }
-  }, [searchResults])
-
   const handleCardSelect = (card: CreditCardData) => {
     // Calculate score for this card in real-time
     const maxValues = {
@@ -122,6 +115,8 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
     }
 
     setSelectedCard(scoredCard)
+    setSearchTerm(card.cardName) // Update search term to show selected card name
+    setSearchResults([]) // Clear search results after selection
   }
 
   const sbiCards = cards.filter((c) => c.bank === "SBI")
@@ -137,6 +132,27 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
             </Button>
           </div>
 
+          {/* User Profile Summary */}
+          <div className="mb-6 p-4 bg-orange-50 rounded-lg">
+            <h3 className="font-semibold mb-3 text-orange-800">Your Profile Summary</h3>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+              <div>
+                <span className="font-medium text-orange-700">User Profile:</span>
+                <div>Income: ₹{Number.parseInt(formData.monthlyIncome)?.toLocaleString()}</div>
+                <div>Credit Score: {getCreditScoreValue(formData.creditScoreRange)}</div>
+                <div>Current Cards: {formData.currentCards}</div>
+              </div>
+              <div>
+                <span className="font-medium text-orange-700">Spending Categories:</span>
+                <div>{formData.spendingCategories.join(", ") || "None selected"}</div>
+              </div>
+              <div>
+                <span className="font-medium text-orange-700">Preferred Banks:</span>
+                <div>{formData.preferredBanks.join(", ") || "None selected"}</div>
+              </div>
+            </div>
+          </div>
+
           {/* SBI Cards Quick Overview */}
           <div className="mb-6 p-4 bg-blue-50 rounded-lg">
             <h3 className="font-semibold mb-3 flex items-center gap-2">
@@ -145,7 +161,11 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 max-h-48 overflow-y-auto">
               {sbiCards.slice(0, 9).map((card) => (
-                <div key={card.id} className="flex justify-between items-center p-2 bg-white rounded text-sm">
+                <div
+                  key={card.id}
+                  className="flex justify-between items-center p-2 bg-white rounded text-sm hover:bg-blue-100 cursor-pointer"
+                  onClick={() => handleCardSelect(card)}
+                >
                   <div>
                     <span className="font-medium">{card.cardName}</span>
                     <div className="text-xs text-gray-600">
@@ -157,10 +177,10 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
             </div>
           </div>
 
-          {/* Live Search Input */}
+          {/* Search Input Only - No Dropdown */}
           <div className="mb-6 space-y-4">
             <div>
-              <Label htmlFor="card-search">Search Cards (All {cards.length} cards available):</Label>
+              <Label htmlFor="card-search">🔍 Search & Test Any Card ({cards.length} cards available):</Label>
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
                 {isSearching && (
@@ -169,36 +189,40 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                 <Input
                   id="card-search"
                   type="text"
-                  placeholder="Type card name, bank, or description to search..."
+                  placeholder="Type card name, bank, or description to search and test..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
-                  className="pl-10 pr-10"
+                  className="pl-10 pr-10 text-lg"
                 />
+              </div>
+              <div className="text-xs text-gray-500 mt-1">
+                💡 Try searching: "SBI Cashback", "HDFC Regalia", "Amazon Pay", "Travel", "Fuel", etc.
               </div>
             </div>
 
             {/* Live Search Results */}
             {searchTerm && searchResults.length > 0 && (
-              <div className="border rounded-lg max-h-60 overflow-y-auto">
-                <div className="p-2 bg-gray-50 text-sm font-medium">
-                  Found {searchResults.length} cards (showing top 10)
+              <div className="border rounded-lg max-h-60 overflow-y-auto bg-white shadow-lg">
+                <div className="p-2 bg-gray-50 text-sm font-medium sticky top-0">
+                  Found {searchResults.length} cards - Click any card to test
                 </div>
                 {searchResults.map((card) => (
                   <div
                     key={card.id}
-                    className="p-3 border-b hover:bg-gray-50 cursor-pointer"
+                    className="p-3 border-b hover:bg-blue-50 cursor-pointer transition-colors"
                     onClick={() => handleCardSelect(card)}
                   >
                     <div className="flex justify-between items-center">
                       <div>
-                        <div className="font-medium">{card.cardName}</div>
+                        <div className="font-medium text-blue-800">{card.cardName}</div>
                         <div className="text-sm text-gray-600">
                           {card.bank} • {card.cardType} • {card.rewardsRate}% rewards
                         </div>
+                        <div className="text-xs text-gray-500 mt-1">{card.description}</div>
                       </div>
                       <div className="text-right text-sm">
-                        <div>₹{card.joiningFee} joining</div>
-                        <div className="text-gray-500">₹{card.annualFee} annual</div>
+                        <div className="font-medium">₹{card.joiningFee}</div>
+                        <div className="text-gray-500 text-xs">joining fee</div>
                       </div>
                     </div>
                   </div>
@@ -207,8 +231,10 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
             )}
 
             {searchTerm && searchResults.length === 0 && !isSearching && (
-              <div className="text-center py-4 text-gray-500">
-                No cards found matching "{searchTerm}". Try different keywords.
+              <div className="text-center py-8 text-gray-500 bg-gray-50 rounded-lg">
+                <Search className="h-8 w-8 mx-auto mb-2 text-gray-400" />
+                <div>No cards found matching "{searchTerm}"</div>
+                <div className="text-sm mt-1">Try different keywords like bank name, card type, or features</div>
               </div>
             )}
           </div>
@@ -216,17 +242,20 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
           {/* Selected Card Analysis */}
           {selectedCard && (
             <div className="space-y-6">
-              <Card>
-                <CardHeader>
+              <Card className="border-2 border-blue-200">
+                <CardHeader className="bg-blue-50">
                   <CardTitle className="flex items-center gap-2">
                     <CreditCardIcon className="h-5 w-5" />
                     {selectedCard.card.cardName}
+                    <Badge variant={selectedCard.eligible ? "default" : "destructive"}>
+                      {selectedCard.eligible ? `✅ PASS (${selectedCard.score.toFixed(1)}/105)` : "❌ FAIL"}
+                    </Badge>
                   </CardTitle>
                   <CardDescription>
                     {selectedCard.card.bank} • {selectedCard.card.cardType} • {selectedCard.card.description}
                   </CardDescription>
                 </CardHeader>
-                <CardContent>
+                <CardContent className="pt-6">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                     {/* Basic Eligibility */}
                     <div>
@@ -344,7 +373,9 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                         <Separator />
                         <div className="flex justify-between font-bold text-lg">
                           <span>Total Score:</span>
-                          <span>{selectedCard.score.toFixed(1)}/105</span>
+                          <span className={selectedCard.score >= 25.0 ? "text-green-600" : "text-orange-600"}>
+                            {selectedCard.score.toFixed(1)}/105
+                          </span>
                         </div>
                         <div className="text-xs text-gray-600">Threshold: 25.0 points (for recommendations)</div>
                       </div>
@@ -358,11 +389,15 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                       <div>
                         <span className="text-sm text-gray-600">Your Categories:</span>
                         <div className="flex flex-wrap gap-1 mt-1">
-                          {formData.spendingCategories.map((cat) => (
-                            <Badge key={cat} variant="outline">
-                              {cat}
-                            </Badge>
-                          ))}
+                          {formData.spendingCategories.length > 0 ? (
+                            formData.spendingCategories.map((cat) => (
+                              <Badge key={cat} variant="outline">
+                                {cat}
+                              </Badge>
+                            ))
+                          ) : (
+                            <span className="text-gray-400 text-sm">None selected</span>
+                          )}
                         </div>
                       </div>
                       <div>
@@ -437,7 +472,7 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
 
           {/* Quick Stats */}
           <div className="mt-6 p-4 bg-gray-50 rounded-lg">
-            <h4 className="font-semibold mb-2">Quick Stats</h4>
+            <h4 className="font-semibold mb-2">Database Stats</h4>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
               <div>
                 <span className="text-gray-600">Total Cards:</span>
