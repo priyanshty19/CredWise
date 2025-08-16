@@ -83,6 +83,23 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
     let skippedRows = 0
     let processedRows = 0
 
+    // First, let's analyze all card types in the sheet
+    console.log("\n🔍 ANALYZING ALL CARD TYPES IN SHEET:")
+    const allCardTypes = new Set<string>()
+    rows.forEach((row, index) => {
+      if (row && row.length > 2 && row[2]) {
+        const cardType = row[2].toString().trim()
+        allCardTypes.add(cardType)
+      }
+    })
+
+    console.log("📊 Unique card types found in sheet:")
+    Array.from(allCardTypes)
+      .sort()
+      .forEach((type) => {
+        console.log(`   • "${type}"`)
+      })
+
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index]
 
@@ -130,11 +147,16 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
                 .map((f: string) => f.trim())
                 .filter(Boolean)
 
+        const rawCardType = getString(row[2])
+        console.log(
+          `\n🔍 Processing row ${index + 2}: Card "${getString(row[0])}" with raw card type: "${rawCardType}"`,
+        )
+
         const card = {
           id: `card_${processedRows + 1}`,
           cardName: getString(row[0]),
           bank: getString(row[1]),
-          cardType: getString(row[2]),
+          cardType: rawCardType, // Keep raw for now, will normalize below
           joiningFee: parseNumeric(row[3]),
           annualFee: parseNumeric(row[4]),
           creditScoreRequirement: parseInt(row[5]),
@@ -159,11 +181,12 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
         // Normalize card type to match dropdown options
         const normalizedCardType = normalizeCardType(card.cardType)
         if (!normalizedCardType) {
-          console.warn(`⚠️ Row ${index + 2} has unsupported card type: ${card.cardType}`)
+          console.warn(`⚠️ Row ${index + 2} has unsupported card type: "${card.cardType}" - SKIPPING`)
           skippedRows++
           continue
         }
 
+        console.log(`✅ Normalized "${card.cardType}" → "${normalizedCardType}"`)
         card.cardType = normalizedCardType
         cards.push(card)
         processedRows++
@@ -185,6 +208,20 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
     console.log(
       `📊 Processing summary: ${processedRows} processed, ${skippedRows} skipped, ${cards.length} valid cards`,
     )
+
+    // Log final card type distribution
+    console.log("\n📊 FINAL CARD TYPE DISTRIBUTION:")
+    const finalCardTypes = cards.reduce(
+      (acc, card) => {
+        acc[card.cardType] = (acc[card.cardType] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>,
+    )
+
+    Object.entries(finalCardTypes).forEach(([type, count]) => {
+      console.log(`   • ${type}: ${count} cards`)
+    })
 
     // Log sample of successfully parsed cards
     if (cards.length > 0) {
@@ -237,58 +274,110 @@ export async function fetchGoogleSheetData(sheetId: string, range: string): Prom
   }
 }
 
-// Enhanced helper function to normalize card types from sheet to match dropdown options
+// ENHANCED helper function to normalize card types from sheet to match dropdown options
 function normalizeCardType(sheetCardType: string): string | null {
   const normalized = sheetCardType.toLowerCase().trim()
 
-  // Map sheet values to dropdown values with more comprehensive mapping
+  console.log(`🔄 Normalizing card type: "${sheetCardType}" → "${normalized}"`)
+
+  // Map sheet values to dropdown values with COMPREHENSIVE mapping
   const typeMapping: { [key: string]: string } = {
-    // Direct matches
+    // Direct matches (case insensitive)
     cashback: "Cashback",
     travel: "Travel",
     rewards: "Rewards",
     student: "Student",
     business: "Business",
 
-    // Common variations
+    // Common variations for CASHBACK
+    "cash back": "Cashback",
+    "cash-back": "Cashback",
+    "cashback card": "Cashback",
+    "cash rewards": "Cashback",
+    "cash back rewards": "Cashback",
+
+    // Common variations for TRAVEL
+    "travel rewards": "Travel",
+    "air miles": "Travel",
+    airline: "Travel",
+    hotel: "Travel",
+    "travel card": "Travel",
+    miles: "Travel",
+    "frequent flyer": "Travel",
+
+    // Common variations for REWARDS
+    reward: "Rewards",
+    "reward points": "Rewards",
+    points: "Rewards",
+    "points card": "Rewards",
     premium: "Rewards",
     lifestyle: "Rewards",
     "lifestyle & rewards": "Rewards",
     "lifestyle&rewards": "Rewards",
+    "lifestyle rewards": "Rewards",
+    "reward card": "Rewards",
+    "general rewards": "Rewards",
+
+    // Common variations for STUDENT
+    "student card": "Student",
+    youth: "Student",
+    starter: "Student",
+    "entry level": "Student",
+    "first card": "Student",
+    beginner: "Student",
+
+    // Common variations for BUSINESS
     "business/professional": "Business",
     "business professional": "Business",
     businessprofessional: "Business",
     professional: "Business",
-
-    // Additional mappings you might have
-    "cash back": "Cashback",
-    "cash-back": "Cashback",
-    reward: "Rewards",
-    "reward points": "Rewards",
-    points: "Rewards",
-
-    // Travel variations
-    "air miles": "Travel",
-    airline: "Travel",
-    hotel: "Travel",
-
-    // Student variations
-    "student card": "Student",
-    youth: "Student",
-    starter: "Student",
-
-    // Business variations
     corporate: "Business",
     commercial: "Business",
+    "business card": "Business",
+    "corporate card": "Business",
+
+    // Additional specific mappings that might be in your sheet
+    "fuel card": "Rewards", // Fuel cards are typically rewards-based
+    "shopping card": "Rewards", // Shopping cards are typically rewards-based
+    "dining card": "Rewards", // Dining cards are typically rewards-based
+    entertainment: "Rewards", // Entertainment cards are typically rewards-based
+    grocery: "Rewards", // Grocery cards are typically rewards-based
+
+    // Credit builder cards
+    secured: "Student", // Secured cards often for students/beginners
+    "credit builder": "Student",
+
+    // Premium/luxury cards
+    platinum: "Rewards",
+    gold: "Rewards",
+    signature: "Rewards",
+    infinite: "Rewards",
+    world: "Rewards",
+    elite: "Rewards",
+    privilege: "Rewards",
+    prestige: "Rewards",
   }
 
   const mapped = typeMapping[normalized]
 
-  if (!mapped) {
-    console.warn(`⚠️ Unmapped card type: "${sheetCardType}" (normalized: "${normalized}")`)
-  }
+  if (mapped) {
+    console.log(`✅ Successfully mapped: "${sheetCardType}" → "${mapped}"`)
+    return mapped
+  } else {
+    console.warn(`⚠️ UNMAPPED card type: "${sheetCardType}" (normalized: "${normalized}")`)
+    console.warn(`   Available mappings: ${Object.keys(typeMapping).join(", ")}`)
 
-  return mapped || null
+    // Try partial matching as fallback
+    for (const [key, value] of Object.entries(typeMapping)) {
+      if (normalized.includes(key) || key.includes(normalized)) {
+        console.log(`🔄 Partial match found: "${normalized}" contains "${key}" → "${value}"`)
+        return value
+      }
+    }
+
+    console.error(`❌ No mapping found for card type: "${sheetCardType}"`)
+    return null
+  }
 }
 
 export async function submitUserData(submission: UserSubmission): Promise<boolean> {
@@ -348,9 +437,23 @@ export function filterAndRankCards(
   console.log("📊 Total available cards:", cards.length)
   console.log("🎯 NEW REQUIREMENT: Only cards with composite score ≥25.0 will be considered eligible")
 
-  // Find all cashback cards first for analysis
-  const cashbackCards = cards.filter((card) => card.cardType === "Cashback")
-  console.log(`💳 Total Cashback cards in database: ${cashbackCards.length}`)
+  // Log available card types for debugging
+  console.log("\n📊 AVAILABLE CARD TYPES IN DATABASE:")
+  const availableCardTypes = [...new Set(cards.map((card) => card.cardType))].sort()
+  availableCardTypes.forEach((type) => {
+    const count = cards.filter((card) => card.cardType === type).length
+    console.log(`   • ${type}: ${count} cards`)
+  })
+
+  // Find all cards of the requested type first for analysis
+  const requestedTypeCards = cards.filter((card) => card.cardType === cardType)
+  console.log(`💳 Total ${cardType} cards in database: ${requestedTypeCards.length}`)
+
+  if (requestedTypeCards.length === 0) {
+    console.error(`❌ NO CARDS FOUND FOR TYPE: "${cardType}"`)
+    console.log("Available card types:", availableCardTypes)
+    return []
+  }
 
   // Log specific cards mentioned
   const specificCards = [
@@ -386,7 +489,9 @@ export function filterAndRankCards(
 
       console.log(`   ✅ Credit Score: ${meetsCredit ? "PASS" : "FAIL"}`)
       console.log(`   ✅ Income: ${meetsIncome ? "PASS" : "FAIL"}`)
-      console.log(`   ✅ Card Type: ${matchesType ? "PASS" : "FAIL"}`)
+      console.log(
+        `   ✅ Card Type: ${matchesType ? "PASS" : "FAIL"} (card: "${card.cardType}" vs requested: "${cardType}")`,
+      )
       console.log(`   🎯 BASIC ELIGIBLE: ${meetsCredit && meetsIncome && matchesType ? "YES" : "NO"}`)
     } else {
       console.log(`❌ ${cardName}: NOT FOUND in database`)
@@ -426,6 +531,7 @@ export function filterAndRankCards(
       `- Monthly Income: ₹${monthlyIncome.toLocaleString()} (looking for cards with requirement ≤ ₹${monthlyIncome.toLocaleString()})`,
     )
     console.log(`- Card Type: ${cardType}`)
+    console.log(`- Available card types: ${availableCardTypes.join(", ")}`)
     return []
   }
 
