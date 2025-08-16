@@ -1,4 +1,18 @@
-import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
+export interface CreditCardData {
+  id: string
+  cardName: string
+  bank: string
+  cardType: string
+  joiningFee: number
+  annualFee: number
+  creditScoreRequirement: number
+  monthlyIncomeRequirement: number
+  rewardsRate: number
+  signUpBonus: number
+  features: string[]
+  description: string
+  spendingCategories: string[]
+}
 
 interface CreditCard {
   id: string
@@ -313,6 +327,14 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
       cards.slice(0, 3).forEach((card, index) => {
         console.log(`   ${index + 1}. ${card.cardName} (${card.bank}) - ${card.cardType}`)
         console.log(`      Spending Categories: [${card.spendingCategories.join(", ")}]`)
+        console.log(`      Joining Fee: ₹${card.joiningFee}, Annual Fee: ₹${card.annualFee}`)
+        console.log(`      Rewards Rate: ${card.rewardsRate}%, Sign-up Bonus: ₹${card.signUpBonus}`)
+        console.log(
+          `      Credit Score Req: ${card.creditScoreRequirement}, Income Req: ₹${card.monthlyIncomeRequirement}`,
+        )
+        console.log(`      Features: [${card.features.join(", ")}]`)
+        console.log(`      Description: ${card.description}`)
+        console.log("      ---")
       })
     }
 
@@ -552,13 +574,14 @@ export function filterAndRankCardsWithSpendingCategories(
   console.log("🛍️ User spending categories:", spendingCategories)
   console.log("🏦 User preferred banks:", preferredBanks)
 
-  // NEW WEIGHT DISTRIBUTION (Total = 100):
+  // NEW WEIGHT DISTRIBUTION (Total = 105):
   console.log("\n🎯 NEW SCORING WEIGHTS:")
-  console.log("🎁 Rewards Rate: 30 points")
-  console.log("🛍️ Category Match: 30 points")
-  console.log("🎉 Sign-up Bonus: 20 points")
-  console.log("💳 Joining Fee: 10 points")
-  console.log("📅 Annual Fee: 10 points")
+  console.log("🎁 Rewards Rate: 30 points (30%)")
+  console.log("🛍️ Category Match: 30 points (30%)")
+  console.log("🎉 Sign-up Bonus: 20 points (19%)")
+  console.log("💳 Joining Fee: 10 points (9.5%)")
+  console.log("📅 Annual Fee: 10 points (9.5%)")
+  console.log("🏦 Bank Preference Bonus: 5 points (2%)")
 
   // Step 1: Basic eligibility filtering (same as before)
   const basicEligibleCards = cards.filter((card) => {
@@ -1578,3 +1601,31 @@ function getCreditScoreValue(range: string): number {
 }
 
 // Explicit export for getCardRecommendationsForForm
+
+async function submitEnhancedFormData(data: any): Promise<boolean> {
+  try {
+    const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL
+
+    if (!appsScriptUrl) {
+      throw new Error("Apps Script URL not configured")
+    }
+
+    const response = await fetch(appsScriptUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result = await response.json()
+    return result.success === true
+  } catch (error) {
+    console.error("Error submitting enhanced form data:", error)
+    return false
+  }
+}
