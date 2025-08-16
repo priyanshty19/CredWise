@@ -912,4 +912,4 @@ function getCreditScoreValue(range: string): number {
   }
 }
 
-// At the very end of the file, add this explicit export to ensure it's available
+// Explicit export to ensure the function is available for import

@@ -15,8 +15,8 @@ import {
   fetchCreditCards,
   fetchAvailableSpendingCategories,
   filterAndRankCardsWithSpendingCategories,
-  getCardRecommendationsForForm,
 } from "@/lib/google-sheets"
+import { getCardRecommendationsForForm } from "@/lib/google-sheets"
 
 interface Recommendation {
   name: string
