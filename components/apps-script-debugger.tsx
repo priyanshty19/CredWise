@@ -9,7 +9,6 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Textarea } from "@/components/ui/textarea"
 import { CheckCircle2, AlertCircle, Loader2, Code, Send, Clock, ExternalLink, Copy, RefreshCw } from "lucide-react"
-import { testGoogleAppsScriptConnection } from "@/lib/google-apps-script-submission"
 
 export default function AppsScriptDebugger() {
   const [isLoading, setIsLoading] = useState(false)
@@ -17,45 +16,38 @@ export default function AppsScriptDebugger() {
     success: boolean
     error?: string
     responseTime?: number
+    response?: any
   } | null>(null)
   const [customUrl, setCustomUrl] = useState("")
   const [customPayload, setCustomPayload] = useState(`{
-  "monthlyIncome": "75000",
-  "spendingCategories": ["dining", "travel", "shopping"],
-  "monthlySpending": "30000",
+  "monthlyIncome": 75000,
+  "monthlySpending": 35000,
+  "creditScoreRange": "750-850",
   "currentCards": "2",
-  "creditScore": "780",
-  "preferredBanks": ["HDFC Bank", "ICICI Bank"],
-  "joiningFeePreference": "low_fee"
+  "spendingCategories": "dining, travel, shopping",
+  "preferredBanks": "HDFC Bank, ICICI Bank",
+  "joiningFeePreference": "low_fee",
+  "submissionType": "enhanced_form",
+  "userAgent": "Test User Agent"
 }`)
 
-  const runTest = async () => {
-    setIsLoading(true)
-    setTestResult(null)
-
-    try {
-      const result = await testGoogleAppsScriptConnection()
-      setTestResult(result)
-    } catch (error) {
-      setTestResult({
-        success: false,
-        error: error instanceof Error ? error.message : "Test failed",
-      })
-    } finally {
-      setIsLoading(false)
-    }
-  }
-
-  const testCustomEndpoint = async () => {
-    if (!customUrl) return
-
+  const testEnhancedFormSubmission = async () => {
     setIsLoading(true)
     setTestResult(null)
 
     const startTime = Date.now()
 
     try {
-      const response = await fetch(customUrl, {
+      const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || customUrl
+
+      if (!appsScriptUrl) {
+        throw new Error("Apps Script URL not configured")
+      }
+
+      console.log("🔗 Testing Apps Script URL:", appsScriptUrl)
+      console.log("📦 Test payload:", customPayload)
+
+      const response = await fetch(appsScriptUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
@@ -66,6 +58,9 @@ export default function AppsScriptDebugger() {
       const responseTime = Date.now() - startTime
       const responseText = await response.text()
 
+      console.log("📡 Response status:", response.status)
+      console.log("📄 Response text:", responseText)
+
       let responseData
       try {
         responseData = JSON.parse(responseText)
@@ -74,10 +69,10 @@ export default function AppsScriptDebugger() {
       }
 
       setTestResult({
-        success: response.ok,
+        success: response.ok && responseData.success !== false,
         error: response.ok ? undefined : `HTTP ${response.status}: ${response.statusText}`,
         responseTime,
-        ...responseData,
+        response: responseData,
       })
     } catch (error) {
       setTestResult({
@@ -102,7 +97,7 @@ export default function AppsScriptDebugger() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Code className="h-5 w-5" />
-            Google Apps Script Debugger
+            Enhanced Form Apps Script Debugger
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -131,30 +126,12 @@ export default function AppsScriptDebugger() {
             </div>
           </div>
 
-          {/* Quick Test */}
+          {/* Enhanced Form Test */}
           <div className="space-y-4">
-            <h4 className="font-medium text-gray-900">Quick Connection Test</h4>
-            <Button onClick={runTest} disabled={isLoading} className="w-full">
-              {isLoading ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Testing Connection...
-                </>
-              ) : (
-                <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Test Apps Script Connection
-                </>
-              )}
-            </Button>
-          </div>
-
-          {/* Custom Endpoint Test */}
-          <div className="space-y-4 border-t pt-6">
-            <h4 className="font-medium text-gray-900">Custom Endpoint Test</h4>
+            <h4 className="font-medium text-gray-900">Enhanced Form Structure Test</h4>
 
             <div className="space-y-2">
-              <Label htmlFor="custom-url">Apps Script URL</Label>
+              <Label htmlFor="custom-url">Apps Script URL (if different from env)</Label>
               <Input
                 id="custom-url"
                 value={customUrl}
@@ -164,31 +141,26 @@ export default function AppsScriptDebugger() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="custom-payload">Test Payload (JSON)</Label>
+              <Label htmlFor="custom-payload">Enhanced Form Test Payload (JSON)</Label>
               <Textarea
                 id="custom-payload"
                 value={customPayload}
                 onChange={(e) => setCustomPayload(e.target.value)}
-                rows={8}
+                rows={12}
                 className="font-mono text-sm"
               />
             </div>
 
-            <Button
-              onClick={testCustomEndpoint}
-              disabled={isLoading || !customUrl}
-              variant="outline"
-              className="w-full bg-transparent"
-            >
+            <Button onClick={testEnhancedFormSubmission} disabled={isLoading} className="w-full">
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Testing...
+                  Testing Enhanced Form Submission...
                 </>
               ) : (
                 <>
                   <Send className="h-4 w-4 mr-2" />
-                  Test Custom Endpoint
+                  Test Enhanced Form Apps Script
                 </>
               )}
             </Button>
@@ -205,7 +177,7 @@ export default function AppsScriptDebugger() {
               <AlertDescription>
                 <div className="space-y-2">
                   <div className={`font-medium ${testResult.success ? "text-green-800" : "text-red-800"}`}>
-                    {testResult.success ? "✅ Connection Successful!" : "❌ Connection Failed"}
+                    {testResult.success ? "✅ Enhanced Form Test Successful!" : "❌ Enhanced Form Test Failed"}
                   </div>
 
                   {testResult.responseTime && (
@@ -221,9 +193,19 @@ export default function AppsScriptDebugger() {
                     </div>
                   )}
 
+                  {testResult.response && (
+                    <div className="text-sm">
+                      <strong>Response:</strong>
+                      <pre className="mt-1 p-2 bg-white rounded border text-xs overflow-auto">
+                        {JSON.stringify(testResult.response, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+
                   {testResult.success && (
                     <div className="text-green-700 text-sm">
-                      Your Apps Script is properly configured and responding to requests.
+                      Your Apps Script is properly handling the enhanced form structure. Check your Google Sheet for the
+                      new data!
                     </div>
                   )}
                 </div>
@@ -231,25 +213,39 @@ export default function AppsScriptDebugger() {
             </Alert>
           )}
 
-          {/* Troubleshooting Guide */}
+          {/* Updated Field Mapping */}
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
-            <h4 className="font-medium text-blue-900 mb-2">Troubleshooting Guide</h4>
-            <div className="space-y-2 text-sm text-blue-800">
-              <div className="flex items-start gap-2">
-                <span className="font-medium">1.</span>
-                <span>Ensure your Apps Script is deployed as a web app with "Anyone" access</span>
+            <h4 className="font-medium text-blue-900 mb-2">Enhanced Form Field Mapping</h4>
+            <div className="space-y-1 text-sm text-blue-800">
+              <div>
+                <strong>A:</strong> Timestamp (auto-generated)
               </div>
-              <div className="flex items-start gap-2">
-                <span className="font-medium">2.</span>
-                <span>Check that the NEXT_PUBLIC_APPS_SCRIPT_URL environment variable is set</span>
+              <div>
+                <strong>B:</strong> Monthly Income (monthlyIncome)
               </div>
-              <div className="flex items-start gap-2">
-                <span className="font-medium">3.</span>
-                <span>Verify your Google Sheet has the correct "Form-Submissions" tab</span>
+              <div>
+                <strong>C:</strong> Monthly Credit Card Spending (monthlySpending)
               </div>
-              <div className="flex items-start gap-2">
-                <span className="font-medium">4.</span>
-                <span>Test the script directly in the Apps Script editor</span>
+              <div>
+                <strong>D:</strong> Credit Score Range (creditScoreRange)
+              </div>
+              <div>
+                <strong>E:</strong> Current Cards Count (currentCards)
+              </div>
+              <div>
+                <strong>F:</strong> Spending Categories (spendingCategories)
+              </div>
+              <div>
+                <strong>G:</strong> Preferred Banks (preferredBanks)
+              </div>
+              <div>
+                <strong>H:</strong> Joining Fee Preference (joiningFeePreference)
+              </div>
+              <div>
+                <strong>I:</strong> Submission Type (submissionType)
+              </div>
+              <div>
+                <strong>J:</strong> User Agent (userAgent)
               </div>
             </div>
           </div>
@@ -262,7 +258,17 @@ export default function AppsScriptDebugger() {
                 Apps Script Console
               </a>
             </Button>
-            <Button variant="outline" size="sm" onClick={runTest} disabled={isLoading}>
+            <Button variant="outline" size="sm" asChild>
+              <a
+                href="https://docs.google.com/spreadsheets/d/1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw/edit"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="h-3 w-3 mr-2" />
+                View Google Sheet
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" onClick={testEnhancedFormSubmission} disabled={isLoading}>
               <RefreshCw className={`h-3 w-3 mr-2 ${isLoading ? "animate-spin" : ""}`} />
               Retest
             </Button>
