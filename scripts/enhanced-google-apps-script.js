@@ -4,16 +4,16 @@
  * Updated for 18-column structure with comprehensive data capture
  */
 
+// Configuration
+const SHEET_ID = "1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw" // Your submission sheet ID
+const SHEET_NAME = "Sheet1" // Make sure this tab exists in your Google Sheet
+const MAX_RETRIES = 3
+const RETRY_DELAY = 1000 // 1 second
+
 // Declare variables
 const ContentService = google.script.content
 const SpreadsheetApp = google.script.spreadsheet
-const Utilities = google.script.util
-const google = {} // Declare the google variable to fix the undeclared variable error
-
-// Configuration
-const SHEET_NAME = "Form-Submissions" // Make sure this tab exists in your Google Sheet
-const MAX_RETRIES = 3
-const RETRY_DELAY = 1000 // 1 second
+const Utilities = google.script.utilities
 
 /**
  * Main function to handle POST requests
@@ -26,6 +26,10 @@ function doPost(e) {
     // Parse the request data
     let data
     try {
+      if (!e || !e.postData || !e.postData.contents) {
+        throw new Error("No POST data received")
+      }
+
       const contents = e.postData.contents
       console.log("📦 Raw request contents:", contents)
       data = JSON.parse(contents)
@@ -65,8 +69,8 @@ function processSubmission(data) {
   console.log("🔄 Processing submission:", data)
 
   try {
-    // Get the active spreadsheet
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+    // Get the target spreadsheet by ID
+    const spreadsheet = SpreadsheetApp.openById(SHEET_ID)
     console.log("📊 Got spreadsheet:", spreadsheet.getName())
 
     // Get or create the target sheet
@@ -113,6 +117,8 @@ function processSubmission(data) {
         message: "Data submitted successfully",
         row: writeResult.row,
         timestamp: rowData[0],
+        sheetName: SHEET_NAME,
+        sheetId: SHEET_ID,
       }
     } else {
       console.error("❌ Failed to write data:", writeResult.error)
@@ -289,7 +295,7 @@ function checkSheetStructure() {
   console.log("🔍 Checking sheet structure")
 
   try {
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+    const spreadsheet = SpreadsheetApp.openById(SHEET_ID)
     console.log("📊 Spreadsheet:", spreadsheet.getName())
 
     const sheet = spreadsheet.getSheetByName(SHEET_NAME)
@@ -321,6 +327,7 @@ function checkSheetStructure() {
       rows: lastRow,
       columns: lastCol,
       sheetName: SHEET_NAME,
+      sheetId: SHEET_ID,
     }
   } catch (error) {
     console.error("❌ Error checking sheet structure:", error)
@@ -338,7 +345,7 @@ function setupCompleteColumnStructure() {
   console.log("🔧 Setting up complete column structure")
 
   try {
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
+    const spreadsheet = SpreadsheetApp.openById(SHEET_ID)
     let sheet = spreadsheet.getSheetByName(SHEET_NAME)
 
     if (!sheet) {
@@ -357,47 +364,67 @@ function setupCompleteColumnStructure() {
 }
 
 /**
- * Migrate existing data to new structure (if needed)
+ * Test form submission with spending categories
  */
-function migrateExistingData() {
-  console.log("🔄 Starting data migration")
+function testFormSubmissionWithSpendingCategories() {
+  console.log("🧪 Testing form submission with spending categories")
 
-  try {
-    const spreadsheet = SpreadsheetApp.getActiveSpreadsheet()
-    const sheet = spreadsheet.getSheetByName(SHEET_NAME)
-
-    if (!sheet) {
-      console.log("❌ No sheet found to migrate")
-      return { success: false, error: "No sheet found" }
-    }
-
-    const lastRow = sheet.getLastRow()
-    const lastCol = sheet.getLastColumn()
-
-    console.log(`📊 Current sheet: ${lastRow} rows x ${lastCol} columns`)
-
-    // If we already have 18 columns, no migration needed
-    if (lastCol >= 18) {
-      console.log("✅ Sheet already has correct structure")
-      return { success: true, message: "No migration needed" }
-    }
-
-    // Add missing columns
-    const targetColumns = 18
-    const columnsToAdd = targetColumns - lastCol
-
-    if (columnsToAdd > 0) {
-      console.log(`📝 Adding ${columnsToAdd} columns`)
-      sheet.insertColumnsAfter(lastCol, columnsToAdd)
-    }
-
-    // Update headers
-    setupColumnHeaders(sheet)
-
-    console.log("✅ Data migration complete")
-    return { success: true, message: "Data migration complete" }
-  } catch (error) {
-    console.error("❌ Error during migration:", error)
-    return { success: false, error: error.toString() }
+  const testFormData = {
+    timestamp: new Date().toISOString(),
+    monthlyIncome: "80000",
+    monthlySpending: "35000",
+    creditScoreRange: "750-850",
+    currentCards: "2",
+    spendingCategories: "dining, travel, fuel, shopping",
+    preferredBanks: "SBI, HDFC Bank, American Express",
+    joiningFeePreference: "any_amount",
+    submissionType: "enhanced_form_with_spending_categories",
+    userAgent: "Test Form User Agent",
+    cardName: "",
+    bankName: "",
+    cardType: "",
+    joiningFee: "",
+    annualFee: "",
+    rewardRate: "",
+    sessionId: "",
+    notes: "Test form submission with spending categories",
   }
+
+  const result = processSubmission(testFormData)
+  console.log("🧪 Form submission test result:", result)
+
+  return result
+}
+
+/**
+ * Test card application click tracking
+ */
+function testCardApplicationClickTracking() {
+  console.log("🧪 Testing card application click tracking")
+
+  const testClickData = {
+    timestamp: new Date().toISOString(),
+    monthlyIncome: "",
+    monthlySpending: "",
+    creditScoreRange: "",
+    currentCards: "",
+    spendingCategories: "",
+    preferredBanks: "",
+    joiningFeePreference: "",
+    submissionType: "card_application_click",
+    userAgent: "Test Click User Agent",
+    cardName: "HDFC Millennia Credit Card",
+    bankName: "HDFC Bank",
+    cardType: "Cashback",
+    joiningFee: "1000",
+    annualFee: "1000",
+    rewardRate: "2.5%",
+    sessionId: "test_click_session_789",
+    notes: "Test card application click tracking",
+  }
+
+  const result = processSubmission(testClickData)
+  console.log("🧪 Click tracking test result:", result)
+
+  return result
 }

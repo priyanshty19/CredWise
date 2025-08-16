@@ -34,6 +34,7 @@ export async function submitEnhancedFormData(data: EnhancedFormSubmission): Prom
 
     if (!appsScriptUrl) {
       console.error("❌ Apps Script URL not configured")
+      console.error("Please add NEXT_PUBLIC_APPS_SCRIPT_URL to your environment variables")
       throw new Error("Apps Script URL not configured")
     }
 
@@ -42,15 +43,15 @@ export async function submitEnhancedFormData(data: EnhancedFormSubmission): Prom
     // Prepare the payload with the correct structure for the 18-column sheet
     const payload = {
       timestamp: data.timestamp,
-      monthlyIncome: data.monthlyIncome,
-      monthlySpending: data.monthlySpending,
+      monthlyIncome: data.monthlyIncome.toString(),
+      monthlySpending: data.monthlySpending.toString(),
       creditScoreRange: data.creditScoreRange,
       currentCards: data.currentCards,
       spendingCategories: data.spendingCategories.join(", "),
       preferredBanks: data.preferredBanks.join(", "),
       joiningFeePreference: data.joiningFeePreference,
-      submissionType: data.submissionType,
       userAgent: data.userAgent || "Unknown",
+      submissionType: data.submissionType,
       // Additional fields for card click data (will be empty for form submissions)
       cardName: "",
       bankName: "",
@@ -59,7 +60,7 @@ export async function submitEnhancedFormData(data: EnhancedFormSubmission): Prom
       annualFee: "",
       rewardRate: "",
       sessionId: "",
-      notes: "Enhanced form submission",
+      notes: "Enhanced form submission with spending categories",
     }
 
     console.log("📦 Payload being sent:", payload)
@@ -70,21 +71,67 @@ export async function submitEnhancedFormData(data: EnhancedFormSubmission): Prom
         "Content-Type": "application/json",
       },
       body: JSON.stringify(payload),
+      redirect: "follow", // Handle redirects automatically
     })
 
     console.log("📡 Response status:", response.status)
+    console.log("📡 Response URL:", response.url)
     console.log("📡 Response headers:", Object.fromEntries(response.headers.entries()))
 
     if (!response.ok) {
       const errorText = await response.text()
       console.error("❌ HTTP error response:", errorText)
+
+      // Check for common Apps Script issues
+      if (errorText.includes("Authorization required") || errorText.includes("permission")) {
+        throw new Error(
+          "Apps Script authorization issue. Please ensure:\n" +
+            "1. Your Apps Script is deployed as a web app\n" +
+            "2. Set 'Execute as' to 'Me'\n" +
+            "3. Set 'Who has access' to 'Anyone'\n" +
+            "4. Redeploy the script after making changes",
+        )
+      }
+
+      if (response.status === 302 || errorText.includes("Moved Temporarily")) {
+        throw new Error(
+          "Apps Script URL redirect detected. This usually means:\n" +
+            "1. Your deployment URL has changed\n" +
+            "2. The script needs to be redeployed\n" +
+            "3. Check your NEXT_PUBLIC_APPS_SCRIPT_URL environment variable",
+        )
+      }
+
       throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`)
     }
 
-    const result = await response.json()
-    console.log("✅ Apps Script response:", result)
+    const responseText = await response.text()
+    console.log("📄 Raw response text:", responseText)
 
-    return result.success === true
+    try {
+      const result = JSON.parse(responseText)
+      console.log("✅ Apps Script response:", result)
+
+      if (result.success) {
+        console.log("✅ Form data submitted successfully to Google Sheets")
+        console.log("📊 Data written to row:", result.row)
+        return true
+      } else {
+        console.error("❌ Apps Script returned success=false:", result.error)
+        return false
+      }
+    } catch (parseError) {
+      console.warn("⚠️ Response is not valid JSON:", parseError)
+      console.log("📄 Response text:", responseText)
+
+      // If we got a 200 status but non-JSON response, assume success
+      if (response.status === 200) {
+        console.log("✅ Assuming success based on 200 status code")
+        return true
+      }
+
+      return false
+    }
   } catch (error) {
     console.error("❌ Error submitting enhanced form data:", error)
     return false
@@ -113,8 +160,8 @@ export async function trackCardApplicationClick(data: CardApplicationClick): Pro
       spendingCategories: "", // Empty for click tracking
       preferredBanks: "", // Empty for click tracking
       joiningFeePreference: "", // Empty for click tracking
-      submissionType: data.submissionType,
       userAgent: data.userAgent || "Unknown",
+      submissionType: data.submissionType,
       // Card-specific data
       cardName: data.cardName,
       bankName: data.bankName,

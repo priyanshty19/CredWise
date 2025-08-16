@@ -11,6 +11,7 @@ interface CreditCard {
   signUpBonus: number
   features: string[]
   description: string
+  spendingCategories: string[] // NEW: Added spending categories
 }
 
 interface UserSubmission {
@@ -28,7 +29,7 @@ interface SheetData {
 
 // Google Sheets configuration - Updated for public access
 const SHEET_ID = "1rHR5xzCmZZAlIjahAcpXrxwgYMcItVPckTCiOCSZfSo"
-const CARDS_RANGE = "Card-Data!A:K" // Fetch all rows in columns A through K
+const CARDS_RANGE = "Card-Data!A:L" // Updated to include spending category column L
 const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
 
 export async function fetchCreditCards(): Promise<CreditCard[]> {
@@ -55,7 +56,7 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
     console.log("📋 Headers found:", headers)
     console.log("📊 Data rows to process:", rows.length)
 
-    // Validate expected headers
+    // Updated expected headers to include spending category
     const expectedHeaders = [
       "Card Name",
       "Bank",
@@ -68,6 +69,7 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
       "Sign Up Bonus",
       "Features",
       "Description",
+      "Spending Category", // NEW: Added spending category column
     ]
 
     console.log("🔍 Header validation:")
@@ -83,13 +85,27 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
     let skippedRows = 0
     let processedRows = 0
 
-    // First, let's analyze all card types in the sheet
-    console.log("\n🔍 ANALYZING ALL CARD TYPES IN SHEET:")
+    // First, let's analyze all card types and spending categories in the sheet
+    console.log("\n🔍 ANALYZING ALL CARD TYPES AND SPENDING CATEGORIES IN SHEET:")
     const allCardTypes = new Set<string>()
+    const allSpendingCategories = new Set<string>()
+
     rows.forEach((row, index) => {
       if (row && row.length > 2 && row[2]) {
         const cardType = row[2].toString().trim()
         allCardTypes.add(cardType)
+      }
+
+      // Parse spending categories from column L (index 11)
+      if (row && row.length > 11 && row[11]) {
+        const spendingCategoriesStr = row[11].toString().trim()
+        if (spendingCategoriesStr && spendingCategoriesStr !== "NA") {
+          const categories = spendingCategoriesStr
+            .split(",")
+            .map((cat) => cat.trim().toLowerCase())
+            .filter(Boolean)
+          categories.forEach((cat) => allSpendingCategories.add(cat))
+        }
       }
     })
 
@@ -98,6 +114,13 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
       .sort()
       .forEach((type) => {
         console.log(`   • "${type}"`)
+      })
+
+    console.log("📊 Unique spending categories found in sheet:")
+    Array.from(allSpendingCategories)
+      .sort()
+      .forEach((category) => {
+        console.log(`   • "${category}"`)
       })
 
     for (let index = 0; index < rows.length; index++) {
@@ -147,9 +170,19 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
                 .map((f: string) => f.trim())
                 .filter(Boolean)
 
+        // NEW: Parse spending categories from comma-separated string in column L
+        const spendingCategoriesString = getString(row[11])
+        const spendingCategories =
+          !spendingCategoriesString || spendingCategoriesString === "NA"
+            ? []
+            : spendingCategoriesString
+                .split(",")
+                .map((cat: string) => cat.trim().toLowerCase())
+                .filter(Boolean)
+
         const rawCardType = getString(row[2])
         console.log(
-          `\n🔍 Processing row ${index + 2}: Card "${getString(row[0])}" with raw card type: "${rawCardType}"`,
+          `\n🔍 Processing row ${index + 2}: Card "${getString(row[0])}" with raw card type: "${rawCardType}" and spending categories: [${spendingCategories.join(", ")}]`,
         )
 
         const card = {
@@ -165,6 +198,7 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
           signUpBonus: parseNumeric(row[8]),
           features,
           description: getString(row[10]),
+          spendingCategories, // NEW: Added spending categories
         }
 
         // Validate required fields
@@ -223,11 +257,12 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
       console.log(`   • ${type}: ${count} cards`)
     })
 
-    // Log sample of successfully parsed cards
+    // Log sample of successfully parsed cards with spending categories
     if (cards.length > 0) {
-      console.log("📋 Sample parsed cards:")
+      console.log("📋 Sample parsed cards with spending categories:")
       cards.slice(0, 3).forEach((card, index) => {
         console.log(`   ${index + 1}. ${card.cardName} (${card.bank}) - ${card.cardType}`)
+        console.log(`      Spending Categories: [${card.spendingCategories.join(", ")}]`)
       })
     }
 
@@ -245,6 +280,28 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
     }
 
     throw error
+  }
+}
+
+// NEW: Function to get all unique spending categories from the sheet
+export async function fetchAvailableSpendingCategories(): Promise<string[]> {
+  try {
+    const cards = await fetchCreditCards()
+    const allCategories = new Set<string>()
+
+    cards.forEach((card) => {
+      card.spendingCategories.forEach((category) => {
+        allCategories.add(category)
+      })
+    })
+
+    const sortedCategories = Array.from(allCategories).sort()
+    console.log("📊 Available spending categories from sheet:", sortedCategories)
+
+    return sortedCategories
+  } catch (error) {
+    console.error("❌ Error fetching spending categories:", error)
+    return []
   }
 }
 
@@ -422,6 +479,121 @@ export async function submitToGoogleSheets(data: any): Promise<boolean> {
     console.error("Error submitting to Google Sheets:", error)
     return false
   }
+}
+
+// NEW: Enhanced filtering function that considers spending categories
+export function filterAndRankCardsWithSpendingCategories(
+  cards: CreditCard[],
+  userProfile: {
+    creditScore: number
+    monthlyIncome: number
+    cardType: string
+    spendingCategories?: string[] // NEW: User's spending categories
+  },
+  topN = 3,
+): CreditCard[] {
+  const { creditScore, monthlyIncome, cardType, spendingCategories = [] } = userProfile
+
+  console.log("🔍 SPENDING CATEGORY ENHANCED FILTERING ANALYSIS")
+  console.log("=".repeat(70))
+  console.log("👤 User Profile:", userProfile)
+  console.log("📊 Total available cards:", cards.length)
+  console.log("🛍️ User spending categories:", spendingCategories)
+
+  // Step 1: Basic eligibility filtering (same as before)
+  const basicEligibleCards = cards.filter((card) => {
+    const meetsCredit = card.creditScoreRequirement === 0 || creditScore >= card.creditScoreRequirement
+    const meetsIncome = card.monthlyIncomeRequirement === 0 || monthlyIncome >= card.monthlyIncomeRequirement
+    const matchesType = card.cardType === cardType
+    return meetsCredit && meetsIncome && matchesType
+  })
+
+  console.log(`🎯 Basic eligible cards: ${basicEligibleCards.length}`)
+
+  // Step 2: Calculate composite scores with spending category bonus
+  console.log("\n📊 CALCULATING SCORES WITH SPENDING CATEGORY BONUS:")
+  const scoredCards = basicEligibleCards.map((card) => {
+    let score = 0
+
+    // Get max values for normalization
+    const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
+    const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
+    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
+    const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
+
+    // Base scoring (80% of total score)
+    const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 20 : 20
+    const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 20 : 20
+    const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 20 : 0
+    const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 20 : 0
+
+    score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
+
+    // NEW: Spending category bonus (20% of total score)
+    let categoryBonus = 0
+    if (spendingCategories.length > 0 && card.spendingCategories.length > 0) {
+      const userCategoriesLower = spendingCategories.map((cat) => cat.toLowerCase())
+      const matchingCategories = card.spendingCategories.filter((cardCat) =>
+        userCategoriesLower.includes(cardCat.toLowerCase()),
+      )
+
+      // Calculate bonus based on percentage of matching categories
+      const matchPercentage = matchingCategories.length / Math.max(userCategoriesLower.length, 1)
+      categoryBonus = matchPercentage * 20 // Up to 20 points for perfect match
+
+      console.log(`🛍️ ${card.cardName} category analysis:`)
+      console.log(`   Card categories: [${card.spendingCategories.join(", ")}]`)
+      console.log(`   User categories: [${userCategoriesLower.join(", ")}]`)
+      console.log(`   Matching: [${matchingCategories.join(", ")}]`)
+      console.log(`   Match percentage: ${(matchPercentage * 100).toFixed(1)}%`)
+      console.log(`   Category bonus: ${categoryBonus.toFixed(1)}/20`)
+    }
+
+    score += categoryBonus
+    const compositeScore = Math.round(score * 100) / 100
+
+    console.log(`📊 ${card.cardName}:`)
+    console.log(`   💳 Joining Fee: ₹${card.joiningFee} → Score: ${joiningFeeScore.toFixed(1)}/20`)
+    console.log(`   📅 Annual Fee: ₹${card.annualFee} → Score: ${annualFeeScore.toFixed(1)}/20`)
+    console.log(`   🎁 Rewards Rate: ${card.rewardsRate}% → Score: ${rewardsScore.toFixed(1)}/20`)
+    console.log(`   🎉 Sign-up Bonus: ₹${card.signUpBonus} → Score: ${bonusScore.toFixed(1)}/20`)
+    console.log(`   🛍️ Category Match: → Score: ${categoryBonus.toFixed(1)}/20`)
+    console.log(`   🎯 COMPOSITE SCORE: ${compositeScore}/100`)
+
+    return {
+      ...card,
+      compositeScore,
+      categoryBonus,
+    }
+  })
+
+  // Step 3: Filter by composite score ≥25.0
+  const scoreEligibleCards = scoredCards.filter((card) => {
+    const meetsScoreThreshold = card.compositeScore >= 25.0
+    console.log(
+      `${meetsScoreThreshold ? "✅" : "❌"} ${card.cardName}: Score ${card.compositeScore}/100 ${meetsScoreThreshold ? "≥" : "<"} 25.0`,
+    )
+    return meetsScoreThreshold
+  })
+
+  console.log(`🎯 Score-eligible cards (≥25.0): ${scoreEligibleCards.length}`)
+
+  if (scoreEligibleCards.length === 0) {
+    console.log("⚠️ No cards meet the composite score threshold of ≥25.0")
+    return []
+  }
+
+  // Step 4: Sort by composite score (highest first) and return top N
+  const sortedCards = scoreEligibleCards.sort((a, b) => b.compositeScore - a.compositeScore).slice(0, topN)
+
+  console.log(`\n🏆 TOP ${topN} SPENDING CATEGORY ENHANCED RECOMMENDATIONS:`)
+  sortedCards.forEach((card, index) => {
+    console.log(
+      `${index + 1}. ${card.cardName}: ${card.compositeScore}/100 (Category Bonus: ${card.categoryBonus?.toFixed(1) || 0}/20)`,
+    )
+  })
+
+  return sortedCards
 }
 
 export function filterAndRankCards(

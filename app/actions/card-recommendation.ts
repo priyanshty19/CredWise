@@ -1,6 +1,12 @@
 "use server"
 
-import { fetchCreditCards, filterAndRankCards, filterAndRankCardsByRewards } from "@/lib/google-sheets"
+import {
+  fetchCreditCards,
+  filterAndRankCards,
+  filterAndRankCardsByRewards,
+  filterAndRankCardsWithSpendingCategories,
+} from "@/lib/google-sheets"
+import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
 
 interface CardSubmission {
   creditScore: number
@@ -269,7 +275,7 @@ export async function getEnhancedCardRecommendations(
   }
 }
 
-// New function for the enhanced recommendations component
+// NEW: Enhanced function for the form with spending categories
 export async function getCardRecommendationsForForm(formData: {
   monthlyIncome: string
   spendingCategories: string[]
@@ -280,6 +286,8 @@ export async function getCardRecommendationsForForm(formData: {
   joiningFeePreference: string
 }) {
   try {
+    console.log("🔄 Processing form data with spending categories:", formData)
+
     // Convert form data to the format expected by our existing functions
     const creditScore = Number.parseInt(formData.creditScore) || 650
     const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 50000
@@ -292,51 +300,90 @@ export async function getCardRecommendationsForForm(formData: {
       cardType = "Rewards"
     }
 
-    const cardSubmission: CardSubmission = {
-      creditScore,
-      monthlyIncome,
-      cardType,
-      timestamp: new Date().toISOString(),
-      topN: 7, // Get top 7 recommendations
-    }
+    console.log(
+      `🎯 Determined card type: ${cardType} based on spending categories: [${formData.spendingCategories.join(", ")}]`,
+    )
 
-    const result = await getCardRecommendations(cardSubmission)
+    // Fetch all cards to use the new spending category enhanced filtering
+    const allCards = await fetchCreditCards()
 
-    if (!result.success) {
+    if (allCards.length === 0) {
       return {
         success: false,
-        error: result.error,
+        error: "No credit card data available. Please try again later.",
         recommendations: [],
         totalCards: 0,
         userProfile: null,
       }
     }
 
+    // Use the new spending category enhanced filtering
+    const recommendations = filterAndRankCardsWithSpendingCategories(
+      allCards,
+      {
+        creditScore,
+        monthlyIncome,
+        cardType,
+        spendingCategories: formData.spendingCategories, // Pass user's spending categories
+      },
+      7, // Get top 7 recommendations
+    )
+
+    console.log(`✅ Generated ${recommendations.length} recommendations with spending category matching`)
+
+    // Log the enhanced form submission to Google Sheets
+    try {
+      const submissionData = {
+        timestamp: new Date().toISOString(),
+        monthlyIncome,
+        monthlySpending: Number.parseInt(formData.monthlySpending) || 25000,
+        creditScoreRange: formData.creditScore,
+        currentCards: formData.currentCards,
+        spendingCategories: formData.spendingCategories,
+        preferredBanks: formData.preferredBanks,
+        joiningFeePreference: formData.joiningFeePreference,
+        submissionType: "enhanced_form_with_spending_categories",
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Server",
+      }
+
+      console.log("📝 Submitting enhanced form data to Google Sheets:", submissionData)
+      const submissionSuccess = await submitEnhancedFormData(submissionData)
+
+      if (submissionSuccess) {
+        console.log("✅ Enhanced form data submitted successfully to Google Sheets")
+      } else {
+        console.warn("⚠️ Failed to submit enhanced form data to Google Sheets")
+      }
+    } catch (submissionError) {
+      console.error("❌ Error submitting enhanced form data:", submissionError)
+      // Don't fail the recommendation request if logging fails
+    }
+
     // Transform the recommendations to match the expected format
-    const transformedRecommendations =
-      result.recommendations?.map((card) => ({
-        name: card.cardName,
-        bank: card.bank,
-        type: cardType.toLowerCase(),
-        annualFee: card.annualFee,
-        joiningFee: card.joiningFee,
-        rewardRate: `${card.rewardsRate}% rewards`,
-        welcomeBonus: card.signUpBonus > 0 ? `₹${card.signUpBonus.toLocaleString()} welcome bonus` : "",
-        keyFeatures: card.features || [
-          "Reward points on purchases",
-          "Online transaction benefits",
-          "Fuel surcharge waiver",
-          "Welcome bonus offer",
-        ],
-        bestFor: formData.spendingCategories.slice(0, 3),
-        score: Math.round(card.compositeScore),
-        reasoning: card.reason,
-      })) || []
+    const transformedRecommendations = recommendations.map((card) => ({
+      name: card.cardName,
+      bank: card.bank,
+      type: cardType.toLowerCase(),
+      annualFee: card.annualFee,
+      joiningFee: card.joiningFee,
+      rewardRate: `${card.rewardsRate}% rewards`,
+      welcomeBonus: card.signUpBonus > 0 ? `₹${card.signUpBonus.toLocaleString()} welcome bonus` : "",
+      keyFeatures: card.features || [
+        "Reward points on purchases",
+        "Online transaction benefits",
+        "Fuel surcharge waiver",
+        "Welcome bonus offer",
+      ],
+      bestFor: formData.spendingCategories.slice(0, 3),
+      score: Math.round(card.compositeScore),
+      reasoning: `Score: ${card.compositeScore}/100. ${card.spendingCategories.length > 0 ? `Matches your spending in: ${card.spendingCategories.join(", ")}` : "Selected based on optimal balance of fees and rewards."}`,
+      spendingCategories: card.spendingCategories, // Include card's spending categories
+    }))
 
     return {
       success: true,
       recommendations: transformedRecommendations,
-      totalCards: result.totalCardsConsidered || 0,
+      totalCards: allCards.length,
       userProfile: {
         monthlyIncome,
         monthlySpending: Number.parseInt(formData.monthlySpending) || 25000,

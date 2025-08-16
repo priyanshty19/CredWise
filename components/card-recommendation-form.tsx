@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -21,17 +21,20 @@ import {
   CheckCircle2,
 } from "lucide-react"
 import EnhancedRecommendations from "./enhanced-recommendations"
+import { fetchAvailableSpendingCategories } from "@/lib/google-sheets"
 
-const spendingCategories = [
-  { id: "dining", label: "Dining & Restaurants", icon: Utensils },
-  { id: "fuel", label: "Fuel & Gas", icon: Fuel },
-  { id: "groceries", label: "Groceries", icon: ShoppingBag },
-  { id: "travel", label: "Travel & Hotels", icon: Plane },
-  { id: "shopping", label: "Online Shopping", icon: ShoppingBag },
-  { id: "entertainment", label: "Entertainment", icon: Smartphone },
-  { id: "utilities", label: "Utilities & Bills", icon: Zap },
-  { id: "transport", label: "Transport", icon: Car },
-]
+// Icon mapping for spending categories
+const categoryIcons: { [key: string]: any } = {
+  dining: Utensils,
+  fuel: Fuel,
+  groceries: ShoppingBag,
+  travel: Plane,
+  shopping: ShoppingBag,
+  entertainment: Smartphone,
+  utilities: Zap,
+  transport: Car,
+  // Add more mappings as needed
+}
 
 const banks = [
   "HDFC Bank",
@@ -48,6 +51,8 @@ const banks = [
 
 export default function CardRecommendationForm() {
   const [currentStep, setCurrentStep] = useState(1)
+  const [availableSpendingCategories, setAvailableSpendingCategories] = useState<string[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
   const [formData, setFormData] = useState({
     monthlyIncome: "",
     spendingCategories: [] as string[],
@@ -58,6 +63,46 @@ export default function CardRecommendationForm() {
     joiningFeePreference: "",
   })
   const [showRecommendations, setShowRecommendations] = useState(false)
+
+  // Fetch available spending categories from Google Sheets on component mount
+  useEffect(() => {
+    const loadSpendingCategories = async () => {
+      try {
+        console.log("🔄 Loading spending categories from Google Sheets...")
+        setLoadingCategories(true)
+        const categories = await fetchAvailableSpendingCategories()
+        console.log("✅ Loaded spending categories:", categories)
+        setAvailableSpendingCategories(categories)
+      } catch (error) {
+        console.error("❌ Error loading spending categories:", error)
+        // Fallback to default categories if loading fails
+        setAvailableSpendingCategories([
+          "dining",
+          "fuel",
+          "groceries",
+          "travel",
+          "shopping",
+          "entertainment",
+          "utilities",
+          "transport",
+        ])
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+
+    loadSpendingCategories()
+  }, [])
+
+  // Create spending category objects with icons and labels
+  const spendingCategories = availableSpendingCategories.map((category) => {
+    const normalizedCategory = category.toLowerCase()
+    return {
+      id: normalizedCategory,
+      label: category.charAt(0).toUpperCase() + category.slice(1), // Capitalize first letter
+      icon: categoryIcons[normalizedCategory] || ShoppingBag, // Default icon if not found
+    }
+  })
 
   const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
@@ -218,29 +263,34 @@ export default function CardRecommendationForm() {
                 <p className="text-sm text-gray-600 mt-1">
                   This helps us recommend cards with the best rewards for your spending patterns.
                 </p>
+                {loadingCategories && (
+                  <p className="text-sm text-blue-600 mt-2">Loading spending categories from your data...</p>
+                )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {spendingCategories.map((category) => {
-                  const IconComponent = category.icon
-                  const isSelected = formData.spendingCategories.includes(category.id)
-                  return (
-                    <div
-                      key={category.id}
-                      className={`flex items-center space-x-3 p-4 rounded-lg border cursor-pointer transition-colors ${
-                        isSelected
-                          ? "border-blue-500 bg-blue-50"
-                          : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                      }`}
-                      onClick={() => handleCategoryToggle(category.id)}
-                    >
-                      <Checkbox checked={isSelected} onChange={() => handleCategoryToggle(category.id)} />
-                      <IconComponent className="h-5 w-5 text-gray-600" />
-                      <span className="font-medium">{category.label}</span>
-                    </div>
-                  )
-                })}
-              </div>
+              {!loadingCategories && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {spendingCategories.map((category) => {
+                    const IconComponent = category.icon
+                    const isSelected = formData.spendingCategories.includes(category.id)
+                    return (
+                      <div
+                        key={category.id}
+                        className={`flex items-center space-x-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        }`}
+                        onClick={() => handleCategoryToggle(category.id)}
+                      >
+                        <Checkbox checked={isSelected} onChange={() => handleCategoryToggle(category.id)} />
+                        <IconComponent className="h-5 w-5 text-gray-600" />
+                        <span className="font-medium">{category.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
 
               {formData.spendingCategories.length > 0 && (
                 <div className="mt-4">
@@ -250,7 +300,7 @@ export default function CardRecommendationForm() {
                       const category = spendingCategories.find((cat) => cat.id === categoryId)
                       return (
                         <Badge key={categoryId} variant="secondary">
-                          {category?.label}
+                          {category?.label || categoryId}
                         </Badge>
                       )
                     })}
