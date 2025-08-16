@@ -1,18 +1,4 @@
-export interface CreditCardData {
-  id: string
-  cardName: string
-  bank: string
-  cardType: string
-  joiningFee: number
-  annualFee: number
-  creditScoreRequirement: number
-  monthlyIncomeRequirement: number
-  rewardsRate: number
-  signUpBonus: number
-  features: string[]
-  description: string
-  spendingCategories: string[]
-}
+import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
 
 interface CreditCard {
   id: string
@@ -96,174 +82,276 @@ async function logUserSubmission(data: {
   }
 }
 
-// Fetch all credit cards from Google Sheets
-export async function fetchCreditCards(): Promise<CreditCardData[]> {
+export async function fetchCreditCards(): Promise<CreditCard[]> {
   try {
-    const response = await fetch(
-      `https://sheets.googleapis.com/v4/spreadsheets/${process.env.NEXT_PUBLIC_GOOGLE_SHEETS_ID}/values/CreditCards!A:M?key=${process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY}`,
-    )
-
-    if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+    // Validate API key
+    if (!API_KEY) {
+      throw new Error(
+        "Google Sheets API key is not configured. Please add NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY to your environment variables.",
+      )
     }
 
-    const data = await response.json()
-    const rows = data.values || []
+    const sheetData = await fetchGoogleSheetData(SHEET_ID, CARDS_RANGE)
 
-    if (rows.length <= 1) {
-      console.warn("No credit card data found in Google Sheets")
-      return []
+    if (!sheetData || !sheetData.values || sheetData.values.length === 0) {
+      throw new Error(
+        "No data found in Google Sheet. Please ensure:\n" +
+          "1. The 'Card-Data' tab contains data\n" +
+          "2. Data starts from row 1 (headers)\n" +
+          "3. Sheet is not empty",
+      )
     }
 
-    // Skip header row and process data
-    const cards: CreditCardData[] = rows
-      .slice(1)
-      .map((row: string[], index: number) => {
-        try {
-          return {
-            id: row[0] || `card-${index}`,
-            cardName: row[1] || "Unknown Card",
-            bank: row[2] || "Unknown Bank",
-            cardType: row[3] || "Unknown Type",
-            joiningFee: Number.parseFloat(row[4]) || 0,
-            annualFee: Number.parseFloat(row[5]) || 0,
-            creditScoreRequirement: Number.parseInt(row[6]) || 650,
-            monthlyIncomeRequirement: Number.parseInt(row[7]) || 25000,
-            rewardsRate: Number.parseFloat(row[8]) || 1.0,
-            signUpBonus: Number.parseInt(row[9]) || 0,
-            features: row[10] ? row[10].split(",").map((f) => f.trim()) : [],
-            description: row[11] || "No description available",
-            spendingCategories: row[12] ? row[12].split(",").map((c) => c.trim()) : [],
-          }
-        } catch (error) {
-          console.error(`Error parsing card data for row ${index}:`, error)
-          return null
+    const [headers, ...rows] = sheetData.values
+    console.log("📋 Headers found:", headers)
+    console.log("📊 Data rows to process:", rows.length)
+
+    // Updated expected headers to include spending category
+    const expectedHeaders = [
+      "Card Name",
+      "Bank",
+      "Card Type",
+      "Joining Fee",
+      "Annual Fee",
+      "Credit Score Requirement",
+      "Income Requirement",
+      "Rewards Rate",
+      "Sign Up Bonus",
+      "Features",
+      "Description",
+      "Spending Category", // NEW: Added spending category column
+    ]
+
+    console.log("🔍 Header validation:")
+    expectedHeaders.forEach((expected, index) => {
+      const actual = headers[index]
+      const match = actual === expected
+      console.log(
+        `   Column ${String.fromCharCode(65 + index)}: ${match ? "✅" : "⚠️"} Expected: "${expected}", Found: "${actual}"`,
+      )
+    })
+
+    const cards: CreditCard[] = []
+    let skippedRows = 0
+    let processedRows = 0
+
+    // First, let's analyze all card types and spending categories in the sheet
+    console.log("\n🔍 ANALYZING ALL CARD TYPES AND SPENDING CATEGORIES IN SHEET:")
+    const allCardTypes = new Set<string>()
+    const allSpendingCategories = new Set<string>()
+
+    rows.forEach((row, index) => {
+      if (row && row.length > 2 && row[2]) {
+        const cardType = row[2].toString().trim()
+        allCardTypes.add(cardType)
+      }
+
+      // Parse spending categories from column L (index 11)
+      if (row && row.length > 11 && row[11]) {
+        const spendingCategoriesStr = row[11].toString().trim()
+        if (spendingCategoriesStr && spendingCategoriesStr !== "NA") {
+          const categories = spendingCategoriesStr
+            .split(",")
+            .map((cat) => cat.trim().toLowerCase())
+            .filter(Boolean)
+          categories.forEach((cat) => allSpendingCategories.add(cat))
         }
-      })
-      .filter(Boolean) as CreditCardData[]
-
-    console.log(`✅ Successfully fetched ${cards.length} credit cards from Google Sheets`)
-    return cards
-  } catch (error) {
-    console.error("Error fetching credit cards from Google Sheets:", error)
-    // Return empty array instead of throwing to prevent app crash
-    return []
-  }
-}
-
-// Enhanced scoring algorithm
-export function calculateRefinedScore(
-  card: CreditCardData,
-  userCategories: string[],
-  preferredBanks: string[],
-  maxValues: { rewards: number; signup: number; joining: number; annual: number },
-) {
-  // 1. Rewards Rate Score (0-30 points)
-  const rewardsScore = (card.rewardsRate / maxValues.rewards) * 30
-
-  // 2. Category Match Score (0-30 points)
-  const matchingCategories = card.spendingCategories.filter((tag) => userCategories.includes(tag))
-  const categoryScore = userCategories.length > 0 ? (matchingCategories.length / userCategories.length) * 30 : 0
-
-  // 3. Sign-up Bonus Score (0-20 points)
-  const signupScore = (card.signUpBonus / maxValues.signup) * 20
-
-  // 4. Joining Fee Score (0-10 points) - Lower fee = higher score
-  const joiningScore = ((maxValues.joining - card.joiningFee) / maxValues.joining) * 10
-
-  // 5. Annual Fee Score (0-10 points) - Lower fee = higher score
-  const annualScore = ((maxValues.annual - card.annualFee) / maxValues.annual) * 10
-
-  // 6. Bank Preference Bonus (0-5 points)
-  const bankScore = preferredBanks.some((bank) => card.bank.toLowerCase().includes(bank.toLowerCase())) ? 5 : 0
-
-  const totalScore = rewardsScore + categoryScore + signupScore + joiningScore + annualScore + bankScore
-
-  return {
-    total: totalScore,
-    breakdown: {
-      rewards: rewardsScore,
-      category: categoryScore,
-      signup: signupScore,
-      joining: joiningScore,
-      annual: annualScore,
-      bank: bankScore,
-    },
-    categoryMatches: matchingCategories,
-  }
-}
-
-// Check card eligibility
-export function checkEligibility(card: CreditCardData, formData: any) {
-  const reasons: string[] = []
-  let eligible = true
-
-  // Credit score check
-  const creditScore = getCreditScoreValue(formData.creditScoreRange)
-  if (creditScore < card.creditScoreRequirement) {
-    eligible = false
-    reasons.push(`Credit score too low (need ${card.creditScoreRequirement}+)`)
-  }
-
-  // Income check
-  const income = Number.parseInt(formData.monthlyIncome)
-  if (income < card.monthlyIncomeRequirement) {
-    eligible = false
-    reasons.push(`Income too low (need ₹${card.monthlyIncomeRequirement}+)`)
-  }
-
-  return { eligible, reasons }
-}
-
-// Get personalized card recommendations
-export async function getCardRecommendationsForForm(formData: any) {
-  try {
-    // Fetch all cards
-    const allCards = await fetchCreditCards()
-
-    if (allCards.length === 0) {
-      throw new Error("No cards available in database")
-    }
-
-    // Calculate max values for normalization
-    const maxValues = {
-      rewards: Math.max(...allCards.map((c) => c.rewardsRate)),
-      signup: Math.max(...allCards.map((c) => c.signUpBonus)),
-      joining: Math.max(...allCards.map((c) => c.joiningFee)),
-      annual: Math.max(...allCards.map((c) => c.annualFee)),
-    }
-
-    // Score and filter all cards
-    const scoredCards = allCards.map((card) => {
-      const eligibility = checkEligibility(card, formData)
-      const scoring = calculateRefinedScore(card, formData.spendingCategories, formData.preferredBanks, maxValues)
-
-      return {
-        card,
-        score: scoring.total,
-        scoreBreakdown: scoring.breakdown,
-        eligible: eligibility.eligible,
-        eligibilityReasons: eligibility.reasons,
-        categoryMatches: scoring.categoryMatches,
       }
     })
 
-    // Filter eligible cards with score >= 25.0
-    const eligibleCards = scoredCards.filter((card) => card.eligible && card.score >= 25.0)
+    console.log("📊 Unique card types found in sheet:")
+    Array.from(allCardTypes)
+      .sort()
+      .forEach((type) => {
+        console.log(`   • "${type}"`)
+      })
 
-    // Sort by score (highest first) and take top 7
-    const topRecommendations = eligibleCards.sort((a, b) => b.score - a.score).slice(0, 7)
+    console.log("📊 Unique spending categories found in sheet:")
+    Array.from(allSpendingCategories)
+      .sort()
+      .forEach((category) => {
+        console.log(`   • "${category}"`)
+      })
 
-    console.log(`✅ Generated ${topRecommendations.length} recommendations from ${allCards.length} total cards`)
+    for (let index = 0; index < rows.length; index++) {
+      const row = rows[index]
 
-    return {
-      recommendations: topRecommendations,
-      totalCards: allCards.length,
-      eligibleCards: eligibleCards.length,
+      try {
+        // Skip completely empty rows
+        if (!row || row.every((cell) => !cell || cell === "")) {
+          skippedRows++
+          continue
+        }
+
+        // Ensure we have at least the basic required columns
+        if (row.length < 3) {
+          console.warn(`⚠️ Row ${index + 2} has insufficient columns:`, row)
+          skippedRows++
+          continue
+        }
+
+        // Helper function to parse numeric values, handling "NA" and empty cells
+        const parseNumeric = (value: any, defaultValue = 0): number => {
+          if (!value || value === "NA" || value === "" || value === null || value === undefined) return defaultValue
+          const parsed = Number.parseFloat(value.toString().replace(/,/g, "")) // Remove commas
+          return isNaN(parsed) ? defaultValue : parsed
+        }
+
+        // Helper function to parse integer values
+        const parseInt = (value: any, defaultValue = 0): number => {
+          if (!value || value === "NA" || value === "" || value === null || value === undefined) return defaultValue
+          const parsed = Number.parseInt(value.toString().replace(/,/g, "")) // Remove commas
+          return isNaN(parsed) ? defaultValue : parsed
+        }
+
+        // Helper function to safely get string value
+        const getString = (value: any, defaultValue = ""): string => {
+          if (!value || value === "NA" || value === null || value === undefined) return defaultValue
+          return value.toString().trim()
+        }
+
+        // Parse features from comma-separated string, handling "NA"
+        const featuresString = getString(row[9])
+        const features =
+          !featuresString || featuresString === "NA"
+            ? []
+            : featuresString
+                .split(",")
+                .map((f: string) => f.trim())
+                .filter(Boolean)
+
+        // NEW: Parse spending categories from comma-separated string in column L
+        const spendingCategoriesString = getString(row[11])
+        const spendingCategories =
+          !spendingCategoriesString || spendingCategoriesString === "NA"
+            ? []
+            : spendingCategoriesString
+                .split(",")
+                .map((cat: string) => cat.trim().toLowerCase())
+                .filter(Boolean)
+
+        const rawCardType = getString(row[2])
+        console.log(
+          `\n🔍 Processing row ${index + 2}: Card "${getString(row[0])}" with raw card type: "${rawCardType}" and spending categories: [${spendingCategories.join(", ")}]`,
+        )
+
+        const card = {
+          id: `card_${processedRows + 1}`,
+          cardName: getString(row[0]),
+          bank: getString(row[1]),
+          cardType: rawCardType, // Keep raw for now, will normalize below
+          joiningFee: parseNumeric(row[3]),
+          annualFee: parseNumeric(row[4]),
+          creditScoreRequirement: parseInt(row[5]),
+          monthlyIncomeRequirement: parseNumeric(row[6]),
+          rewardsRate: parseNumeric(row[7]),
+          signUpBonus: parseNumeric(row[8]),
+          features,
+          description: getString(row[10]),
+          spendingCategories, // NEW: Added spending categories
+        }
+
+        // Validate required fields
+        if (!card.cardName || !card.bank || !card.cardType) {
+          console.warn(`⚠️ Row ${index + 2} missing required fields:`, {
+            name: card.cardName,
+            bank: card.bank,
+            type: card.cardType,
+          })
+          skippedRows++
+          continue
+        }
+
+        // Normalize card type to match dropdown options
+        const normalizedCardType = normalizeCardType(card.cardType)
+        if (!normalizedCardType) {
+          console.warn(`⚠️ Row ${index + 2} has unsupported card type: "${card.cardType}" - SKIPPING`)
+          skippedRows++
+          continue
+        }
+
+        console.log(`✅ Normalized "${card.cardType}" → "${normalizedCardType}"`)
+        card.cardType = normalizedCardType
+        cards.push(card)
+        processedRows++
+
+        // Log progress every 50 cards
+        if (processedRows % 50 === 0) {
+          console.log(`📈 Processed ${processedRows} cards so far...`)
+        }
+      } catch (error) {
+        console.error(`❌ Error parsing row ${index + 2}:`, error, row)
+        skippedRows++
+        continue
+      }
     }
+
+    console.log("🎉 PROCESSING COMPLETE!")
+    console.log(`✅ Successfully parsed ${cards.length} cards`)
+    console.log(`⚠️ Skipped ${skippedRows} rows due to missing/invalid data`)
+    console.log(
+      `📊 Processing summary: ${processedRows} processed, ${skippedRows} skipped, ${cards.length} valid cards`,
+    )
+
+    // Log final card type distribution
+    console.log("\n📊 FINAL CARD TYPE DISTRIBUTION:")
+    const finalCardTypes = cards.reduce(
+      (acc, card) => {
+        acc[card.cardType] = (acc[card.cardType] || 0) + 1
+        return acc
+      },
+      {} as Record<string, number>,
+    )
+
+    Object.entries(finalCardTypes).forEach(([type, count]) => {
+      console.log(`   • ${type}: ${count} cards`)
+    })
+
+    // Log sample of successfully parsed cards with spending categories
+    if (cards.length > 0) {
+      console.log("📋 Sample parsed cards with spending categories:")
+      cards.slice(0, 3).forEach((card, index) => {
+        console.log(`   ${index + 1}. ${card.cardName} (${card.bank}) - ${card.cardType}`)
+        console.log(`      Spending Categories: [${card.spendingCategories.join(", ")}]`)
+      })
+    }
+
+    return cards
   } catch (error) {
-    console.error("Error generating card recommendations:", error)
+    console.error("❌ Error fetching credit cards from Google Sheets:", error)
+
+    // Enhanced error logging for debugging
+    if (error instanceof Error) {
+      console.error("Error details:", {
+        message: error.message,
+        stack: error.stack,
+        name: error.name,
+      })
+    }
+
     throw error
+  }
+}
+
+// NEW: Function to get all unique spending categories from the sheet
+export async function fetchAvailableSpendingCategories(): Promise<string[]> {
+  try {
+    const cards = await fetchCreditCards()
+    const allCategories = new Set<string>()
+
+    cards.forEach((card) => {
+      card.spendingCategories.forEach((category) => {
+        allCategories.add(category)
+      })
+    })
+
+    const sortedCategories = Array.from(allCategories).sort()
+    console.log("📊 Available spending categories from sheet:", sortedCategories)
+
+    return sortedCategories
+  } catch (error) {
+    console.error("❌ Error fetching spending categories:", error)
+    return []
   }
 }
 
@@ -1313,8 +1401,168 @@ export async function getEnhancedCardRecommendations(
 }
 
 // NEW: Enhanced function for the form with spending categories and refined scoring
+export async function getCardRecommendationsForForm(formData: {
+  monthlyIncome: string
+  spendingCategories: string[]
+  monthlySpending: string
+  currentCards: string
+  creditScore: string
+  preferredBanks: string[]
+  joiningFeePreference: string
+}) {
+  try {
+    console.log("🔄 Processing form data with refined scoring algorithm:", formData)
+
+    // Convert form data to the format expected by our existing functions
+    const creditScore = getCreditScoreValue(formData.creditScore) || 650
+    const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 50000
+
+    // Determine card type based on spending categories
+    let cardType = "Cashback" // Default
+    if (formData.spendingCategories.includes("travel")) {
+      cardType = "Travel"
+    } else if (formData.spendingCategories.includes("dining") || formData.spendingCategories.includes("shopping")) {
+      cardType = "Rewards"
+    }
+
+    console.log(
+      `🎯 Determined card type: ${cardType} based on spending categories: [${formData.spendingCategories.join(", ")}]`,
+    )
+
+    // Fetch all cards to use the new spending category enhanced filtering
+    const allCards = await fetchCreditCards()
+
+    if (allCards.length === 0) {
+      return {
+        success: false,
+        error: "No credit card data available. Please try again later.",
+        recommendations: [],
+        totalCards: 0,
+        userProfile: null,
+      }
+    }
+
+    // Use the new spending category enhanced filtering with refined scoring
+    let recommendations = filterAndRankCardsWithSpendingCategories(
+      allCards,
+      {
+        creditScore,
+        monthlyIncome,
+        cardType,
+        spendingCategories: formData.spendingCategories, // Pass user's spending categories
+        preferredBanks: formData.preferredBanks, // Pass user's preferred banks
+      },
+      7, // Get top 7 recommendations
+    )
+
+    // Prioritize cards from preferred banks
+    if (formData.preferredBanks && formData.preferredBanks.length > 0) {
+      const preferredBankCards = allCards.filter((card) =>
+        formData.preferredBanks.some((bank) => card.bank.toLowerCase().includes(bank.toLowerCase())),
+      )
+      const otherCards = allCards.filter(
+        (card) => !formData.preferredBanks.some((bank) => card.bank.toLowerCase().includes(bank.toLowerCase())),
+      )
+
+      // Score preferred bank cards if they aren't already in recommendations
+      const preferredBankCardsToScore = preferredBankCards.filter(
+        (card) => !recommendations.find((rec) => rec.id === card.id),
+      )
+      const scoredPreferredBankCards = filterAndRankCardsWithSpendingCategories(
+        preferredBankCardsToScore,
+        {
+          creditScore,
+          monthlyIncome,
+          cardType,
+          spendingCategories: formData.spendingCategories,
+          preferredBanks: formData.preferredBanks,
+        },
+        7 - recommendations.length, // Get enough to fill the top 7
+      )
+
+      // Combine recommendations, prioritizing existing ones
+      recommendations = [...recommendations, ...scoredPreferredBankCards].slice(0, 7)
+    }
+
+    console.log(`✅ Generated ${recommendations.length} recommendations with refined scoring algorithm`)
+
+    // Log the enhanced form submission to Google Sheets
+    try {
+      const submissionData = {
+        timestamp: new Date().toISOString(),
+        monthlyIncome,
+        monthlySpending: Number.parseInt(formData.monthlySpending) || 25000,
+        creditScoreRange: formData.creditScore,
+        currentCards: formData.currentCards,
+        spendingCategories: formData.spendingCategories,
+        preferredBanks: formData.preferredBanks,
+        joiningFeePreference: formData.joiningFeePreference,
+        submissionType: "enhanced_form_with_refined_scoring",
+        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Server",
+      }
+
+      console.log("📝 Submitting enhanced form data to Google Sheets:", submissionData)
+      const submissionSuccess = await submitEnhancedFormData(submissionData)
+
+      if (submissionSuccess) {
+        console.log("✅ Enhanced form data submitted successfully to Google Sheets")
+      } else {
+        console.warn("⚠️ Failed to submit enhanced form data to Google Sheets")
+      }
+    } catch (submissionError) {
+      console.error("❌ Error submitting enhanced form data:", submissionError)
+      // Don't fail the recommendation request if logging fails
+    }
+
+    // Transform the recommendations to match the expected format
+    const transformedRecommendations = recommendations.map((card) => ({
+      name: card.cardName,
+      bank: card.bank,
+      type: cardType.toLowerCase(),
+      annualFee: card.annualFee,
+      joiningFee: card.joiningFee,
+      rewardRate: `${card.rewardsRate}% rewards`,
+      welcomeBonus: card.signUpBonus > 0 ? `₹${card.signUpBonus.toLocaleString()} welcome bonus` : "",
+      keyFeatures: card.features || [
+        "Reward points on purchases",
+        "Online transaction benefits",
+        "Fuel surcharge waiver",
+        "Welcome bonus offer",
+      ],
+      bestFor: formData.spendingCategories.slice(0, 3),
+      score: Math.round(card.compositeScore),
+      reasoning: `Score: ${card.compositeScore}/105. ${card.spendingCategories.length > 0 ? `Matches your spending in: ${card.spendingCategories.join(", ")}. ` : ""}Refined algorithm prioritizes rewards rate (30%) and category match (30%) for optimal value.`,
+      spendingCategories: card.spendingCategories, // Include card's spending categories
+      scoreBreakdown: card.scoreBreakdown, // Include detailed score breakdown
+    }))
+
+    return {
+      success: true,
+      recommendations: transformedRecommendations,
+      totalCards: allCards.length,
+      userProfile: {
+        monthlyIncome,
+        monthlySpending: Number.parseInt(formData.monthlySpending) || 25000,
+        creditScore,
+        spendingCategories: formData.spendingCategories,
+        preferredBanks: formData.preferredBanks,
+      },
+      allCards, // Include all cards for testing component
+    }
+  } catch (error) {
+    console.error("Error in getCardRecommendationsForForm:", error)
+    return {
+      success: false,
+      error: "Failed to generate recommendations. Please try again.",
+      recommendations: [],
+      totalCards: 0,
+      userProfile: null,
+    }
+  }
+}
+
 // Helper function to get credit score value from range
-export function getCreditScoreValue(range: string): number {
+function getCreditScoreValue(range: string): number {
   switch (range) {
     case "300-549":
       return 425
@@ -1328,3 +1576,5 @@ export function getCreditScoreValue(range: string): number {
       return 700
   }
 }
+
+// Explicit export for getCardRecommendationsForForm
