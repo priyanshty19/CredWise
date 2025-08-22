@@ -1,11 +1,7 @@
 "use server"
 
-import {
-  fetchCreditCards,
-  filterAndRankCards,
-  filterAndRankCardsByRewards,
-  filterAndRankCardsWithSpendingCategories,
-} from "@/lib/google-sheets"
+import { fetchCreditCards, filterAndRankCards, filterAndRankCardsByRewards } from "@/lib/google-sheets"
+import { getAdaptiveCardRecommendations } from "@/lib/intersection-count"
 import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
 
 interface CardSubmission {
@@ -98,11 +94,20 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
       const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
 
       const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
-      const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
-      const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
-      const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
+      score += joiningFeeScore
 
-      score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
+      // Annual fee (lower is better) - normalize to 0-25 scale
+      const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
+      score += annualFeeScore
+
+      // Rewards rate (higher is better) - normalize to 0-25 scale
+      const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
+      score += rewardsScore
+
+      // Sign-up bonus (higher is better) - normalize to 0-25 scale
+      const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
+      score += bonusScore
+
       const compositeScore = Math.round(score * 100) / 100
 
       return {
@@ -275,7 +280,7 @@ export async function getEnhancedCardRecommendations(
   }
 }
 
-// NEW: Enhanced function for the form with spending categories and refined scoring
+// NEW: Enhanced function for the form with spending categories and ADAPTIVE INTERSECTION-BASED scoring
 export async function getCardRecommendationsForForm(formData: {
   monthlyIncome: string
   spendingCategories: string[]
@@ -286,25 +291,28 @@ export async function getCardRecommendationsForForm(formData: {
   joiningFeePreference: string
 }) {
   try {
-    console.log("🔄 Processing form data with refined scoring algorithm:", formData)
+    console.log("🔄 Processing form data with ADAPTIVE INTERSECTION-BASED algorithm:", formData)
 
-    // Convert form data to the format expected by our existing functions
-    const creditScore = Number.parseInt(formData.creditScore) || 650
+    // Convert form data to the format expected by our adaptive algorithm
+    const creditScore = getCreditScoreValue(formData.creditScore) || 650
     const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 50000
 
-    // Determine card type based on spending categories
-    let cardType = "Cashback" // Default
-    if (formData.spendingCategories.includes("travel")) {
-      cardType = "Travel"
-    } else if (formData.spendingCategories.includes("dining") || formData.spendingCategories.includes("shopping")) {
-      cardType = "Rewards"
+    // Convert joining fee preference to the format expected by adaptive algorithm
+    let joiningFeePreference: "no_fee" | "low_fee" | "not_concerned" = "not_concerned"
+    switch (formData.joiningFeePreference) {
+      case "free":
+        joiningFeePreference = "no_fee"
+        break
+      case "low":
+        joiningFeePreference = "low_fee"
+        break
+      case "medium":
+      case "any_amount":
+        joiningFeePreference = "not_concerned"
+        break
     }
 
-    console.log(
-      `🎯 Determined card type: ${cardType} based on spending categories: [${formData.spendingCategories.join(", ")}]`,
-    )
-
-    // Fetch all cards to use the new spending category enhanced filtering
+    // Fetch all cards to use the new adaptive intersection-based filtering
     const allCards = await fetchCreditCards()
 
     if (allCards.length === 0) {
@@ -317,20 +325,24 @@ export async function getCardRecommendationsForForm(formData: {
       }
     }
 
-    // Use the new spending category enhanced filtering with refined scoring
-    const recommendations = filterAndRankCardsWithSpendingCategories(
+    // Use the NEW ADAPTIVE INTERSECTION-BASED algorithm
+    const userProfile = {
+      creditScore,
+      monthlyIncome,
+      spendingCategories: formData.spendingCategories,
+      preferredBanks: formData.preferredBanks,
+      joiningFeePreference,
+    }
+
+    const adaptiveRecommendations = getAdaptiveCardRecommendations(
       allCards,
-      {
-        creditScore,
-        monthlyIncome,
-        cardType,
-        spendingCategories: formData.spendingCategories, // Pass user's spending categories
-        preferredBanks: formData.preferredBanks, // Pass user's preferred banks
-      },
+      userProfile,
       7, // Get top 7 recommendations
     )
 
-    console.log(`✅ Generated ${recommendations.length} recommendations with refined scoring algorithm`)
+    console.log(
+      `✅ Generated ${adaptiveRecommendations.length} recommendations with ADAPTIVE INTERSECTION-BASED algorithm`,
+    )
 
     // Log the enhanced form submission to Google Sheets
     try {
@@ -343,43 +355,51 @@ export async function getCardRecommendationsForForm(formData: {
         spendingCategories: formData.spendingCategories,
         preferredBanks: formData.preferredBanks,
         joiningFeePreference: formData.joiningFeePreference,
-        submissionType: "enhanced_form_with_refined_scoring",
+        submissionType: "adaptive_intersection_based_algorithm",
         userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Server",
       }
 
-      console.log("📝 Submitting enhanced form data to Google Sheets:", submissionData)
+      console.log("📝 Submitting adaptive algorithm form data to Google Sheets:", submissionData)
       const submissionSuccess = await submitEnhancedFormData(submissionData)
 
       if (submissionSuccess) {
-        console.log("✅ Enhanced form data submitted successfully to Google Sheets")
+        console.log("✅ Adaptive algorithm form data submitted successfully to Google Sheets")
       } else {
-        console.warn("⚠️ Failed to submit enhanced form data to Google Sheets")
+        console.warn("⚠️ Failed to submit adaptive algorithm form data to Google Sheets")
       }
     } catch (submissionError) {
-      console.error("❌ Error submitting enhanced form data:", submissionError)
+      console.error("❌ Error submitting adaptive algorithm form data:", submissionError)
       // Don't fail the recommendation request if logging fails
     }
 
     // Transform the recommendations to match the expected format
-    const transformedRecommendations = recommendations.map((card) => ({
-      name: card.cardName,
-      bank: card.bank,
-      type: cardType.toLowerCase(),
-      annualFee: card.annualFee,
-      joiningFee: card.joiningFee,
-      rewardRate: `${card.rewardsRate}% rewards`,
-      welcomeBonus: card.signUpBonus > 0 ? `₹${card.signUpBonus.toLocaleString()} welcome bonus` : "",
-      keyFeatures: card.features || [
+    const transformedRecommendations = adaptiveRecommendations.map((scored) => ({
+      name: scored.card.cardName,
+      bank: scored.card.bank,
+      type: scored.card.cardType.toLowerCase(),
+      annualFee: scored.card.annualFee,
+      joiningFee: scored.card.joiningFee,
+      rewardRate: `${scored.card.rewardsRate}% rewards`,
+      welcomeBonus: scored.card.signUpBonus > 0 ? `₹${scored.card.signUpBonus.toLocaleString()} welcome bonus` : "",
+      keyFeatures: scored.card.features || [
         "Reward points on purchases",
         "Online transaction benefits",
         "Fuel surcharge waiver",
         "Welcome bonus offer",
       ],
-      bestFor: formData.spendingCategories.slice(0, 3),
-      score: Math.round(card.compositeScore),
-      reasoning: `Score: ${card.compositeScore}/105. ${card.spendingCategories.length > 0 ? `Matches your spending in: ${card.spendingCategories.join(", ")}. ` : ""}Refined algorithm prioritizes rewards rate (30%) and category match (30%) for optimal value.`,
-      spendingCategories: card.spendingCategories, // Include card's spending categories
-      scoreBreakdown: card.scoreBreakdown, // Include detailed score breakdown
+      bestFor: scored.intersectionDetails.matchedCategories.slice(0, 3),
+      score: Math.round(scored.totalScore),
+      reasoning: `Score: ${scored.totalScore.toFixed(1)}/100. Matches ${scored.intersectionDetails.intersectionCount}/${formData.spendingCategories.length} of your spending categories: [${scored.intersectionDetails.matchedCategories.join(", ")}]. Adaptive intersection-based algorithm prioritizes category matching (40%) and rewards rate (25%) for maximum relevance.`,
+      spendingCategories: scored.card.spendingCategories, // Include card's spending categories
+      scoreBreakdown: {
+        rewards: scored.scoreBreakdown.rewardsScore,
+        category: scored.scoreBreakdown.intersectionScore,
+        signup: scored.scoreBreakdown.signupScore,
+        joining: scored.scoreBreakdown.joiningFeeScore,
+        annual: scored.scoreBreakdown.annualFeeScore,
+        bankBonus: scored.scoreBreakdown.bankBonus,
+      },
+      intersectionDetails: scored.intersectionDetails, // Include intersection analysis
     }))
 
     return {
@@ -396,7 +416,7 @@ export async function getCardRecommendationsForForm(formData: {
       allCards, // Include all cards for testing component
     }
   } catch (error) {
-    console.error("Error in getCardRecommendationsForForm:", error)
+    console.error("Error in getCardRecommendationsForForm with adaptive algorithm:", error)
     return {
       success: false,
       error: "Failed to generate recommendations. Please try again.",
@@ -420,5 +440,21 @@ export async function getRecommendations(formData: FormData) {
       totalCards: 0,
       userProfile: null,
     }
+  }
+}
+
+// Helper function to get credit score value from range
+function getCreditScoreValue(range: string): number {
+  switch (range) {
+    case "300-549":
+      return 425
+    case "550-649":
+      return 600
+    case "650-749":
+      return 700
+    case "750-850":
+      return 800
+    default:
+      return 700
   }
 }
