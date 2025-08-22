@@ -32,7 +32,7 @@ interface PortfolioAnalysisProps {
   onAnalysisComplete?: (analysis: ParsedPortfolio) => void
 }
 
-export default function PortfolioAnalysis({ onAnalysisComplete }: PortfolioAnalysisProps) {
+export function PortfolioAnalysis({ onAnalysisComplete }: PortfolioAnalysisProps) {
   const [file, setFile] = useState<File | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [analysis, setAnalysis] = useState<ParsedPortfolio | null>(null)
@@ -303,3 +303,5 @@ export default function PortfolioAnalysis({ onAnalysisComplete }: PortfolioAnaly
     </div>
   )
 }
+
+export default PortfolioAnalysis
