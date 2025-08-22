@@ -471,15 +471,42 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
     setIsLoading(true)
     setError(null)
 
+    // Log the specific test case
+    console.log("🧪 TESTING WITH SPECIFIC USER PROFILE:")
+    console.log("- Income: ₹1,00,000")
+    console.log("- Monthly Spending: ₹25,000")
+    console.log("- Credit Score: Excellent (750-850)")
+    console.log("- Spending Categories: Travel")
+    console.log("- Preferred Bank: American Express")
+    console.log("- Joining Fee: Not a concern")
+
     startTransition(async () => {
       try {
         const result: RecommendationResult = await getCardRecommendationsForForm(formData)
 
         if (result.success) {
+          console.log("✅ RECOMMENDATION RESULTS FOR TEST PROFILE:")
+          console.log(`- Total recommendations: ${result.recommendations.length}`)
+          console.log(`- Algorithm used: Adaptive Intersection-Based`)
+
+          result.recommendations.forEach((card, index) => {
+            console.log(`\n${index + 1}. ${card.name} (${card.bank})`)
+            console.log(`   Score: ${card.score}/100`)
+            console.log(`   Categories matched: [${card.bestFor?.join(", ")}]`)
+            console.log(`   Joining Fee: ₹${card.joiningFee}`)
+            console.log(`   Annual Fee: ₹${card.annualFee}`)
+            console.log(`   Reward Rate: ${card.rewardRate}`)
+            if (card.scoreBreakdown) {
+              console.log(
+                `   Score breakdown: R:${card.scoreBreakdown.rewards.toFixed(1)} C:${card.scoreBreakdown.category.toFixed(1)} B:${card.scoreBreakdown.bankBonus}`,
+              )
+            }
+          })
+
           setRecommendations(result.recommendations)
           setUserProfile(result.userProfile)
           setTotalCards(result.totalCards)
-          setAllCards(result.allCards || []) // Set all cards for testing
+          setAllCards(result.allCards || [])
         } else {
           setError(result.error || "Failed to get recommendations")
         }
