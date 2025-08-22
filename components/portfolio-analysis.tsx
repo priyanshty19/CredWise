@@ -1,330 +1,465 @@
 "use client"
 
-import { useState, useTransition } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import React from "react"
+
+import { useState, useCallback } from "react"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Badge } from "@/components/ui/badge"
+import { Progress } from "@/components/ui/progress"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Upload, Plus, FileText, BarChart3, PieChart, AlertCircle, CheckCircle2, Loader2 } from "lucide-react"
 import {
-  parsePortfolioFile,
-  addManualEntry,
-  type PortfolioEntry,
-  calculatePortfolioSummary,
-} from "@/app/actions/portfolio-actions"
-import PortfolioDashboard from "@/components/portfolio-dashboard"
+  Upload,
+  FileSpreadsheet,
+  TrendingUp,
+  TrendingDown,
+  PieChart,
+  BarChart3,
+  AlertCircle,
+  CheckCircle,
+  Loader2,
+} from "lucide-react"
+import {
+  parseUniversalStatement,
+  formatCurrency,
+  formatPercentage,
+  type ParsedPortfolio,
+} from "@/lib/universal-statement-parser"
+import { parseCSV, parseExcel } from "@/lib/file-parsers"
 
-export default function PortfolioAnalysis() {
-  const [portfolioEntries, setPortfolioEntries] = useState<PortfolioEntry[]>([])
+export function PortfolioAnalysis() {
+  const [file, setFile] = useState<File | null>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [portfolio, setPortfolio] = useState<ParsedPortfolio | null>(null)
+  const [error, setError] = useState<string | null>(null)
   const [activeTab, setActiveTab] = useState("upload")
-  const [uploadStatus, setUploadStatus] = useState<{
-    status: "idle" | "uploading" | "success" | "error"
-    message?: string
-    details?: any
-  }>({ status: "idle" })
 
-  const [isPending, startTransition] = useTransition()
-
-  const handleFileUpload = async (formData: FormData) => {
-    setUploadStatus({ status: "uploading", message: "Parsing your investment file..." })
-
-    startTransition(async () => {
-      try {
-        const result = await parsePortfolioFile(formData)
-
-        if (result.success && result.data) {
-          setPortfolioEntries((prev) => [...prev, ...result.data])
-          setUploadStatus({
-            status: "success",
-            message: `Successfully parsed ${result.data.length} investments from ${result.summary?.fileName}`,
-            details: result.summary,
-          })
-          // Switch to dashboard tab after successful upload
-          setTimeout(() => setActiveTab("dashboard"), 1000)
-        } else {
-          setUploadStatus({
-            status: "error",
-            message: result.error || "Failed to parse file",
-          })
-        }
-      } catch (error) {
-        setUploadStatus({
-          status: "error",
-          message: "An unexpected error occurred while parsing the file",
-        })
-      }
-    })
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const selectedFile = event.target.files?.[0]
+    if (selectedFile) {
+      setFile(selectedFile)
+      setError(null)
+    }
   }
 
-  const handleManualEntry = async (formData: FormData) => {
-    startTransition(async () => {
-      const result = await addManualEntry(formData)
+  const processFile = useCallback(async () => {
+    if (!file) return
 
-      if (result.success && result.data) {
-        setPortfolioEntries((prev) => [...prev, result.data])
-        // Reset form
-        const form = document.getElementById("manual-entry-form") as HTMLFormElement
-        form?.reset()
+    setIsLoading(true)
+    setError(null)
+
+    try {
+      let data: any[][] = []
+
+      if (file.name.endsWith(".csv")) {
+        data = await parseCSV(file)
+      } else if (file.name.endsWith(".xlsx") || file.name.endsWith(".xls")) {
+        data = await parseExcel(file)
+      } else {
+        throw new Error("Unsupported file format. Please upload CSV or Excel files.")
       }
-    })
-  }
 
-  const summary = calculatePortfolioSummary(portfolioEntries)
+      const parsedPortfolio = parseUniversalStatement(data, file.name)
+      setPortfolio(parsedPortfolio)
+      setActiveTab("results")
 
-  return (
+      console.log("Portfolio parsed successfully:", parsedPortfolio)
+    } catch (err) {
+      console.error("Error processing file:", err)
+      setError(err instanceof Error ? err.message : "Failed to process file")
+    } finally {
+      setIsLoading(false)
+    }
+  }, [file])
+
+  const getSupportedPlatforms = () => [
+    { name: "Groww", formats: ["CSV", "Excel"], status: "Fully Supported" },
+    { name: "Zerodha", formats: ["CSV", "Excel"], status: "Fully Supported" },
+    { name: "Angel One", formats: ["CSV", "Excel"], status: "Generic Parser" },
+    { name: "HDFC Securities", formats: ["CSV", "Excel"], status: "Generic Parser" },
+    { name: "ICICI Direct", formats: ["CSV", "Excel"], status: "Generic Parser" },
+    { name: "Other Platforms", formats: ["CSV", "Excel"], status: "Generic Parser" },
+  ]
+
+  const renderUploadSection = () => (
     <div className="space-y-6">
-      <Card className="border-l-4 border-l-blue-500">
+      {/* Platform Support */}
+      <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-6 w-6 text-blue-600" />
-            Portfolio Analysis with Universal Parser
+            <FileSpreadsheet className="h-5 w-5" />
+            Supported Platforms
           </CardTitle>
-          <p className="text-gray-600">
-            Upload statements from Groww, Zerodha, Angel One, HDFC Securities, ICICI Direct, or any supported platform
-          </p>
+          <CardDescription>Upload your portfolio statement from any of these platforms</CardDescription>
         </CardHeader>
+        <CardContent>
+          <div className="grid md:grid-cols-2 gap-4">
+            {getSupportedPlatforms().map((platform) => (
+              <div key={platform.name} className="flex items-center justify-between p-3 border rounded-lg">
+                <div>
+                  <div className="font-medium">{platform.name}</div>
+                  <div className="text-sm text-gray-500">{platform.formats.join(", ")}</div>
+                </div>
+                <Badge variant={platform.status === "Fully Supported" ? "default" : "secondary"}>
+                  {platform.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </CardContent>
       </Card>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-3">
-          <TabsTrigger value="upload" className="flex items-center gap-2">
-            <Upload className="h-4 w-4" />
-            Upload Files
-          </TabsTrigger>
-          <TabsTrigger value="manual" className="flex items-center gap-2">
-            <Plus className="h-4 w-4" />
-            Manual Entry
-          </TabsTrigger>
-          <TabsTrigger value="dashboard" className="flex items-center gap-2">
-            <PieChart className="h-4 w-4" />
-            Dashboard
-            {portfolioEntries.length > 0 && (
-              <Badge variant="secondary" className="ml-1">
-                {portfolioEntries.length}
-              </Badge>
+      {/* File Upload */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Upload className="h-5 w-5" />
+            Upload Portfolio Statement
+          </CardTitle>
+          <CardDescription>Select your CSV or Excel portfolio statement file</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2">
+            <Label htmlFor="file-upload">Portfolio Statement File</Label>
+            <Input
+              id="file-upload"
+              type="file"
+              accept=".csv,.xlsx,.xls"
+              onChange={handleFileChange}
+              className="cursor-pointer"
+            />
+          </div>
+
+          {file && (
+            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
+              <FileSpreadsheet className="h-4 w-4 text-blue-600" />
+              <span className="text-sm font-medium">{file.name}</span>
+              <span className="text-sm text-gray-500">({(file.size / 1024).toFixed(1)} KB)</span>
+            </div>
+          )}
+
+          <Button onClick={processFile} disabled={!file || isLoading} className="w-full">
+            {isLoading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Processing...
+              </>
+            ) : (
+              <>
+                <BarChart3 className="h-4 w-4 mr-2" />
+                Analyze Portfolio
+              </>
             )}
-          </TabsTrigger>
-        </TabsList>
+          </Button>
 
-        {/* File Upload Tab */}
-        <TabsContent value="upload" className="space-y-6">
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Instructions */}
+      <Card>
+        <CardHeader>
+          <CardTitle>How to Export Your Portfolio</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-3">
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-600">
+                1
+              </div>
+              <div>
+                <div className="font-medium">Login to your broker platform</div>
+                <div className="text-sm text-gray-600">Access your portfolio or holdings section</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-600">
+                2
+              </div>
+              <div>
+                <div className="font-medium">Export portfolio data</div>
+                <div className="text-sm text-gray-600">Look for "Export", "Download" or "Statement" options</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-600">
+                3
+              </div>
+              <div>
+                <div className="font-medium">Choose CSV or Excel format</div>
+                <div className="text-sm text-gray-600">Select the most detailed format available</div>
+              </div>
+            </div>
+            <div className="flex items-start gap-3">
+              <div className="w-6 h-6 bg-blue-100 rounded-full flex items-center justify-center text-sm font-medium text-blue-600">
+                4
+              </div>
+              <div>
+                <div className="font-medium">Upload and analyze</div>
+                <div className="text-sm text-gray-600">Upload the file here for comprehensive analysis</div>
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+  )
+
+  const renderPortfolioOverview = () => {
+    if (!portfolio) return null
+
+    const { summary, platform, parseDate } = portfolio
+    const gainColor = summary.totalPnL >= 0 ? "text-green-600" : "text-red-600"
+    const gainIcon = summary.totalPnL >= 0 ? TrendingUp : TrendingDown
+
+    return (
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-2xl font-bold">Portfolio Overview</h2>
+            <p className="text-gray-600">
+              Platform: {platform} • Analyzed on {new Date(parseDate).toLocaleDateString()}
+            </p>
+          </div>
+          <Badge variant="outline" className="flex items-center gap-1">
+            <CheckCircle className="h-3 w-3" />
+            {portfolio.holdings.length} Holdings
+          </Badge>
+        </div>
+
+        {/* Summary Cards */}
+        <div className="grid md:grid-cols-4 gap-4">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Universal Statement Parser
-              </CardTitle>
-              <p className="text-sm text-gray-600">
-                Advanced parser supporting multiple platforms and file formats with automatic detection
-              </p>
-            </CardHeader>
-            <CardContent className="space-y-4">
-              <form action={handleFileUpload} className="space-y-4">
-                <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-gray-400 transition-colors">
-                  <Upload className="h-12 w-12 text-gray-400 mx-auto mb-4" />
-                  <div className="space-y-2">
-                    <Label htmlFor="file" className="text-lg font-medium cursor-pointer">
-                      Choose investment statement file
-                    </Label>
-                    <p className="text-sm text-gray-500">CSV, Excel, PDF, Word files up to 10MB</p>
-                    <Input
-                      id="file"
-                      name="file"
-                      type="file"
-                      accept=".csv,.xlsx,.xls,.pdf,.doc,.docx"
-                      className="mt-2"
-                      disabled={isPending}
-                    />
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isPending}>
-                  {isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Processing with Universal Parser...
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-4 w-4 mr-2" />
-                      Parse & Analyze File
-                    </>
-                  )}
-                </Button>
-              </form>
-
-              {/* Upload Status */}
-              {uploadStatus.status !== "idle" && (
-                <Alert
-                  className={
-                    uploadStatus.status === "success"
-                      ? "border-green-200 bg-green-50"
-                      : uploadStatus.status === "error"
-                        ? "border-red-200 bg-red-50"
-                        : "border-blue-200 bg-blue-50"
-                  }
-                >
-                  {uploadStatus.status === "success" && <CheckCircle2 className="h-4 w-4 text-green-600" />}
-                  {uploadStatus.status === "error" && <AlertCircle className="h-4 w-4 text-red-600" />}
-                  {uploadStatus.status === "uploading" && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
-
-                  <AlertDescription className="ml-2">
-                    {uploadStatus.message}
-                    {uploadStatus.details && (
-                      <div className="mt-2 text-sm">
-                        <strong>Platform:</strong> {uploadStatus.details.platform} |<strong> Format:</strong>{" "}
-                        {uploadStatus.details.detectedFormat} |<strong> Holdings:</strong>{" "}
-                        {uploadStatus.details.totalInvestments} |<strong> Total Value:</strong> ₹
-                        {uploadStatus.details.totalValue?.toLocaleString("en-IN")}
-                      </div>
-                    )}
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {/* Supported Platforms */}
-              <div className="bg-gray-50 rounded-lg p-4">
-                <h4 className="font-medium text-gray-900 mb-3">Supported Platforms & Formats:</h4>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
-                  <div className="space-y-2">
-                    <h5 className="text-sm font-medium text-gray-700">Trading Platforms</h5>
-                    <div className="space-y-1 text-xs text-gray-600">
-                      <div>• Groww (Stocks & MF)</div>
-                      <div>• Zerodha Console</div>
-                      <div>• Angel One</div>
-                      <div>• HDFC Securities</div>
-                      <div>• ICICI Direct</div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <h5 className="text-sm font-medium text-gray-700">File Formats</h5>
-                    <div className="space-y-1 text-xs text-gray-600">
-                      <div>• CSV files</div>
-                      <div>• Excel (.xlsx, .xls)</div>
-                      <div>• PDF statements</div>
-                      <div>• Word documents</div>
-                    </div>
-                  </div>
-                  <div className="space-y-2">
-                    <h5 className="text-sm font-medium text-gray-700">Auto-Detection</h5>
-                    <div className="space-y-1 text-xs text-gray-600">
-                      <div>• Platform recognition</div>
-                      <div>• Header mapping</div>
-                      <div>• Data validation</div>
-                      <div>• Format conversion</div>
-                    </div>
-                  </div>
-                </div>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-600">Total Invested</div>
+              <div className="text-2xl font-bold">{formatCurrency(summary.totalInvested)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-600">Current Value</div>
+              <div className="text-2xl font-bold">{formatCurrency(summary.totalCurrent)}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-600">Total P&L</div>
+              <div className={`text-2xl font-bold flex items-center gap-1 ${gainColor}`}>
+                {React.createElement(gainIcon, { className: "h-5 w-5" })}
+                {formatCurrency(Math.abs(summary.totalPnL))}
               </div>
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* Manual Entry Tab */}
-        <TabsContent value="manual" className="space-y-6">
           <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Plus className="h-5 w-5" />
-                Add Investment Manually
-              </CardTitle>
-              <p className="text-sm text-gray-600">Manually add individual investments to your portfolio</p>
-            </CardHeader>
-            <CardContent>
-              <form id="manual-entry-form" action={handleManualEntry} className="space-y-4">
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="name">Investment Name</Label>
-                    <Input id="name" name="name" placeholder="e.g., Reliance Industries, SBI Bluechip Fund" required />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="type">Investment Type</Label>
-                    <Select name="type" required>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Select type" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="equity">Equity/Stocks</SelectItem>
-                        <SelectItem value="mutual_fund">Mutual Fund</SelectItem>
-                        <SelectItem value="bond">Bonds</SelectItem>
-                        <SelectItem value="other">Other</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="quantity">Quantity/Units</Label>
-                    <Input id="quantity" name="quantity" type="number" step="0.001" placeholder="100" required />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="avgPrice">Average Price (₹)</Label>
-                    <Input id="avgPrice" name="avgPrice" type="number" step="0.01" placeholder="2500.00" required />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="currentPrice">Current Price (₹)</Label>
-                    <Input
-                      id="currentPrice"
-                      name="currentPrice"
-                      type="number"
-                      step="0.01"
-                      placeholder="2750.00"
-                      required
-                    />
-                  </div>
-                </div>
-
-                <Button type="submit" className="w-full" disabled={isPending}>
-                  {isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Adding...
-                    </>
-                  ) : (
-                    <>
-                      <Plus className="h-4 w-4 mr-2" />
-                      Add Investment
-                    </>
-                  )}
-                </Button>
-              </form>
+            <CardContent className="p-4">
+              <div className="text-sm text-gray-600">Returns</div>
+              <div className={`text-2xl font-bold ${gainColor}`}>{formatPercentage(summary.totalPnLPercentage)}</div>
             </CardContent>
           </Card>
-        </TabsContent>
+        </div>
 
-        {/* Dashboard Tab */}
-        <TabsContent value="dashboard" className="space-y-6">
-          {portfolioEntries.length > 0 ? (
-            <PortfolioDashboard portfolioEntries={portfolioEntries} summary={summary} />
-          ) : (
-            <Card className="border-dashed border-2 border-gray-300">
-              <CardContent className="flex flex-col items-center justify-center py-16 text-center">
-                <PieChart className="h-16 w-16 text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">No Portfolio Data</h3>
-                <p className="text-gray-600 mb-6 max-w-md">
-                  Upload your investment statements using our universal parser or add manual entries to see your
-                  portfolio analysis and insights.
-                </p>
-                <div className="flex gap-3">
-                  <Button onClick={() => setActiveTab("upload")} variant="default">
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload Files
-                  </Button>
-                  <Button onClick={() => setActiveTab("manual")} variant="outline">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Manual Entry
-                  </Button>
+        {/* Asset Allocation */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <PieChart className="h-5 w-5" />
+              Asset Allocation
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid md:grid-cols-2 gap-6">
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span>Stocks</span>
+                  <span className="font-medium">{summary.stocksCount} holdings</span>
                 </div>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
+                <Progress
+                  value={(summary.stocksCount / (summary.stocksCount + summary.mutualFundsCount)) * 100}
+                  className="h-2"
+                />
+              </div>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <span>Mutual Funds</span>
+                  <span className="font-medium">{summary.mutualFundsCount} holdings</span>
+                </div>
+                <Progress
+                  value={(summary.mutualFundsCount / (summary.stocksCount + summary.mutualFundsCount)) * 100}
+                  className="h-2"
+                />
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Top Holdings */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Top Holdings by Value</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-3">
+              {portfolio.holdings
+                .sort((a, b) => b.currentValue - a.currentValue)
+                .slice(0, 5)
+                .map((holding, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 border rounded-lg">
+                    <div className="flex-1">
+                      <div className="font-medium">{holding.name}</div>
+                      <div className="text-sm text-gray-600">
+                        {holding.type === "stock" ? "Stock" : "Mutual Fund"} • {holding.platform}
+                      </div>
+                    </div>
+                    <div className="text-right">
+                      <div className="font-medium">{formatCurrency(holding.currentValue)}</div>
+                      <div className={`text-sm ${holding.pnl >= 0 ? "text-green-600" : "text-red-600"}`}>
+                        {formatPercentage(holding.pnlPercentage)}
+                      </div>
+                    </div>
+                  </div>
+                ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    )
+  }
+
+  const renderDetailedHoldings = () => {
+    if (!portfolio) return null
+
+    const stocks = portfolio.holdings.filter((h) => h.type === "stock")
+    const mutualFunds = portfolio.holdings.filter((h) => h.type === "mutual_fund")
+
+    return (
+      <div className="space-y-6">
+        <Tabs defaultValue="stocks" className="w-full">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="stocks">Stocks ({stocks.length})</TabsTrigger>
+            <TabsTrigger value="mutual-funds">Mutual Funds ({mutualFunds.length})</TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="stocks" className="space-y-4">
+            {stocks.length > 0 ? (
+              <div className="space-y-3">
+                {stocks.map((stock, index) => (
+                  <Card key={index}>
+                    <CardContent className="p-4">
+                      <div className="grid md:grid-cols-6 gap-4 items-center">
+                        <div className="md:col-span-2">
+                          <div className="font-medium">{stock.name}</div>
+                          <div className="text-sm text-gray-600">{stock.symbol || stock.isin}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">Quantity</div>
+                          <div className="font-medium">{stock.quantity}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">Avg Price</div>
+                          <div className="font-medium">₹{stock.avgPrice.toFixed(2)}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">Current Value</div>
+                          <div className="font-medium">{formatCurrency(stock.currentValue)}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">P&L</div>
+                          <div className={`font-medium ${stock.pnl >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            {formatCurrency(Math.abs(stock.pnl))}
+                            <div className="text-xs">{formatPercentage(stock.pnlPercentage)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <div className="text-gray-500">No stocks found in your portfolio</div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+
+          <TabsContent value="mutual-funds" className="space-y-4">
+            {mutualFunds.length > 0 ? (
+              <div className="space-y-3">
+                {mutualFunds.map((fund, index) => (
+                  <Card key={index}>
+                    <CardContent className="p-4">
+                      <div className="grid md:grid-cols-6 gap-4 items-center">
+                        <div className="md:col-span-2">
+                          <div className="font-medium">{fund.name}</div>
+                          <div className="text-sm text-gray-600">
+                            {fund.category} {fund.folio && `• Folio: ${fund.folio}`}
+                          </div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">Units</div>
+                          <div className="font-medium">{fund.quantity.toFixed(3)}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">Avg NAV</div>
+                          <div className="font-medium">₹{fund.avgPrice.toFixed(2)}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">Current Value</div>
+                          <div className="font-medium">{formatCurrency(fund.currentValue)}</div>
+                        </div>
+                        <div className="text-center">
+                          <div className="text-sm text-gray-600">P&L</div>
+                          <div className={`font-medium ${fund.pnl >= 0 ? "text-green-600" : "text-red-600"}`}>
+                            {formatCurrency(Math.abs(fund.pnl))}
+                            <div className="text-xs">{formatPercentage(fund.pnlPercentage)}</div>
+                          </div>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : (
+              <Card>
+                <CardContent className="p-8 text-center">
+                  <div className="text-gray-500">No mutual funds found in your portfolio</div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-6">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="upload">Upload Statement</TabsTrigger>
+          <TabsTrigger value="results" disabled={!portfolio}>
+            Portfolio Overview
+          </TabsTrigger>
+          <TabsTrigger value="holdings" disabled={!portfolio}>
+            Detailed Holdings
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="upload">{renderUploadSection()}</TabsContent>
+
+        <TabsContent value="results">{renderPortfolioOverview()}</TabsContent>
+
+        <TabsContent value="holdings">{renderDetailedHoldings()}</TabsContent>
       </Tabs>
     </div>
   )
