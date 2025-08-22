@@ -1,436 +1,499 @@
 "use client"
 
-import type React from "react"
-
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  LineChart,
+  Line,
+} from "recharts"
 import {
   Upload,
   FileText,
   TrendingUp,
-  PieChart,
   CreditCard,
+  PieChartIcon,
+  BarChart3,
   AlertCircle,
   CheckCircle2,
-  Loader2,
-  Download,
-  Eye,
-  BarChart3,
-  Calendar,
-  DollarSign,
   Target,
   Zap,
 } from "lucide-react"
-import { PortfolioAnalysis } from "./portfolio-analysis"
+import PortfolioDashboard from "./portfolio-dashboard"
 
-interface SpendingInsight {
+interface SpendingData {
   category: string
   amount: number
   percentage: number
-  transactions: number
-  avgTransaction: number
-  trend: "up" | "down" | "stable"
+  color: string
 }
 
-interface PortfolioData {
-  totalSpending: number
-  monthlyAverage: number
-  topCategories: SpendingInsight[]
-  transactionCount: number
-  period: string
-  insights: string[]
-  recommendations: string[]
+interface MonthlyData {
+  month: string
+  spending: number
+  income: number
 }
+
+interface RecommendationInsight {
+  title: string
+  description: string
+  impact: "high" | "medium" | "low"
+  actionable: boolean
+}
+
+const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D", "#FFC658", "#FF7C7C"]
+
+// Sample data for demonstration
+const sampleSpendingData: SpendingData[] = [
+  { category: "Dining", amount: 8500, percentage: 34, color: "#0088FE" },
+  { category: "Groceries", amount: 6200, percentage: 25, color: "#00C49F" },
+  { category: "Fuel", amount: 4800, percentage: 19, color: "#FFBB28" },
+  { category: "Shopping", amount: 3200, percentage: 13, color: "#FF8042" },
+  { category: "Entertainment", amount: 2300, percentage: 9, color: "#8884D8" },
+]
+
+const sampleMonthlyData: MonthlyData[] = [
+  { month: "Jan", spending: 22000, income: 85000 },
+  { month: "Feb", spending: 25000, income: 85000 },
+  { month: "Mar", spending: 28000, income: 85000 },
+  { month: "Apr", spending: 24000, income: 85000 },
+  { month: "May", spending: 26000, income: 85000 },
+  { month: "Jun", spending: 25000, income: 85000 },
+]
+
+const sampleInsights: RecommendationInsight[] = [
+  {
+    title: "High Dining Spend Opportunity",
+    description:
+      "34% of your spending is on dining. Consider cards with high dining rewards like HDFC Millennia or SBI SimplyCLICK.",
+    impact: "high",
+    actionable: true,
+  },
+  {
+    title: "Fuel Spending Optimization",
+    description:
+      "₹4,800 monthly fuel spend can earn significant rewards with fuel-focused cards like HDFC HPCL or Indian Oil cards.",
+    impact: "medium",
+    actionable: true,
+  },
+  {
+    title: "Spending Pattern Consistency",
+    description:
+      "Your spending is consistent month-over-month, making you eligible for premium cards with higher limits.",
+    impact: "low",
+    actionable: false,
+  },
+]
 
 export default function DeepDiveSection() {
-  const [uploadedFile, setUploadedFile] = useState<File | null>(null)
+  const [activeTab, setActiveTab] = useState("upload")
+  const [analysisData, setAnalysisData] = useState<any>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [portfolioData, setPortfolioData] = useState<PortfolioData | null>(null)
-  const [error, setError] = useState<string | null>(null)
 
-  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0]
-    if (!file) return
-
-    setUploadedFile(file)
+  const handleFileUpload = async (file: File) => {
     setIsAnalyzing(true)
-    setError(null)
 
-    try {
-      // Simulate file processing
-      await new Promise((resolve) => setTimeout(resolve, 2000))
-
-      // Mock portfolio analysis data
-      const mockData: PortfolioData = {
-        totalSpending: 125000,
-        monthlyAverage: 25000,
-        topCategories: [
-          {
-            category: "Travel",
-            amount: 45000,
-            percentage: 36,
-            transactions: 12,
-            avgTransaction: 3750,
-            trend: "up",
-          },
-          {
-            category: "Dining",
-            amount: 28000,
-            percentage: 22.4,
-            transactions: 35,
-            avgTransaction: 800,
-            trend: "stable",
-          },
-          {
-            category: "Shopping",
-            amount: 22000,
-            percentage: 17.6,
-            transactions: 18,
-            avgTransaction: 1222,
-            trend: "down",
-          },
-          {
-            category: "Fuel",
-            amount: 15000,
-            percentage: 12,
-            transactions: 24,
-            avgTransaction: 625,
-            trend: "stable",
-          },
-          {
-            category: "Entertainment",
-            amount: 10000,
-            percentage: 8,
-            transactions: 15,
-            avgTransaction: 667,
-            trend: "up",
-          },
-          {
-            category: "Utilities",
-            amount: 5000,
-            percentage: 4,
-            transactions: 6,
-            avgTransaction: 833,
-            trend: "stable",
-          },
-        ],
-        transactionCount: 110,
-        period: "Last 5 months",
-        insights: [
-          "Travel spending is your highest category at 36% of total expenses",
-          "You have consistent monthly spending patterns with ₹25,000 average",
-          "High-value travel transactions suggest premium travel preferences",
-          "Dining expenses show regular frequency with moderate amounts",
-          "Fuel spending indicates regular commuting or travel",
-        ],
-        recommendations: [
-          "Consider travel-focused credit cards with airline miles and hotel rewards",
-          "Look for cards with dining bonus categories for your frequent restaurant visits",
-          "Premium cards with travel insurance and lounge access would suit your profile",
-          "Cards with fuel surcharge waivers can save money on your regular fuel expenses",
-          "Consider cards with no foreign transaction fees for international travel",
-        ],
-      }
-
-      setPortfolioData(mockData)
-    } catch (err) {
-      setError("Failed to analyze the uploaded file. Please try again.")
-    } finally {
+    // Simulate analysis delay
+    setTimeout(() => {
+      setAnalysisData({
+        spendingData: sampleSpendingData,
+        monthlyData: sampleMonthlyData,
+        insights: sampleInsights,
+        totalSpending: 25000,
+        avgMonthlySpending: 25000,
+        topCategory: "Dining",
+        spendingTrend: "stable",
+      })
       setIsAnalyzing(false)
-    }
+      setActiveTab("analysis")
+    }, 2000)
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(amount)
-  }
+  const renderSpendingChart = () => (
+    <ResponsiveContainer width="100%" height={300}>
+      <BarChart data={sampleSpendingData}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="category" />
+        <YAxis />
+        <Tooltip formatter={(value) => [`₹${value.toLocaleString()}`, "Amount"]} />
+        <Bar dataKey="amount" fill="#0088FE" />
+      </BarChart>
+    </ResponsiveContainer>
+  )
 
-  const getTrendIcon = (trend: "up" | "down" | "stable") => {
-    switch (trend) {
-      case "up":
-        return <TrendingUp className="h-4 w-4 text-green-500" />
-      case "down":
-        return <TrendingUp className="h-4 w-4 text-red-500 rotate-180" />
-      default:
-        return <BarChart3 className="h-4 w-4 text-gray-500" />
-    }
-  }
+  const renderSpendingPieChart = () => (
+    <ResponsiveContainer width="100%" height={300}>
+      <PieChart>
+        <Pie
+          data={sampleSpendingData}
+          cx="50%"
+          cy="50%"
+          labelLine={false}
+          label={({ category, percentage }) => `${category} ${percentage}%`}
+          outerRadius={80}
+          fill="#8884d8"
+          dataKey="amount"
+        >
+          {sampleSpendingData.map((entry, index) => (
+            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
+          ))}
+        </Pie>
+        <Tooltip formatter={(value) => [`₹${value.toLocaleString()}`, "Amount"]} />
+      </PieChart>
+    </ResponsiveContainer>
+  )
+
+  const renderTrendChart = () => (
+    <ResponsiveContainer width="100%" height={300}>
+      <LineChart data={sampleMonthlyData}>
+        <CartesianGrid strokeDasharray="3 3" />
+        <XAxis dataKey="month" />
+        <YAxis />
+        <Tooltip formatter={(value) => [`₹${value.toLocaleString()}`, "Amount"]} />
+        <Line type="monotone" dataKey="spending" stroke="#0088FE" strokeWidth={2} name="Spending" />
+        <Line type="monotone" dataKey="income" stroke="#00C49F" strokeWidth={2} name="Income" />
+      </LineChart>
+    </ResponsiveContainer>
+  )
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 py-12">
-      <div className="container mx-auto px-4 max-w-6xl">
-        {/* Header */}
-        <div className="text-center mb-12">
-          <h1 className="text-4xl font-bold text-gray-900 mb-4">Deep Dive Portfolio Analysis</h1>
-          <p className="text-xl text-gray-600 max-w-3xl mx-auto">
-            Upload your bank statements or transaction history to get personalized insights and credit card
-            recommendations based on your actual spending patterns.
-          </p>
-        </div>
+    <div className="max-w-6xl mx-auto p-6 space-y-8">
+      <div className="text-center">
+        <h1 className="text-3xl font-bold mb-2">🔍 Deep Dive Portfolio Analysis</h1>
+        <p className="text-gray-600">Upload your bank statements for personalized insights and card recommendations</p>
+      </div>
 
-        {/* Upload Section */}
-        {!portfolioData && (
-          <Card className="mb-8">
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-4">
+          <TabsTrigger value="upload" className="flex items-center gap-2">
+            <Upload className="h-4 w-4" />
+            Upload
+          </TabsTrigger>
+          <TabsTrigger value="analysis" className="flex items-center gap-2">
+            <BarChart3 className="h-4 w-4" />
+            Analysis
+          </TabsTrigger>
+          <TabsTrigger value="insights" className="flex items-center gap-2">
+            <Target className="h-4 w-4" />
+            Insights
+          </TabsTrigger>
+          <TabsTrigger value="recommendations" className="flex items-center gap-2">
+            <CreditCard className="h-4 w-4" />
+            Cards
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="upload" className="space-y-6">
+          <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Upload className="h-5 w-5" />
-                Upload Your Financial Data
+                <FileText className="h-5 w-5" />
+                Portfolio Upload
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
-                <input
-                  type="file"
-                  accept=".pdf,.csv,.xlsx,.xls"
-                  onChange={handleFileUpload}
-                  className="hidden"
-                  id="file-upload"
-                  disabled={isAnalyzing}
-                />
-                <label
-                  htmlFor="file-upload"
-                  className={`cursor-pointer ${isAnalyzing ? "cursor-not-allowed opacity-50" : ""}`}
-                >
-                  <div className="flex flex-col items-center gap-4">
-                    {isAnalyzing ? (
-                      <Loader2 className="h-12 w-12 text-blue-500 animate-spin" />
-                    ) : (
-                      <FileText className="h-12 w-12 text-gray-400" />
-                    )}
-                    <div>
-                      <p className="text-lg font-semibold text-gray-900">
-                        {isAnalyzing ? "Analyzing your data..." : "Choose file to upload"}
-                      </p>
-                      <p className="text-gray-600">
-                        {isAnalyzing ? "This may take a few moments" : "Supports PDF, CSV, and Excel files (Max 10MB)"}
-                      </p>
-                    </div>
-                    {uploadedFile && !isAnalyzing && (
-                      <Badge variant="outline" className="mt-2">
-                        {uploadedFile.name}
-                      </Badge>
-                    )}
-                  </div>
-                </label>
-              </div>
-
-              <div className="mt-6 grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span>Bank statements (PDF)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span>Transaction exports (CSV)</span>
-                </div>
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-green-500" />
-                  <span>Expense reports (Excel)</span>
-                </div>
-              </div>
+              <PortfolioDashboard
+                onAnalysisComplete={(data) => {
+                  setAnalysisData(data)
+                  setActiveTab("analysis")
+                }}
+              />
             </CardContent>
           </Card>
-        )}
+        </TabsContent>
 
-        {/* Error State */}
-        {error && (
-          <Alert className="mb-8 border-red-200 bg-red-50">
-            <AlertCircle className="h-4 w-4 text-red-600" />
-            <AlertDescription className="text-red-800">
-              {error}
-              <Button
-                onClick={() => {
-                  setError(null)
-                  setUploadedFile(null)
-                  setPortfolioData(null)
-                }}
-                variant="outline"
-                size="sm"
-                className="ml-4 bg-transparent"
-              >
-                Try Again
-              </Button>
-            </AlertDescription>
-          </Alert>
-        )}
-
-        {/* Portfolio Analysis Results */}
-        {portfolioData && (
-          <div className="space-y-8">
-            {/* Overview Cards */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Total Spending</p>
-                      <p className="text-2xl font-bold text-gray-900">{formatCurrency(portfolioData.totalSpending)}</p>
+        <TabsContent value="analysis" className="space-y-6">
+          {analysisData ? (
+            <>
+              {/* Summary Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Total Spending</p>
+                        <p className="text-2xl font-bold">₹{analysisData.totalSpending?.toLocaleString()}</p>
+                      </div>
+                      <TrendingUp className="h-8 w-8 text-blue-600" />
                     </div>
-                    <DollarSign className="h-8 w-8 text-blue-500" />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">{portfolioData.period}</p>
-                </CardContent>
-              </Card>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Avg Monthly</p>
+                        <p className="text-2xl font-bold">₹{analysisData.avgMonthlySpending?.toLocaleString()}</p>
+                      </div>
+                      <BarChart3 className="h-8 w-8 text-green-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Top Category</p>
+                        <p className="text-2xl font-bold">{analysisData.topCategory}</p>
+                      </div>
+                      <PieChartIcon className="h-8 w-8 text-orange-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardContent className="p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <p className="text-sm text-gray-600">Trend</p>
+                        <p className="text-2xl font-bold capitalize">{analysisData.spendingTrend}</p>
+                      </div>
+                      <Zap className="h-8 w-8 text-purple-600" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
+
+              {/* Charts */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Spending by Category</CardTitle>
+                  </CardHeader>
+                  <CardContent>{renderSpendingChart()}</CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Category Distribution</CardTitle>
+                  </CardHeader>
+                  <CardContent>{renderSpendingPieChart()}</CardContent>
+                </Card>
+              </div>
 
               <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Monthly Average</p>
-                      <p className="text-2xl font-bold text-gray-900">{formatCurrency(portfolioData.monthlyAverage)}</p>
-                    </div>
-                    <Calendar className="h-8 w-8 text-green-500" />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">Consistent spending pattern</p>
-                </CardContent>
+                <CardHeader>
+                  <CardTitle>Monthly Spending Trend</CardTitle>
+                </CardHeader>
+                <CardContent>{renderTrendChart()}</CardContent>
               </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Transactions</p>
-                      <p className="text-2xl font-bold text-gray-900">{portfolioData.transactionCount}</p>
-                    </div>
-                    <BarChart3 className="h-8 w-8 text-purple-500" />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">Total transactions analyzed</p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardContent className="p-6">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-sm font-medium text-gray-600">Top Category</p>
-                      <p className="text-2xl font-bold text-gray-900">{portfolioData.topCategories[0]?.category}</p>
-                    </div>
-                    <Target className="h-8 w-8 text-orange-500" />
-                  </div>
-                  <p className="text-xs text-gray-500 mt-2">
-                    {portfolioData.topCategories[0]?.percentage}% of spending
-                  </p>
-                </CardContent>
-              </Card>
-            </div>
-
-            {/* Spending Breakdown */}
+            </>
+          ) : (
             <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <PieChart className="h-5 w-5" />
-                  Spending Category Breakdown
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-4">
-                  {portfolioData.topCategories.map((category, index) => (
-                    <div
-                      key={category.category}
-                      className="flex items-center justify-between p-4 bg-gray-50 rounded-lg"
-                    >
-                      <div className="flex items-center gap-4">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="w-4 h-4 rounded-full"
-                            style={{
-                              backgroundColor: ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#6B7280"][
-                                index
-                              ],
-                            }}
-                          />
-                          <span className="font-semibold text-gray-900">{category.category}</span>
-                        </div>
-                        {getTrendIcon(category.trend)}
-                      </div>
-                      <div className="text-right">
-                        <p className="font-bold text-gray-900">{formatCurrency(category.amount)}</p>
-                        <p className="text-sm text-gray-600">
-                          {category.percentage}% • {category.transactions} transactions
-                        </p>
-                        <p className="text-xs text-gray-500">Avg: {formatCurrency(category.avgTransaction)}</p>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+              <CardContent className="p-8 text-center">
+                <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Analysis Data</h3>
+                <p className="text-gray-600">Upload your portfolio to see detailed analysis</p>
               </CardContent>
             </Card>
+          )}
+        </TabsContent>
 
-            {/* Insights */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Eye className="h-5 w-5" />
-                    Key Insights
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {portfolioData.insights.map((insight, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <CheckCircle2 className="h-5 w-5 text-blue-500 mt-0.5 flex-shrink-0" />
-                        <p className="text-gray-700">{insight}</p>
+        <TabsContent value="insights" className="space-y-6">
+          {analysisData ? (
+            <div className="space-y-4">
+              <h2 className="text-2xl font-bold">💡 Personalized Insights</h2>
+              {sampleInsights.map((insight, index) => (
+                <Card key={index}>
+                  <CardContent className="p-6">
+                    <div className="flex items-start gap-4">
+                      <div
+                        className={`p-2 rounded-full ${
+                          insight.impact === "high"
+                            ? "bg-red-100"
+                            : insight.impact === "medium"
+                              ? "bg-yellow-100"
+                              : "bg-green-100"
+                        }`}
+                      >
+                        {insight.actionable ? (
+                          <Target
+                            className={`h-5 w-5 ${
+                              insight.impact === "high"
+                                ? "text-red-600"
+                                : insight.impact === "medium"
+                                  ? "text-yellow-600"
+                                  : "text-green-600"
+                            }`}
+                          />
+                        ) : (
+                          <AlertCircle
+                            className={`h-5 w-5 ${
+                              insight.impact === "high"
+                                ? "text-red-600"
+                                : insight.impact === "medium"
+                                  ? "text-yellow-600"
+                                  : "text-green-600"
+                            }`}
+                          />
+                        )}
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center gap-2">
-                    <Zap className="h-5 w-5" />
-                    Recommendations
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-3">
-                    {portfolioData.recommendations.map((recommendation, index) => (
-                      <div key={index} className="flex items-start gap-3">
-                        <CreditCard className="h-5 w-5 text-green-500 mt-0.5 flex-shrink-0" />
-                        <p className="text-gray-700">{recommendation}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-2">
+                          <h3 className="font-semibold">{insight.title}</h3>
+                          <Badge
+                            variant={
+                              insight.impact === "high"
+                                ? "destructive"
+                                : insight.impact === "medium"
+                                  ? "default"
+                                  : "secondary"
+                            }
+                          >
+                            {insight.impact} impact
+                          </Badge>
+                          {insight.actionable && <Badge variant="outline">Actionable</Badge>}
+                        </div>
+                        <p className="text-gray-600">{insight.description}</p>
                       </div>
-                    ))}
-                  </div>
-                </CardContent>
-              </Card>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
+          ) : (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <Target className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Insights Available</h3>
+                <p className="text-gray-600">Upload your portfolio to get personalized insights</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
 
-            {/* Portfolio Analysis Component */}
-            <PortfolioAnalysis />
+        <TabsContent value="recommendations" className="space-y-6">
+          {analysisData ? (
+            <div className="space-y-6">
+              <Alert>
+                <CheckCircle2 className="h-4 w-4" />
+                <AlertDescription>
+                  Based on your spending analysis, here are the top card recommendations optimized for your spending
+                  patterns.
+                </AlertDescription>
+              </Alert>
 
-            {/* Action Buttons */}
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
-              <Button size="lg" className="min-w-[200px]">
-                <CreditCard className="h-4 w-4 mr-2" />
-                Get Personalized Card Recommendations
-              </Button>
-              <Button variant="outline" size="lg" className="min-w-[200px] bg-transparent">
-                <Download className="h-4 w-4 mr-2" />
-                Download Analysis Report
-              </Button>
-              <Button
-                variant="outline"
-                size="lg"
-                onClick={() => {
-                  setPortfolioData(null)
-                  setUploadedFile(null)
-                  setError(null)
-                }}
-              >
-                Upload New File
-              </Button>
+              <div className="grid gap-4">
+                {/* Sample recommendations based on analysis */}
+                <Card className="hover:shadow-lg transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="secondary">#1</Badge>
+                          <h3 className="text-xl font-bold">HDFC Millennia Credit Card</h3>
+                          <Badge variant="outline">HDFC</Badge>
+                        </div>
+                        <p className="text-gray-600">Perfect for your high dining and online spending</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-blue-600">92.5</div>
+                        <div className="text-sm text-gray-500">Match Score</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <div className="text-center">
+                        <div className="font-bold text-green-600">5%</div>
+                        <div className="text-sm text-gray-500">Dining Rewards</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold">₹1,000</div>
+                        <div className="text-sm text-gray-500">Joining Fee</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold">₹1,000</div>
+                        <div className="text-sm text-gray-500">Annual Fee</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold text-orange-600">₹2,000</div>
+                        <div className="text-sm text-gray-500">Welcome Bonus</div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      <Badge variant="default">Dining</Badge>
+                      <Badge variant="default">Online Shopping</Badge>
+                      <Badge variant="secondary">Groceries</Badge>
+                    </div>
+
+                    <Button className="w-full">Apply Now - Estimated Monthly Savings: ₹850</Button>
+                  </CardContent>
+                </Card>
+
+                <Card className="hover:shadow-lg transition-shadow">
+                  <CardContent className="p-6">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <div className="flex items-center gap-2 mb-1">
+                          <Badge variant="secondary">#2</Badge>
+                          <h3 className="text-xl font-bold">SBI SimplyCLICK Credit Card</h3>
+                          <Badge variant="outline">SBI</Badge>
+                        </div>
+                        <p className="text-gray-600">Great for online spending and fuel</p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold text-blue-600">88.2</div>
+                        <div className="text-sm text-gray-500">Match Score</div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
+                      <div className="text-center">
+                        <div className="font-bold text-green-600">10X</div>
+                        <div className="text-sm text-gray-500">Online Rewards</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold">₹499</div>
+                        <div className="text-sm text-gray-500">Joining Fee</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold">₹499</div>
+                        <div className="text-sm text-gray-500">Annual Fee</div>
+                      </div>
+                      <div className="text-center">
+                        <div className="font-bold text-orange-600">₹500</div>
+                        <div className="text-sm text-gray-500">Welcome Bonus</div>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap gap-2 mb-4">
+                      <Badge variant="default">Online Shopping</Badge>
+                      <Badge variant="default">Fuel</Badge>
+                      <Badge variant="secondary">Entertainment</Badge>
+                    </div>
+
+                    <Button className="w-full">Apply Now - Estimated Monthly Savings: ₹720</Button>
+                  </CardContent>
+                </Card>
+              </div>
             </div>
-          </div>
-        )}
-      </div>
+          ) : (
+            <Card>
+              <CardContent className="p-8 text-center">
+                <CreditCard className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Recommendations Available</h3>
+                <p className="text-gray-600">Upload your portfolio to get personalized card recommendations</p>
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   )
 }

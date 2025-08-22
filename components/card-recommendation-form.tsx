@@ -19,7 +19,9 @@ import {
   Car,
   ArrowRight,
   CheckCircle2,
+  AlertCircle,
 } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import EnhancedRecommendations from "./enhanced-recommendations"
 import { fetchAvailableSpendingCategories } from "@/lib/google-sheets"
 
@@ -36,16 +38,37 @@ const categoryIcons: { [key: string]: any } = {
   // Add more mappings as needed
 }
 
+// Updated banks list from the provided data
 const banks = [
-  "HDFC Bank",
-  "ICICI Bank",
   "SBI",
+  "PNB",
+  "Bank Of Baroda",
+  "Canara Bank",
+  "Indian Bank",
+  "Union Bank",
+  "Central Bank",
+  "BOI",
+  "IOB",
+  "HDFC",
+  "ICICI Bank",
   "Axis Bank",
-  "Kotak Mahindra Bank",
-  "IndusInd Bank",
+  "Kotak",
   "Yes Bank",
+  "FIRST",
+  "RBL",
+  "Induslnd Bank",
+  "SIB",
+  "Citi",
   "Standard Chartered",
-  "Citibank",
+  "HSBC",
+  "Barclays",
+  "Bajaj",
+  "Tata",
+  "Slice",
+  "Uni",
+  "Jupiter",
+  "Niyo",
+  "Federal",
   "American Express",
 ]
 
@@ -118,12 +141,28 @@ export default function CardRecommendationForm() {
   }
 
   const handleBankToggle = (bank: string) => {
-    setFormData((prev) => ({
-      ...prev,
-      preferredBanks: prev.preferredBanks.includes(bank)
-        ? prev.preferredBanks.filter((b) => b !== bank)
-        : [...prev.preferredBanks, bank],
-    }))
+    setFormData((prev) => {
+      const currentBanks = prev.preferredBanks
+
+      // If bank is already selected, remove it
+      if (currentBanks.includes(bank)) {
+        return {
+          ...prev,
+          preferredBanks: currentBanks.filter((b) => b !== bank),
+        }
+      }
+
+      // If less than 3 banks selected, add it
+      if (currentBanks.length < 3) {
+        return {
+          ...prev,
+          preferredBanks: [...currentBanks, bank],
+        }
+      }
+
+      // If 3 banks already selected, don't add more
+      return prev
+    })
   }
 
   const nextStep = () => {
@@ -336,23 +375,49 @@ export default function CardRecommendationForm() {
               </div>
 
               <div className="space-y-3">
-                <Label>Preferred Banks (Optional)</Label>
-                <p className="text-sm text-gray-600">Select banks you prefer or have existing relationships with.</p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                <div className="flex items-center gap-2">
+                  <Label>Preferred Brands (Optional)</Label>
+                  <Badge variant="outline" className="text-xs">
+                    Max 3 selections
+                  </Badge>
+                </div>
+                <p className="text-sm text-gray-600">
+                  Select up to 3 brands you prefer or have existing relationships with.
+                </p>
+
+                {/* Selection limit warning */}
+                {formData.preferredBanks.length >= 3 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      You've reached the maximum of 3 brand selections. Unselect a brand to choose a different one.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
                   {banks.map((bank) => {
                     const isSelected = formData.preferredBanks.includes(bank)
+                    const isDisabled = !isSelected && formData.preferredBanks.length >= 3
+
                     return (
                       <div
                         key={bank}
                         className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-colors ${
                           isSelected
                             ? "border-blue-500 bg-blue-50"
-                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                            : isDisabled
+                              ? "border-gray-200 bg-gray-100 cursor-not-allowed opacity-50"
+                              : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
                         }`}
-                        onClick={() => handleBankToggle(bank)}
+                        onClick={() => !isDisabled && handleBankToggle(bank)}
                       >
-                        <Checkbox checked={isSelected} onChange={() => handleBankToggle(bank)} />
-                        <span className="text-sm font-medium">{bank}</span>
+                        <Checkbox
+                          checked={isSelected}
+                          disabled={isDisabled}
+                          onChange={() => !isDisabled && handleBankToggle(bank)}
+                        />
+                        <span className={`text-sm font-medium ${isDisabled ? "text-gray-400" : ""}`}>{bank}</span>
                       </div>
                     )
                   })}
@@ -360,11 +425,18 @@ export default function CardRecommendationForm() {
 
                 {formData.preferredBanks.length > 0 && (
                   <div className="mt-3">
-                    <p className="text-sm text-gray-600 mb-2">Selected banks:</p>
+                    <p className="text-sm text-gray-600 mb-2">Selected brands ({formData.preferredBanks.length}/3):</p>
                     <div className="flex flex-wrap gap-2">
                       {formData.preferredBanks.map((bank) => (
-                        <Badge key={bank} variant="secondary">
+                        <Badge key={bank} variant="secondary" className="flex items-center gap-1">
                           {bank}
+                          <button
+                            onClick={() => handleBankToggle(bank)}
+                            className="ml-1 text-gray-500 hover:text-gray-700"
+                            aria-label={`Remove ${bank}`}
+                          >
+                            ×
+                          </button>
                         </Badge>
                       ))}
                     </div>

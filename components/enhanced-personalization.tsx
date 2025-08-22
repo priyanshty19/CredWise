@@ -63,6 +63,40 @@ interface CardTesterProps {
   onClose: () => void
 }
 
+// Updated banks list from the provided data
+const banks = [
+  "SBI",
+  "PNB",
+  "Bank Of Baroda",
+  "Canara Bank",
+  "Indian Bank",
+  "Union Bank",
+  "Central Bank",
+  "BOI",
+  "IOB",
+  "HDFC",
+  "ICICI Bank",
+  "Axis Bank",
+  "Kotak",
+  "Yes Bank",
+  "FIRST",
+  "RBL",
+  "Induslnd Bank",
+  "SIB",
+  "Citi",
+  "Standard Chartered",
+  "HSBC",
+  "Barclays",
+  "Bajaj",
+  "Tata",
+  "Slice",
+  "Uni",
+  "Jupiter",
+  "Niyo",
+  "Federal",
+  "American Express",
+]
+
 function CardTester({ cards, formData, onClose }: CardTesterProps) {
   const [searchTerm, setSearchTerm] = useState<string>("")
   const [selectedCard, setSelectedCard] = useState<ScoredCard | null>(null)
@@ -147,7 +181,7 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                 <div>{formData.spendingCategories.join(", ") || "None selected"}</div>
               </div>
               <div>
-                <span className="font-medium text-orange-700">Preferred Banks:</span>
+                <span className="font-medium text-orange-700">Preferred Brands:</span>
                 <div>{formData.preferredBanks.join(", ") || "None selected"}</div>
               </div>
             </div>
@@ -359,14 +393,14 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                         </div>
 
                         <div className="flex justify-between">
-                          <span>🏦 Bank Bonus (5):</span>
+                          <span>🏦 Brand Bonus (5):</span>
                           <span className="font-medium">{selectedCard.scoreBreakdown.bank.toFixed(1)}</span>
                         </div>
                         <div className="text-xs text-gray-600">
                           {formData.preferredBanks.some((bank) =>
                             selectedCard.card.bank.toLowerCase().includes(bank.toLowerCase()),
                           )
-                            ? "Preferred bank"
+                            ? "Preferred brand"
                             : "Not preferred"}
                         </div>
 
@@ -429,7 +463,7 @@ function CardTester({ cards, formData, onClose }: CardTesterProps) {
                     <h4 className="font-semibold mb-2">Card Details</h4>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
                       <div>
-                        <span className="text-gray-600">Bank:</span>
+                        <span className="text-gray-600">Brand:</span>
                         <div className="font-medium">{selectedCard.card.bank}</div>
                       </div>
                       <div>
@@ -608,11 +642,10 @@ export default function EnhancedPersonalization() {
         const categories = [...new Set(cards.flatMap((card) => card.spendingCategories))].sort()
         setAvailableCategories(categories)
 
-        // Extract unique banks from cards
-        const banks = [...new Set(cards.map((card) => card.bank))].sort()
+        // Use the predefined banks list instead of extracting from cards
         setAvailableBanks(banks)
 
-        console.log(`✅ Loaded ${cards.length} cards, ${categories.length} categories, ${banks.length} banks`)
+        console.log(`✅ Loaded ${cards.length} cards, ${categories.length} categories, ${banks.length} brands`)
       } catch (error) {
         console.error("Error fetching live data:", error)
       } finally {
@@ -637,10 +670,28 @@ export default function EnhancedPersonalization() {
   }
 
   const handleBankChange = (bankId: string, checked: boolean) => {
-    setFormData((prev) => ({
-      ...prev,
-      preferredBanks: checked ? [...prev.preferredBanks, bankId] : prev.preferredBanks.filter((id) => id !== bankId),
-    }))
+    setFormData((prev) => {
+      const currentBanks = prev.preferredBanks
+
+      // If bank is already selected, remove it
+      if (currentBanks.includes(bankId)) {
+        return {
+          ...prev,
+          preferredBanks: currentBanks.filter((id) => id !== bankId),
+        }
+      }
+
+      // If less than 3 banks selected, add it
+      if (currentBanks.length < 3) {
+        return {
+          ...prev,
+          preferredBanks: [...currentBanks, bankId],
+        }
+      }
+
+      // If 3 banks already selected, don't add more
+      return prev
+    })
   }
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -838,23 +889,68 @@ export default function EnhancedPersonalization() {
               </div>
             </div>
 
-            {/* Preferred Banks - Live from database */}
+            {/* Preferred Brands - Updated with 3 max selection limit */}
             <div>
-              <Label>Preferred Banks (Optional)</Label>
-              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2 max-h-32 overflow-y-auto">
-                {availableBanks.map((bank) => (
-                  <div key={bank} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={bank}
-                      checked={formData.preferredBanks.includes(bank)}
-                      onCheckedChange={(checked) => handleBankChange(bank, checked as boolean)}
-                    />
-                    <Label htmlFor={bank} className="text-sm">
-                      {bank}
-                    </Label>
-                  </div>
-                ))}
+              <div className="flex items-center gap-2 mb-2">
+                <Label>Preferred Brands (Optional)</Label>
+                <Badge variant="outline" className="text-xs">
+                  Max 3 selections
+                </Badge>
               </div>
+              <p className="text-sm text-gray-600 mb-3">
+                Select up to 3 brands you prefer or have existing relationships with.
+              </p>
+
+              {/* Selection limit warning */}
+              {formData.preferredBanks.length >= 3 && (
+                <Alert className="mb-4">
+                  <AlertCircle className="h-4 w-4" />
+                  <AlertDescription>
+                    You've reached the maximum of 3 brand selections. Unselect a brand to choose a different one.
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-2 max-h-32 overflow-y-auto">
+                {availableBanks.map((bank) => {
+                  const isSelected = formData.preferredBanks.includes(bank)
+                  const isDisabled = !isSelected && formData.preferredBanks.length >= 3
+
+                  return (
+                    <div key={bank} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={bank}
+                        checked={isSelected}
+                        disabled={isDisabled}
+                        onCheckedChange={(checked) => !isDisabled && handleBankChange(bank, checked as boolean)}
+                      />
+                      <Label htmlFor={bank} className={`text-sm ${isDisabled ? "text-gray-400" : ""}`}>
+                        {bank}
+                      </Label>
+                    </div>
+                  )
+                })}
+              </div>
+
+              {formData.preferredBanks.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-sm text-gray-600 mb-2">Selected brands ({formData.preferredBanks.length}/3):</p>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.preferredBanks.map((bank) => (
+                      <Badge key={bank} variant="secondary" className="flex items-center gap-1">
+                        {bank}
+                        <button
+                          onClick={() => handleBankChange(bank, false)}
+                          className="ml-1 text-gray-500 hover:text-gray-700"
+                          aria-label={`Remove ${bank}`}
+                        >
+                          ×
+                        </button>
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Joining Fee Preference */}
