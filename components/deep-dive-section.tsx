@@ -7,7 +7,7 @@ import { Badge } from "@/components/ui/badge"
 import { TrendingUp, Target, Settings, AlertCircle, CheckCircle } from "lucide-react"
 import { PortfolioAnalysis } from "./portfolio-analysis"
 
-export function DeepDiveSection() {
+function DeepDiveSection() {
   const [activeTab, setActiveTab] = useState("portfolio")
 
   return (
@@ -164,3 +164,5 @@ export function DeepDiveSection() {
     </div>
   )
 }
+
+export default DeepDiveSection
