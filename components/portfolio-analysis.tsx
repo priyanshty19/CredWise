@@ -2,299 +2,497 @@
 
 import type React from "react"
 
-import { useState, useCallback } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { useState, useRef } from "react"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import { Separator } from "@/components/ui/separator"
 import {
   Upload,
   FileText,
-  TrendingUp,
-  TrendingDown,
-  PieChart,
   AlertCircle,
   CheckCircle2,
-  BarChart3,
-  Target,
+  TrendingUp,
+  DollarSign,
+  Calendar,
+  Building2,
+  CreditCard,
+  Loader2,
 } from "lucide-react"
-import {
-  parseUniversalStatement,
-  formatCurrency,
-  formatPercentage,
-  type ParsedPortfolio,
-} from "@/lib/universal-statement-parser"
+import { parseUniversalStatement } from "@/lib/universal-statement-parser"
 
-interface PortfolioAnalysisProps {
-  onAnalysisComplete?: (analysis: ParsedPortfolio) => void
+interface Transaction {
+  date: string
+  description: string
+  amount: number
+  category?: string
+  type: "debit" | "credit"
 }
 
-export function PortfolioAnalysis({ onAnalysisComplete }: PortfolioAnalysisProps) {
+interface AnalysisResult {
+  totalTransactions: number
+  totalSpending: number
+  totalCredits: number
+  netAmount: number
+  categories: Record<string, { amount: number; count: number }>
+  monthlyBreakdown: Record<string, number>
+  topMerchants: Array<{ name: string; amount: number; count: number }>
+  insights: string[]
+}
+
+export function PortfolioAnalysis() {
   const [file, setFile] = useState<File | null>(null)
   const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analysis, setAnalysis] = useState<ParsedPortfolio | null>(null)
+  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const selectedFile = event.target.files?.[0]
     if (selectedFile) {
       setFile(selectedFile)
       setError(null)
-      setAnalysis(null)
+      setAnalysisResult(null)
     }
   }
 
-  const analyzePortfolio = useCallback(async () => {
-    if (!file) return
+  const handleAnalyze = async () => {
+    if (!file) {
+      setError("Please select a file to analyze")
+      return
+    }
 
     setIsAnalyzing(true)
     setError(null)
 
     try {
-      const fileContent = await file.text()
-      const portfolioAnalysis = parseUniversalStatement(fileContent, file.name)
+      console.log("🔍 Starting portfolio analysis for:", file.name)
 
-      if (!portfolioAnalysis.success) {
-        throw new Error(portfolioAnalysis.error || "Failed to parse portfolio statement")
+      // Parse the statement file
+      const transactions = await parseUniversalStatement(file)
+
+      if (!transactions || transactions.length === 0) {
+        throw new Error("No transactions found in the file. Please check the file format.")
       }
 
-      setAnalysis(portfolioAnalysis)
-      onAnalysisComplete?.(portfolioAnalysis)
+      console.log(`📊 Parsed ${transactions.length} transactions`)
+
+      // Perform analysis
+      const analysis = analyzeTransactions(transactions)
+      setAnalysisResult(analysis)
+
+      console.log("✅ Analysis completed successfully")
     } catch (err) {
-      console.error("Portfolio analysis error:", err)
-      setError(err instanceof Error ? err.message : "Failed to analyze portfolio")
+      console.error("❌ Analysis error:", err)
+      setError(err instanceof Error ? err.message : "Failed to analyze the file")
     } finally {
       setIsAnalyzing(false)
     }
-  }, [file, onAnalysisComplete])
-
-  const getPerformanceColor = (change: number) => {
-    if (change > 0) return "text-green-600"
-    if (change < 0) return "text-red-600"
-    return "text-gray-600"
   }
 
-  const getPerformanceIcon = (change: number) => {
-    if (change > 0) return <TrendingUp className="h-4 w-4" />
-    if (change < 0) return <TrendingDown className="h-4 w-4" />
-    return <Target className="h-4 w-4" />
+  const analyzeTransactions = (transactions: Transaction[]): AnalysisResult => {
+    const categories: Record<string, { amount: number; count: number }> = {}
+    const monthlyBreakdown: Record<string, number> = {}
+    const merchantMap: Record<string, { amount: number; count: number }> = {}
+
+    let totalSpending = 0
+    let totalCredits = 0
+
+    transactions.forEach((transaction) => {
+      const { amount, type, description, date } = transaction
+      const month = new Date(date).toISOString().slice(0, 7) // YYYY-MM format
+
+      if (type === "debit") {
+        totalSpending += Math.abs(amount)
+
+        // Category analysis
+        const category = transaction.category || categorizeTransaction(description)
+        if (!categories[category]) {
+          categories[category] = { amount: 0, count: 0 }
+        }
+        categories[category].amount += Math.abs(amount)
+        categories[category].count += 1
+
+        // Monthly breakdown
+        if (!monthlyBreakdown[month]) {
+          monthlyBreakdown[month] = 0
+        }
+        monthlyBreakdown[month] += Math.abs(amount)
+
+        // Merchant analysis
+        const merchant = extractMerchantName(description)
+        if (!merchantMap[merchant]) {
+          merchantMap[merchant] = { amount: 0, count: 0 }
+        }
+        merchantMap[merchant].amount += Math.abs(amount)
+        merchantMap[merchant].count += 1
+      } else {
+        totalCredits += Math.abs(amount)
+      }
+    })
+
+    // Get top merchants
+    const topMerchants = Object.entries(merchantMap)
+      .map(([name, data]) => ({ name, ...data }))
+      .sort((a, b) => b.amount - a.amount)
+      .slice(0, 10)
+
+    // Generate insights
+    const insights = generateInsights(categories, monthlyBreakdown, totalSpending, transactions.length)
+
+    return {
+      totalTransactions: transactions.length,
+      totalSpending,
+      totalCredits,
+      netAmount: totalCredits - totalSpending,
+      categories,
+      monthlyBreakdown,
+      topMerchants,
+      insights,
+    }
+  }
+
+  const categorizeTransaction = (description: string): string => {
+    const desc = description.toLowerCase()
+
+    if (
+      desc.includes("restaurant") ||
+      desc.includes("food") ||
+      desc.includes("dining") ||
+      desc.includes("zomato") ||
+      desc.includes("swiggy")
+    ) {
+      return "Dining & Restaurants"
+    }
+    if (
+      desc.includes("fuel") ||
+      desc.includes("petrol") ||
+      desc.includes("gas") ||
+      desc.includes("hp") ||
+      desc.includes("iocl")
+    ) {
+      return "Fuel & Gas"
+    }
+    if (
+      desc.includes("grocery") ||
+      desc.includes("supermarket") ||
+      desc.includes("bigbasket") ||
+      desc.includes("grofers")
+    ) {
+      return "Groceries"
+    }
+    if (desc.includes("amazon") || desc.includes("flipkart") || desc.includes("shopping") || desc.includes("mall")) {
+      return "Online Shopping"
+    }
+    if (
+      desc.includes("uber") ||
+      desc.includes("ola") ||
+      desc.includes("taxi") ||
+      desc.includes("metro") ||
+      desc.includes("transport")
+    ) {
+      return "Transport"
+    }
+    if (
+      desc.includes("movie") ||
+      desc.includes("cinema") ||
+      desc.includes("netflix") ||
+      desc.includes("entertainment")
+    ) {
+      return "Entertainment"
+    }
+    if (
+      desc.includes("electricity") ||
+      desc.includes("water") ||
+      desc.includes("internet") ||
+      desc.includes("mobile") ||
+      desc.includes("utility")
+    ) {
+      return "Utilities & Bills"
+    }
+    if (desc.includes("hotel") || desc.includes("flight") || desc.includes("travel") || desc.includes("booking")) {
+      return "Travel & Hotels"
+    }
+    if (desc.includes("medical") || desc.includes("hospital") || desc.includes("pharmacy") || desc.includes("health")) {
+      return "Healthcare"
+    }
+
+    return "Others"
+  }
+
+  const extractMerchantName = (description: string): string => {
+    // Simple merchant name extraction - can be enhanced
+    const parts = description.split(" ")
+    return (
+      parts
+        .slice(0, 2)
+        .join(" ")
+        .replace(/[^a-zA-Z0-9\s]/g, "")
+        .trim() || "Unknown"
+    )
+  }
+
+  const generateInsights = (
+    categories: Record<string, { amount: number; count: number }>,
+    monthlyBreakdown: Record<string, number>,
+    totalSpending: number,
+    transactionCount: number,
+  ): string[] => {
+    const insights: string[] = []
+
+    // Top spending category
+    const topCategory = Object.entries(categories).sort(([, a], [, b]) => b.amount - a.amount)[0]
+
+    if (topCategory) {
+      const percentage = ((topCategory[1].amount / totalSpending) * 100).toFixed(1)
+      insights.push(`Your highest spending category is ${topCategory[0]} (${percentage}% of total spending)`)
+    }
+
+    // Average transaction amount
+    const avgTransaction = totalSpending / transactionCount
+    insights.push(`Your average transaction amount is ₹${avgTransaction.toFixed(0)}`)
+
+    // Monthly spending pattern
+    const months = Object.keys(monthlyBreakdown).sort()
+    if (months.length >= 2) {
+      const latestMonth = monthlyBreakdown[months[months.length - 1]]
+      const previousMonth = monthlyBreakdown[months[months.length - 2]]
+      const change = (((latestMonth - previousMonth) / previousMonth) * 100).toFixed(1)
+
+      if (Number.parseFloat(change) > 0) {
+        insights.push(`Your spending increased by ${change}% compared to the previous month`)
+      } else {
+        insights.push(
+          `Your spending decreased by ${Math.abs(Number.parseFloat(change))}% compared to the previous month`,
+        )
+      }
+    }
+
+    // High-frequency categories
+    const highFreqCategory = Object.entries(categories).sort(([, a], [, b]) => b.count - a.count)[0]
+
+    if (highFreqCategory && highFreqCategory[1].count > 5) {
+      insights.push(
+        `You make frequent transactions in ${highFreqCategory[0]} (${highFreqCategory[1].count} transactions)`,
+      )
+    }
+
+    return insights
+  }
+
+  const formatCurrency = (amount: number) => {
+    return new Intl.NumberFormat("en-IN", {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    }).format(amount)
   }
 
   return (
     <div className="space-y-6">
-      {/* File Upload Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Upload className="h-5 w-5" />
-            Upload Portfolio Statement
+            <FileText className="h-5 w-5" />
+            Portfolio Analysis
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           <div>
-            <Label htmlFor="portfolio-file">Select your portfolio statement (CSV, Excel, or text format)</Label>
-            <Input
-              id="portfolio-file"
-              type="file"
-              accept=".csv,.xlsx,.xls,.txt"
-              onChange={handleFileChange}
-              className="mt-2"
-            />
-            <p className="text-sm text-gray-500 mt-1">
-              Supports statements from Zerodha, Groww, Angel One, ICICI Direct, and other major platforms
-            </p>
+            <Label htmlFor="statement-file">Upload Bank Statement or Credit Card Statement</Label>
+            <div className="mt-2">
+              <Input
+                id="statement-file"
+                type="file"
+                accept=".pdf,.csv,.xlsx,.xls"
+                onChange={handleFileSelect}
+                ref={fileInputRef}
+                className="cursor-pointer"
+              />
+            </div>
+            <p className="text-sm text-gray-500 mt-1">Supported formats: PDF, CSV, Excel (.xlsx, .xls)</p>
           </div>
 
           {file && (
-            <div className="flex items-center gap-2 p-3 bg-blue-50 rounded-lg">
-              <FileText className="h-4 w-4 text-blue-600" />
-              <span className="text-sm font-medium">{file.name}</span>
-              <span className="text-xs text-gray-500">({(file.size / 1024).toFixed(1)} KB)</span>
-            </div>
+            <Alert>
+              <CheckCircle2 className="h-4 w-4" />
+              <AlertDescription>
+                Selected file: <strong>{file.name}</strong> ({(file.size / 1024 / 1024).toFixed(2)} MB)
+              </AlertDescription>
+            </Alert>
           )}
 
-          <Button onClick={analyzePortfolio} disabled={!file || isAnalyzing} className="w-full">
-            {isAnalyzing ? "Analyzing Portfolio..." : "Analyze Portfolio"}
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
+          <Button onClick={handleAnalyze} disabled={!file || isAnalyzing} className="w-full">
+            {isAnalyzing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Analyzing...
+              </>
+            ) : (
+              <>
+                <Upload className="h-4 w-4 mr-2" />
+                Analyze Portfolio
+              </>
+            )}
           </Button>
         </CardContent>
       </Card>
 
-      {/* Error Display */}
-      {error && (
-        <Alert className="border-red-200 bg-red-50">
-          <AlertCircle className="h-4 w-4 text-red-600" />
-          <AlertDescription className="text-red-800">{error}</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Analysis Results */}
-      {analysis && analysis.success && (
+      {analysisResult && (
         <div className="space-y-6">
-          {/* Portfolio Summary */}
+          {/* Summary Cards */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Total Transactions</p>
+                    <p className="text-2xl font-bold">{analysisResult.totalTransactions}</p>
+                  </div>
+                  <CreditCard className="h-8 w-8 text-blue-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Total Spending</p>
+                    <p className="text-2xl font-bold text-red-600">{formatCurrency(analysisResult.totalSpending)}</p>
+                  </div>
+                  <TrendingUp className="h-8 w-8 text-red-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Total Credits</p>
+                    <p className="text-2xl font-bold text-green-600">{formatCurrency(analysisResult.totalCredits)}</p>
+                  </div>
+                  <DollarSign className="h-8 w-8 text-green-500" />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-gray-600">Net Amount</p>
+                    <p
+                      className={`text-2xl font-bold ${analysisResult.netAmount >= 0 ? "text-green-600" : "text-red-600"}`}
+                    >
+                      {formatCurrency(analysisResult.netAmount)}
+                    </p>
+                  </div>
+                  <Building2 className="h-8 w-8 text-gray-500" />
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Spending Categories */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <PieChart className="h-5 w-5" />
-                Portfolio Summary
-              </CardTitle>
+              <CardTitle>Spending by Category</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{formatCurrency(analysis.summary.totalValue)}</div>
-                  <div className="text-sm text-gray-500">Total Value</div>
-                </div>
-                <div className="text-center">
-                  <div className="text-2xl font-bold text-green-600">
-                    {formatCurrency(analysis.summary.totalInvested)}
-                  </div>
-                  <div className="text-sm text-gray-500">Total Invested</div>
-                </div>
-                <div className="text-center">
-                  <div className={`text-2xl font-bold ${getPerformanceColor(analysis.summary.totalGainLoss)}`}>
-                    {formatCurrency(analysis.summary.totalGainLoss)}
-                  </div>
-                  <div className="text-sm text-gray-500">Total P&L</div>
-                </div>
-                <div className="text-center">
-                  <div
-                    className={`text-2xl font-bold flex items-center justify-center gap-1 ${getPerformanceColor(analysis.summary.totalGainLossPercentage)}`}
-                  >
-                    {getPerformanceIcon(analysis.summary.totalGainLossPercentage)}
-                    {formatPercentage(analysis.summary.totalGainLossPercentage)}
-                  </div>
-                  <div className="text-sm text-gray-500">Return %</div>
-                </div>
+              <div className="space-y-4">
+                {Object.entries(analysisResult.categories)
+                  .sort(([, a], [, b]) => b.amount - a.amount)
+                  .map(([category, data]) => {
+                    const percentage = ((data.amount / analysisResult.totalSpending) * 100).toFixed(1)
+                    return (
+                      <div key={category} className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <Badge variant="outline">{category}</Badge>
+                          <span className="text-sm text-gray-600">{data.count} transactions</span>
+                        </div>
+                        <div className="text-right">
+                          <div className="font-semibold">{formatCurrency(data.amount)}</div>
+                          <div className="text-sm text-gray-500">{percentage}%</div>
+                        </div>
+                      </div>
+                    )
+                  })}
               </div>
             </CardContent>
           </Card>
 
-          {/* Holdings Breakdown */}
+          {/* Monthly Breakdown */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                Holdings Breakdown ({analysis.holdings.length} holdings)
+                <Calendar className="h-5 w-5" />
+                Monthly Spending Breakdown
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3 max-h-96 overflow-y-auto">
-                {analysis.holdings.map((holding, index) => (
-                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                    <div className="flex-1">
-                      <div className="font-medium">{holding.symbol}</div>
-                      <div className="text-sm text-gray-600">
-                        {holding.quantity} shares @ {formatCurrency(holding.avgPrice)}
-                      </div>
+              <div className="space-y-3">
+                {Object.entries(analysisResult.monthlyBreakdown)
+                  .sort(([a], [b]) => b.localeCompare(a))
+                  .map(([month, amount]) => (
+                    <div key={month} className="flex justify-between items-center">
+                      <span className="font-medium">
+                        {new Date(month + "-01").toLocaleDateString("en-US", { year: "numeric", month: "long" })}
+                      </span>
+                      <span className="font-semibold">{formatCurrency(amount)}</span>
                     </div>
-                    <div className="text-right">
-                      <div className="font-medium">{formatCurrency(holding.currentValue)}</div>
-                      <div
-                        className={`text-sm flex items-center gap-1 ${getPerformanceColor(holding.gainLossPercentage)}`}
-                      >
-                        {getPerformanceIcon(holding.gainLossPercentage)}
-                        {formatPercentage(holding.gainLossPercentage)}
-                      </div>
+                  ))}
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Top Merchants */}
+          <Card>
+            <CardHeader>
+              <CardTitle>Top Merchants</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-3">
+                {analysisResult.topMerchants.slice(0, 10).map((merchant, index) => (
+                  <div key={merchant.name} className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <Badge variant="secondary">#{index + 1}</Badge>
+                      <span className="font-medium">{merchant.name}</span>
+                      <span className="text-sm text-gray-600">{merchant.count} transactions</span>
                     </div>
+                    <span className="font-semibold">{formatCurrency(merchant.amount)}</span>
                   </div>
                 ))}
               </div>
             </CardContent>
           </Card>
 
-          {/* Platform Information */}
-          {analysis.platform && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-green-600" />
-                  Platform Detected
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline">{analysis.platform}</Badge>
-                  <span className="text-sm text-gray-600">Statement format automatically detected and parsed</span>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Analysis Insights */}
+          {/* Insights */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <Target className="h-5 w-5" />
-                Portfolio Insights
+                <TrendingUp className="h-5 w-5" />
+                Key Insights
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-4">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <h4 className="font-semibold text-blue-800 mb-2">Best Performer</h4>
-                  {(() => {
-                    const bestPerformer = analysis.holdings.reduce((best, current) =>
-                      current.gainLossPercentage > best.gainLossPercentage ? current : best,
-                    )
-                    return (
-                      <div>
-                        <div className="font-medium">{bestPerformer.symbol}</div>
-                        <div className="text-sm text-green-600">
-                          +{formatPercentage(bestPerformer.gainLossPercentage)} (
-                          {formatCurrency(bestPerformer.gainLoss)})
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-                <div className="p-4 bg-red-50 rounded-lg">
-                  <h4 className="font-semibold text-red-800 mb-2">Needs Attention</h4>
-                  {(() => {
-                    const worstPerformer = analysis.holdings.reduce((worst, current) =>
-                      current.gainLossPercentage < worst.gainLossPercentage ? current : worst,
-                    )
-                    return (
-                      <div>
-                        <div className="font-medium">{worstPerformer.symbol}</div>
-                        <div className="text-sm text-red-600">
-                          {formatPercentage(worstPerformer.gainLossPercentage)} (
-                          {formatCurrency(worstPerformer.gainLoss)})
-                        </div>
-                      </div>
-                    )
-                  })()}
-                </div>
-              </div>
-
-              <Separator />
-
-              <div className="space-y-2">
-                <h4 className="font-semibold">Portfolio Allocation</h4>
-                <div className="space-y-2">
-                  {analysis.holdings
-                    .sort((a, b) => b.currentValue - a.currentValue)
-                    .slice(0, 5)
-                    .map((holding, index) => {
-                      const percentage = (holding.currentValue / analysis.summary.totalValue) * 100
-                      return (
-                        <div key={index} className="flex items-center justify-between">
-                          <span className="text-sm">{holding.symbol}</span>
-                          <div className="flex items-center gap-2">
-                            <div className="w-20 bg-gray-200 rounded-full h-2">
-                              <div
-                                className="bg-blue-600 h-2 rounded-full"
-                                style={{ width: `${Math.min(percentage, 100)}%` }}
-                              />
-                            </div>
-                            <span className="text-sm font-medium w-12 text-right">{percentage.toFixed(1)}%</span>
-                          </div>
-                        </div>
-                      )
-                    })}
-                </div>
+            <CardContent>
+              <div className="space-y-3">
+                {analysisResult.insights.map((insight, index) => (
+                  <Alert key={index}>
+                    <CheckCircle2 className="h-4 w-4" />
+                    <AlertDescription>{insight}</AlertDescription>
+                  </Alert>
+                ))}
               </div>
             </CardContent>
           </Card>
