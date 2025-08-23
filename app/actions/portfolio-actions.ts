@@ -148,7 +148,7 @@ export async function addManualEntry(formData: FormData) {
   }
 }
 
-export function calculatePortfolioSummary(entries: PortfolioEntry[]): PortfolioSummary {
+export async function calculatePortfolioSummary(entries: PortfolioEntry[]): Promise<PortfolioSummary> {
   const totalValue = entries.reduce((sum, entry) => sum + entry.currentValue, 0)
   const totalInvested = entries.reduce((sum, entry) => sum + entry.quantity * entry.avgPrice, 0)
   const totalGainLoss = totalValue - totalInvested
