@@ -8,6 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
+import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
   CreditCard,
   Utensils,
@@ -21,7 +22,6 @@ import {
   CheckCircle2,
   AlertCircle,
 } from "lucide-react"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import EnhancedRecommendations from "./enhanced-recommendations"
 import { fetchAvailableSpendingCategories } from "@/lib/google-sheets"
 
