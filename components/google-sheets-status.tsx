@@ -1,219 +1,65 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
-import { Alert, AlertDescription } from "@/components/ui/alert"
-import {
-  CheckCircle2,
-  AlertCircle,
-  Clock,
-  Database,
-  ExternalLink,
-  RefreshCw,
-  Loader2,
-  Wifi,
-  WifiOff,
-} from "lucide-react"
 import { checkGoogleSheetsStatus } from "@/app/actions/google-sheets-actions"
 
-interface ConnectionStatus {
-  sheetsApi: {
-    status: "connected" | "error" | "checking"
-    message?: string
-    responseTime?: number
-  }
-  appsScript: {
-    status: "connected" | "error" | "checking"
-    message?: string
-    responseTime?: number
-  }
-  lastChecked?: Date
+interface StatusResult {
+  success: boolean
+  message: string
+  cardCount?: number
 }
 
-export default function GoogleSheetsStatus() {
-  const [status, setStatus] = useState<ConnectionStatus>({
-    sheetsApi: { status: "checking" },
-    appsScript: { status: "checking" },
-  })
-  const [isRefreshing, setIsRefreshing] = useState(false)
+export function GoogleSheetsStatus() {
+  const [status, setStatus] = useState<StatusResult | null>(null)
+  const [loading, setLoading] = useState(false)
 
-  const checkConnections = async () => {
-    setIsRefreshing(true)
-    setStatus({
-      sheetsApi: { status: "checking" },
-      appsScript: { status: "checking" },
-    })
-
+  const checkStatus = async () => {
+    setLoading(true)
     try {
       const result = await checkGoogleSheetsStatus()
-
-      setStatus({
-        sheetsApi: result.sheetsApi,
-        appsScript: result.appsScript,
-        lastChecked: new Date(),
-      })
+      setStatus(result)
     } catch (error) {
       setStatus({
-        sheetsApi: {
-          status: "error",
-          message: "Failed to check connection",
-        },
-        appsScript: {
-          status: "error",
-          message: "Failed to check connection",
-        },
-        lastChecked: new Date(),
+        success: false,
+        message: "Failed to check status",
       })
+    } finally {
+      setLoading(false)
     }
-
-    setIsRefreshing(false)
   }
 
   useEffect(() => {
-    checkConnections()
+    checkStatus()
   }, [])
 
-  const getStatusIcon = (status: "connected" | "error" | "checking") => {
-    switch (status) {
-      case "connected":
-        return <CheckCircle2 className="h-4 w-4 text-green-600" />
-      case "error":
-        return <AlertCircle className="h-4 w-4 text-red-600" />
-      case "checking":
-        return <Loader2 className="h-4 w-4 animate-spin text-blue-600" />
-    }
-  }
-
-  const getStatusBadge = (status: "connected" | "error" | "checking") => {
-    switch (status) {
-      case "connected":
-        return <Badge className="bg-green-100 text-green-800">Connected</Badge>
-      case "error":
-        return <Badge variant="destructive">Error</Badge>
-      case "checking":
-        return <Badge variant="secondary">Checking...</Badge>
-    }
-  }
-
-  const overallStatus = status.sheetsApi.status === "connected" && status.appsScript.status === "connected"
-
   return (
-    <div className="space-y-4">
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              {overallStatus ? (
-                <Wifi className="h-5 w-5 text-green-600" />
-              ) : (
-                <WifiOff className="h-5 w-5 text-red-600" />
-              )}
-              Google Sheets Integration Status
-            </div>
-            <Button onClick={checkConnections} disabled={isRefreshing} variant="outline" size="sm">
-              <RefreshCw className={`h-4 w-4 mr-2 ${isRefreshing ? "animate-spin" : ""}`} />
-              Refresh
-            </Button>
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          {/* Overall Status */}
-          <Alert className={overallStatus ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
-            {overallStatus ? (
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
-            ) : (
-              <AlertCircle className="h-4 w-4 text-red-600" />
-            )}
-            <AlertDescription>
-              <div className={overallStatus ? "text-green-800" : "text-red-800"}>
-                {overallStatus
-                  ? "✅ All systems operational - ready to receive form submissions"
-                  : "❌ Some services are experiencing issues"}
-              </div>
-            </AlertDescription>
-          </Alert>
-
-          {/* Individual Service Status */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* Google Sheets API */}
-            <div className="border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <Database className="h-4 w-4" />
-                  <span className="font-medium">Google Sheets API</span>
-                </div>
-                {getStatusBadge(status.sheetsApi.status)}
-              </div>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(status.sheetsApi.status)}
-                  <span>{status.sheetsApi.message || "Checking connection..."}</span>
-                </div>
-                {status.sheetsApi.responseTime && (
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-3 w-3" />
-                    <span>{status.sheetsApi.responseTime}ms response time</span>
-                  </div>
-                )}
-              </div>
-            </div>
-
-            {/* Apps Script */}
-            <div className="border rounded-lg p-4">
-              <div className="flex items-center justify-between mb-2">
-                <div className="flex items-center gap-2">
-                  <ExternalLink className="h-4 w-4" />
-                  <span className="font-medium">Apps Script Webhook</span>
-                </div>
-                {getStatusBadge(status.appsScript.status)}
-              </div>
-              <div className="space-y-2 text-sm text-gray-600">
-                <div className="flex items-center gap-2">
-                  {getStatusIcon(status.appsScript.status)}
-                  <span>{status.appsScript.message || "Checking connection..."}</span>
-                </div>
-                {status.appsScript.responseTime && (
-                  <div className="flex items-center gap-2">
-                    <Clock className="h-3 w-3" />
-                    <span>{status.appsScript.responseTime}ms response time</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          {/* Last Checked */}
-          {status.lastChecked && (
-            <div className="text-xs text-gray-500 text-center">
-              Last checked: {status.lastChecked.toLocaleTimeString()}
-            </div>
+    <Card>
+      <CardHeader>
+        <CardTitle>Google Sheets Connection Status</CardTitle>
+        <CardDescription>Check if the Google Sheets API is working correctly</CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="flex items-center gap-2">
+          <Button onClick={checkStatus} disabled={loading}>
+            {loading ? "Checking..." : "Check Status"}
+          </Button>
+          {status && (
+            <Badge variant={status.success ? "default" : "destructive"}>{status.success ? "Connected" : "Error"}</Badge>
           )}
+        </div>
 
-          {/* Configuration Status */}
-          <div className="bg-gray-50 rounded-lg p-3">
-            <h4 className="font-medium text-gray-900 mb-2 text-sm">Configuration Status</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
-              <div className="flex items-center justify-between">
-                <span>API Key:</span>
-                <Badge variant="default" className="text-xs">
-                  Server-side
-                </Badge>
-              </div>
-              <div className="flex items-center justify-between">
-                <span>Apps Script URL:</span>
-                <Badge
-                  variant={process.env.NEXT_PUBLIC_APPS_SCRIPT_URL ? "default" : "destructive"}
-                  className="text-xs"
-                >
-                  {process.env.NEXT_PUBLIC_APPS_SCRIPT_URL ? "Set" : "Missing"}
-                </Badge>
-              </div>
-            </div>
+        {status && (
+          <div className="space-y-2">
+            <p className="text-sm text-muted-foreground">{status.message}</p>
+            {status.cardCount !== undefined && (
+              <p className="text-sm">Found {status.cardCount} credit cards in the sheet</p>
+            )}
           </div>
-        </CardContent>
-      </Card>
-    </div>
+        )}
+      </CardContent>
+    </Card>
   )
 }

@@ -18,20 +18,21 @@ export interface CreditCardData {
   spendingCategories: string[]
 }
 
-interface CreditCard {
+export interface CreditCard {
   id: string
-  cardName: string
+  name: string
   bank: string
   cardType: string
   joiningFee: number
   annualFee: number
-  creditScoreRequirement: number
-  monthlyIncomeRequirement: number
-  rewardsRate: number
-  signUpBonus: number
+  rewardRate: number
+  categories: string[]
+  eligibilityIncome: number
   features: string[]
-  description: string
-  spendingCategories: string[]
+  pros: string[]
+  cons: string[]
+  bestFor: string[]
+  applyUrl: string
 }
 
 interface UserSubmission {
@@ -92,20 +93,14 @@ async function logUserSubmission(data: {
   }
 }
 
-// Updated to use server action
+// This function now uses server action instead of direct API calls
 export async function fetchCreditCards(): Promise<CreditCard[]> {
-  try {
-    const result = await fetchCreditCardsAction()
+  return await fetchCreditCardsAction()
+}
 
-    if (!result.success) {
-      throw new Error(result.error || "Failed to fetch credit cards")
-    }
-
-    return result.cards || []
-  } catch (error) {
-    console.error("❌ Error fetching credit cards:", error)
-    throw error
-  }
+// Legacy function for backward compatibility
+export async function loadCreditCardsFromSheets(): Promise<CreditCard[]> {
+  return await fetchCreditCards()
 }
 
 export async function fetchAvailableSpendingCategories(): Promise<string[]> {
@@ -114,7 +109,7 @@ export async function fetchAvailableSpendingCategories(): Promise<string[]> {
     const allCategories = new Set<string>()
 
     cards.forEach((card) => {
-      card.spendingCategories.forEach((category) => {
+      card.categories.forEach((category) => {
         allCategories.add(category)
       })
     })
@@ -192,18 +187,18 @@ export function filterAndRankCardsWithSpendingCategories(
     return []
   }
 
-  const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
+  const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardRate), 1)
   const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
   const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
   const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
 
   const scoredCards = basicEligibleCards.map((card) => {
-    const scoreRewards = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 30 : 0
+    const scoreRewards = maxRewardsRate > 0 ? (card.rewardRate / maxRewardsRate) * 30 : 0
 
     let scoreCategory = 0
-    if (spendingCategories.length > 0 && card.spendingCategories.length > 0) {
+    if (spendingCategories.length > 0 && card.categories.length > 0) {
       const userCategoriesLower = spendingCategories.map((cat) => cat.toLowerCase())
-      const matchingCategories = card.spendingCategories.filter((cardCat) =>
+      const matchingCategories = card.categories.filter((cardCat) =>
         userCategoriesLower.includes(cardCat.toLowerCase()),
       )
       const matchPercentage = matchingCategories.length / Math.max(userCategoriesLower.length, 1)
@@ -278,7 +273,7 @@ export function filterAndRankCards(
 
     const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
     const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
+    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardRate), 1)
     const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
 
     const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
@@ -287,7 +282,7 @@ export function filterAndRankCards(
     const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
     score += annualFeeScore
 
-    const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
+    const rewardsScore = maxRewardsRate > 0 ? (card.rewardRate / maxRewardsRate) * 25 : 0
     score += rewardsScore
 
     const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
@@ -337,12 +332,12 @@ export function filterAndRankCardsByRewards(
 
     const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
     const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
+    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardRate), 1)
     const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
 
     const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
     const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
-    const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
+    const rewardsScore = maxRewardsRate > 0 ? (card.rewardRate / maxRewardsRate) * 25 : 0
     const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
 
     score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
@@ -378,10 +373,10 @@ export function filterAndRankCardsByRewards(
 
   const rewardSortedCards = filteredCards
     .sort((a, b) => {
-      if (b.rewardsRate !== a.rewardsRate) {
-        return b.rewardsRate - a.rewardsRate
+      if (b.rewardRate !== a.rewardRate) {
+        return b.rewardRate - a.rewardRate
       }
-      return a.cardName.localeCompare(b.cardName)
+      return a.name.localeCompare(b.name)
     })
     .slice(0, topN)
 
@@ -418,12 +413,12 @@ export function filterAndRankCardsEnhanced(
 
     const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
     const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
+    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardRate), 1)
     const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
 
     const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
     const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
-    const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
+    const rewardsScore = maxRewardsRate > 0 ? (card.rewardRate / maxRewardsRate) * 25 : 0
     const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
 
     score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
@@ -496,7 +491,7 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
 
       const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
       const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-      const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
+      const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardRate), 1)
       const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
 
       const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
@@ -505,7 +500,7 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
       const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
       score += annualFeeScore
 
-      const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
+      const rewardsScore = maxRewardsRate > 0 ? (card.rewardRate / maxRewardsRate) * 25 : 0
       score += rewardsScore
 
       const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
@@ -544,14 +539,14 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
     return {
       success: true,
       recommendations: recommendations.map((card) => ({
-        cardName: card.cardName,
+        name: card.name,
         bank: card.bank,
         features: card.features,
         reason: `Score: ${card.compositeScore}/100. ${card.description || "Selected based on optimal balance of low fees and high rewards for your profile."}`,
         rating: Math.min(5, Math.max(1, Math.round(card.compositeScore / 20))),
         joiningFee: card.joiningFee,
         annualFee: card.annualFee,
-        rewardsRate: card.rewardsRate,
+        rewardRate: card.rewardRate,
         signUpBonus: card.signUpBonus,
         compositeScore: card.compositeScore,
         monthlyIncomeRequirement: card.monthlyIncomeRequirement,
@@ -637,14 +632,14 @@ export async function getEnhancedCardRecommendations(
     return {
       success: true,
       recommendations: recommendations.map((card) => ({
-        cardName: card.cardName,
+        name: card.name,
         bank: card.bank,
         features: card.features,
-        reason: `Reward Rate: ${card.rewardsRate}%. ${card.description || "Selected for having one of the highest reward rates in your category."}`,
-        rating: Math.min(5, Math.max(1, Math.round(card.rewardsRate))),
+        reason: `Reward Rate: ${card.rewardRate}%. ${card.description || "Selected for having one of the highest reward rates in your category."}`,
+        rating: Math.min(5, Math.max(1, Math.round(card.rewardRate))),
         joiningFee: card.joiningFee,
         annualFee: card.annualFee,
-        rewardsRate: card.rewardsRate,
+        rewardRate: card.rewardRate,
         signUpBonus: card.signUpBonus,
         compositeScore: card.compositeScore,
         monthlyIncomeRequirement: card.monthlyIncomeRequirement,
@@ -756,12 +751,12 @@ export async function getCardRecommendationsForForm(formData: {
     }
 
     const transformedRecommendations = recommendations.map((card) => ({
-      name: card.cardName,
+      name: card.name,
       bank: card.bank,
       type: cardType.toLowerCase(),
       annualFee: card.annualFee,
       joiningFee: card.joiningFee,
-      rewardRate: `${card.rewardsRate}% rewards`,
+      rewardRate: `${card.rewardRate}% rewards`,
       welcomeBonus: card.signUpBonus > 0 ? `₹${card.signUpBonus.toLocaleString()} welcome bonus` : "",
       keyFeatures: card.features || [
         "Reward points on purchases",
@@ -771,8 +766,8 @@ export async function getCardRecommendationsForForm(formData: {
       ],
       bestFor: formData.spendingCategories.slice(0, 3),
       score: Math.round(card.compositeScore),
-      reasoning: `Score: ${card.compositeScore}/105. ${card.spendingCategories.length > 0 ? `Matches your spending in: ${card.spendingCategories.join(", ")}. ` : ""}Refined algorithm prioritizes rewards rate (30%) and category match (30%) for optimal value.`,
-      spendingCategories: card.spendingCategories,
+      reasoning: `Score: ${card.compositeScore}/105. ${card.categories.length > 0 ? `Matches your spending in: ${card.categories.join(", ")}. ` : ""}Refined algorithm prioritizes rewards rate (30%) and category match (30%) for optimal value.`,
+      categories: card.categories,
       scoreBreakdown: card.scoreBreakdown,
     }))
 

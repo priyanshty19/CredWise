@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
@@ -18,17 +18,8 @@ import {
   LineChart,
   Line,
 } from "recharts"
-import {
-  CheckCircle2,
-  AlertCircle,
-  TrendingUp,
-  Users,
-  CreditCard,
-  DollarSign,
-  RefreshCw,
-  Loader2,
-  Database,
-} from "lucide-react"
+import { AlertCircle, TrendingUp, Users, CreditCard, DollarSign, RefreshCw, Loader2, Database } from "lucide-react"
+import { fetchSubmissionAnalytics } from "@/app/actions/google-sheets-actions"
 
 interface SubmissionData {
   timestamp: string
@@ -51,7 +42,7 @@ interface AnalyticsData {
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8"]
 
 export default function SubmissionAnalyticsSheets() {
-  const [analyticsData, setAnalyticsData] = useState<AnalyticsData | null>(null)
+  const [analyticsData, setAnalyticsData] = useState<any>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -60,30 +51,8 @@ export default function SubmissionAnalyticsSheets() {
     setError(null)
 
     try {
-      // Since we can't access the Google Sheets API directly from the client anymore,
-      // we'll show a placeholder message indicating that analytics need to be implemented
-      // via a server action or API route
-
-      setError("Analytics data fetching needs to be implemented via server actions for security.")
-
-      // Placeholder data for demonstration
-      const mockData: AnalyticsData = {
-        totalSubmissions: 0,
-        cardTypeDistribution: [
-          { name: "Cashback", value: 0, color: COLORS[0] },
-          { name: "Travel", value: 0, color: COLORS[1] },
-          { name: "Rewards", value: 0, color: COLORS[2] },
-          { name: "Student", value: 0, color: COLORS[3] },
-          { name: "Business", value: 0, color: COLORS[4] },
-        ],
-        incomeDistribution: [],
-        creditScoreDistribution: [],
-        submissionTrend: [],
-        averageIncome: 0,
-        averageCreditScore: 0,
-      }
-
-      setAnalyticsData(mockData)
+      const result = await fetchSubmissionAnalytics()
+      setAnalyticsData(result)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch analytics data")
     } finally {
@@ -316,16 +285,48 @@ export default function SubmissionAnalyticsSheets() {
 
       {/* Status */}
       <Card>
-        <CardContent className="p-4">
-          <Alert className="border-blue-200 bg-blue-50">
-            <CheckCircle2 className="h-4 w-4 text-blue-600" />
-            <AlertDescription>
-              <div className="text-blue-800">
-                Analytics data is now fetched securely from server-side. To implement full analytics, create a server
-                action that fetches submission data from Google Sheets.
-              </div>
-            </AlertDescription>
-          </Alert>
+        <CardHeader>
+          <CardTitle>Form Submission Analytics</CardTitle>
+          <CardDescription>View analytics from Google Sheets submissions</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <Button onClick={fetchAnalyticsData} disabled={isLoading}>
+            {isLoading ? "Loading..." : "Refresh Analytics"}
+          </Button>
+
+          {analyticsData && (
+            <div className="space-y-4">
+              {analyticsData.success ? (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-2">{analyticsData.message}</p>
+                  {analyticsData.data && analyticsData.data.length > 0 ? (
+                    <div className="space-y-2">
+                      <p className="font-medium">
+                        Total Submissions: {analyticsData.data.length - 1} {/* Subtract header row */}
+                      </p>
+                      <div className="bg-gray-50 p-3 rounded">
+                        <h4 className="font-medium mb-2">Recent Submissions:</h4>
+                        <div className="text-xs space-y-1">
+                          {analyticsData.data.slice(1, 6).map((row: any[], index: number) => (
+                            <div key={index} className="border-b pb-1">
+                              {row.slice(0, 3).join(" | ")}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">No submissions found</p>
+                  )}
+                </div>
+              ) : (
+                <div className="bg-red-50 text-red-800 p-3 rounded">
+                  <p className="font-medium">Error</p>
+                  <p className="text-sm">{analyticsData.message}</p>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
