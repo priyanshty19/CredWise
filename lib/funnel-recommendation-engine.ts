@@ -35,6 +35,7 @@ export interface FunnelResult {
     level3Count: number
     finalCount: number
   }
+  twoTierResult?: TwoTierResult
 }
 
 export interface ScoredCard {
@@ -48,16 +49,24 @@ export interface ScoredCard {
   }
   matchPercentage: number
   reasoning: string
+  tier?: "preferred_brand" | "general"
+}
+
+export interface TwoTierResult {
+  preferredBrandCards: ScoredCard[]
+  generalCards: ScoredCard[]
+  showGeneralMessage: boolean
+  finalTop7: ScoredCard[]
 }
 
 /**
- * FUNNEL-BASED RECOMMENDATION ENGINE
+ * FUNNEL-BASED RECOMMENDATION ENGINE WITH TWO-TIER SYSTEM
  *
  * Implements a 3-level filtering system:
  * Level 1: Basic Eligibility (Income + Credit Score)
  * Level 2: Category Preference (>65% match required)
  * Level 3: Joining Fee + Brand Filtering
- * Final: Adaptive Scoring based on user selections
+ * Final: Two-Tier Recommendation System (Preferred Brand + General)
  */
 export class FunnelRecommendationEngine {
   /**
@@ -167,64 +176,134 @@ export class FunnelRecommendationEngine {
     const availableBrands = [...new Set(feeFilteredCards.map((card) => card.bank))].sort()
     console.log(`🏦 Available Brands after fee filtering: [${availableBrands.join(", ")}]`)
 
-    // Step 3C: Apply brand filter if brands are selected
-    let level3Cards = feeFilteredCards
+    // Step 3C: Return fee-filtered cards (no brand filtering at this stage)
+    console.log(`✅ Level 3 Cards (post joining fee filtering): ${feeFilteredCards.length}`)
 
-    if (preferredBrands.length > 0) {
-      const brandFilteredCards = feeFilteredCards.filter((card) => preferredBrands.includes(card.bank))
-      console.log(`🏦 Cards matching preferred brands: ${brandFilteredCards.length}`)
-
-      if (brandFilteredCards.length > 0) {
-        // Use brand-filtered cards if available
-        level3Cards = brandFilteredCards
-        console.log(`✅ Using brand-filtered cards: ${level3Cards.length}`)
-      } else {
-        // Keep all fee-filtered cards if no brand matches (will show mismatch notice)
-        level3Cards = feeFilteredCards
-        console.log(`⚠️ No brand matches found, keeping all fee-filtered cards: ${level3Cards.length}`)
-      }
-
-      level3Cards.forEach((card) => {
-        const isBrandMatch = preferredBrands.includes(card.bank)
-        console.log(`   ${isBrandMatch ? "✅" : "⚠️"} ${card.cardName} (${card.bank})`)
-      })
-    }
-
-    console.log(`✅ Level 3 Final Cards: ${level3Cards.length}`)
-
-    return { level3Cards, availableBrands }
+    return { level3Cards: feeFilteredCards, availableBrands }
   }
 
   /**
-   * FINAL SCORING AND RECOMMENDATION
-   * Apply adaptive scoring based on joining fee and brand match scenarios
-   * Even if brand doesn't match, still provide recommendations from available cards
+   * TWO-TIER RECOMMENDATION SYSTEM
+   * Tier 1: Preferred Brand Cards (if selected)
+   * Tier 2: General Cards (to fill remaining slots)
    */
-  static finalScoringAndRecommendation(level3Cards: CreditCard[], userProfile: UserProfile): ScoredCard[] {
-    console.log("\n🎯 FINAL SCORING AND RECOMMENDATION")
+  static twoTierRecommendationSystem(level3Cards: CreditCard[], userProfile: UserProfile): TwoTierResult {
+    console.log("\n🎯 TWO-TIER RECOMMENDATION SYSTEM")
     console.log("=".repeat(50))
-    console.log(`📊 Cards to score: ${level3Cards.length}`)
+    console.log(`📊 Cards available for two-tier processing: ${level3Cards.length}`)
+    console.log(`👤 Preferred Brands: [${userProfile.preferredBrands.join(", ")}]`)
 
     if (level3Cards.length === 0) {
-      console.log("⚠️ No cards available for scoring")
-      return []
+      console.log("⚠️ No cards available for two-tier processing")
+      return {
+        preferredBrandCards: [],
+        generalCards: [],
+        showGeneralMessage: false,
+        finalTop7: [],
+      }
     }
 
+    let preferredBrandCards: ScoredCard[] = []
+    let generalCards: ScoredCard[] = []
+    let showGeneralMessage = false
+
+    // TIER 1: Preferred Brand Recommendations
+    if (userProfile.preferredBrands.length > 0) {
+      console.log("\n🏆 TIER 1: PREFERRED BRAND RECOMMENDATIONS")
+      console.log("-".repeat(40))
+
+      // Filter cards matching preferred brands
+      const brandMatchedCards = level3Cards.filter((card) => userProfile.preferredBrands.includes(card.bank))
+      console.log(`🏦 Cards matching preferred brands: ${brandMatchedCards.length}`)
+
+      if (brandMatchedCards.length > 0) {
+        // Score and sort preferred brand cards
+        preferredBrandCards = this.scoreAndSortCards(brandMatchedCards, userProfile, "preferred_brand")
+        console.log(`✅ Preferred brand cards scored and sorted: ${preferredBrandCards.length}`)
+
+        preferredBrandCards.forEach((scored, index) => {
+          console.log(`   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`)
+        })
+      }
+
+      // TIER 2: General Recommendations (if needed)
+      if (preferredBrandCards.length < 7) {
+        console.log("\n🌟 TIER 2: GENERAL RECOMMENDATIONS")
+        console.log("-".repeat(40))
+        console.log(`🔄 Need ${7 - preferredBrandCards.length} more cards to reach 7 total`)
+
+        // Use all level3Cards for general recommendations
+        const generalCandidates = level3Cards.filter(
+          (card) => !preferredBrandCards.some((pref) => pref.card.id === card.id),
+        )
+
+        console.log(`📊 General candidates available: ${generalCandidates.length}`)
+
+        if (generalCandidates.length > 0) {
+          generalCards = this.scoreAndSortCards(generalCandidates, userProfile, "general")
+          showGeneralMessage = true
+
+          console.log(`✅ General cards scored and sorted: ${generalCards.length}`)
+          generalCards.slice(0, 7 - preferredBrandCards.length).forEach((scored, index) => {
+            console.log(
+              `   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`,
+            )
+          })
+        }
+      }
+    } else {
+      // NO PREFERRED BRANDS: Use general recommendations only
+      console.log("\n🌟 NO PREFERRED BRANDS: GENERAL RECOMMENDATIONS ONLY")
+      console.log("-".repeat(40))
+
+      generalCards = this.scoreAndSortCards(level3Cards, userProfile, "general")
+      showGeneralMessage = false
+
+      console.log(`✅ General cards scored and sorted: ${generalCards.length}`)
+      generalCards.slice(0, 7).forEach((scored, index) => {
+        console.log(`   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`)
+      })
+    }
+
+    // Combine tiers for final TOP 7
+    const finalTop7 = [...preferredBrandCards, ...generalCards.slice(0, Math.max(0, 7 - preferredBrandCards.length))]
+
+    console.log(`\n🎯 FINAL TOP 7 RECOMMENDATIONS:`)
+    console.log(`   Preferred Brand Cards: ${preferredBrandCards.length}`)
+    console.log(`   General Cards: ${Math.min(generalCards.length, 7 - preferredBrandCards.length)}`)
+    console.log(`   Total: ${finalTop7.length}`)
+    console.log(`   Show General Message: ${showGeneralMessage}`)
+
+    return {
+      preferredBrandCards,
+      generalCards,
+      showGeneralMessage,
+      finalTop7,
+    }
+  }
+
+  /**
+   * Score and sort cards using existing logic
+   */
+  private static scoreAndSortCards(
+    cards: CreditCard[],
+    userProfile: UserProfile,
+    tier: "preferred_brand" | "general",
+  ): ScoredCard[] {
     // Determine scoring scenario
     const hasZeroJoiningFee = userProfile.joiningFeePreference === "no_fee"
-    const hasBrandPreference = userProfile.preferredBrands.length > 0
-    const hasBrandMatch = level3Cards.some((card) => userProfile.preferredBrands.includes(card.bank))
+    const hasBrandPreference = userProfile.preferredBrands.length > 0 && tier === "preferred_brand"
 
     let scoringScenario: string
     let weights: { categoryMatch: number; rewardsRate: number; brandMatch?: number; signUpBonus?: number }
 
-    if (hasZeroJoiningFee && hasBrandMatch) {
+    if (hasZeroJoiningFee && hasBrandPreference) {
       scoringScenario = "Zero Fee + Brand Match"
       weights = { categoryMatch: 30, rewardsRate: 20, brandMatch: 50 }
-    } else if (hasZeroJoiningFee && !hasBrandMatch) {
+    } else if (hasZeroJoiningFee && !hasBrandPreference) {
       scoringScenario = "Zero Fee + No Brand Match"
       weights = { categoryMatch: 30, rewardsRate: 60, signUpBonus: 10 }
-    } else if (!hasZeroJoiningFee && hasBrandMatch) {
+    } else if (!hasZeroJoiningFee && hasBrandPreference) {
       scoringScenario = "Fee >0 + Brand Match"
       weights = { categoryMatch: 30, rewardsRate: 20, brandMatch: 50 }
     } else {
@@ -232,19 +311,12 @@ export class FunnelRecommendationEngine {
       weights = { categoryMatch: 30, rewardsRate: 60, signUpBonus: 10 }
     }
 
-    console.log(`🎯 Scoring Scenario: ${scoringScenario}`)
-    console.log(`⚖️ Weights: ${JSON.stringify(weights)}`)
-
-    if (hasBrandPreference && !hasBrandMatch) {
-      console.log("⚠️ BRAND MISMATCH: User preferred brands not available, scoring all available cards")
-    }
-
     // Calculate max values for normalization
-    const maxRewardsRate = Math.max(...level3Cards.map((c) => c.rewardsRate), 1)
-    const maxSignUpBonus = Math.max(...level3Cards.map((c) => c.signUpBonus), 1)
+    const maxRewardsRate = Math.max(...cards.map((c) => c.rewardsRate), 1)
+    const maxSignUpBonus = Math.max(...cards.map((c) => c.signUpBonus), 1)
 
     // Score each card
-    const scoredCards: ScoredCard[] = level3Cards.map((card) => {
+    const scoredCards: ScoredCard[] = cards.map((card) => {
       // 1. Category Match Score
       const matchPercentage = this.calculateCategoryMatchPercentage(
         userProfile.spendingCategories,
@@ -269,19 +341,6 @@ export class FunnelRecommendationEngine {
 
       const totalScore = categoryScore + rewardsScore + brandScore + signUpScore
 
-      console.log(`\n📊 ${card.cardName} (${card.bank}):`)
-      console.log(
-        `   🛍️ Category Match: ${matchPercentage.toFixed(1)}% → ${categoryScore.toFixed(1)}/${weights.categoryMatch}`,
-      )
-      console.log(`   🎁 Rewards Rate: ${card.rewardsRate}% → ${rewardsScore.toFixed(1)}/${weights.rewardsRate}`)
-      if (weights.brandMatch) {
-        console.log(`   🏦 Brand Match: ${brandScore > 0 ? "Yes" : "No"} → ${brandScore}/${weights.brandMatch}`)
-      }
-      if (weights.signUpBonus) {
-        console.log(`   🎉 Sign-up Bonus: ₹${card.signUpBonus} → ${signUpScore.toFixed(1)}/${weights.signUpBonus}`)
-      }
-      console.log(`   🎯 TOTAL SCORE: ${totalScore.toFixed(2)}/100`)
-
       return {
         card,
         score: totalScore,
@@ -292,26 +351,20 @@ export class FunnelRecommendationEngine {
           signUpBonus: signUpScore,
         },
         matchPercentage,
-        reasoning: this.generateReasoning(card, matchPercentage, scoringScenario, userProfile),
+        reasoning: this.generateReasoning(card, matchPercentage, scoringScenario, userProfile, tier),
+        tier,
       }
     })
 
-    // Sort by score (highest first) with brand preference priority
-    const sortedCards = this.applySortingLogic(scoredCards, userProfile.preferredBrands)
-
-    console.log(`\n🏆 FINAL RECOMMENDATIONS:`)
-    sortedCards.forEach((scored, index) => {
-      console.log(`${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`)
-    })
-
-    return sortedCards
+    // Sort by score (highest first)
+    return scoredCards.sort((a, b) => b.score - a.score)
   }
 
   /**
-   * Complete funnel processing
+   * Complete funnel processing with two-tier system
    */
   static processFunnel(allCards: CreditCard[], userProfile: UserProfile): FunnelResult {
-    console.log("🚀 STARTING FUNNEL-BASED RECOMMENDATION ENGINE")
+    console.log("🚀 STARTING FUNNEL-BASED RECOMMENDATION ENGINE WITH TWO-TIER SYSTEM")
     console.log("=".repeat(70))
 
     // Level 1: Basic Eligibility
@@ -320,38 +373,39 @@ export class FunnelRecommendationEngine {
     // Level 2: Category Filtering
     const level2Cards = this.level2CategoryFiltering(level1Cards, userProfile.spendingCategories)
 
-    // Level 3: Joining Fee and Brand Filtering
+    // Level 3: Joining Fee Filtering (no brand filtering)
     const { level3Cards, availableBrands } = this.level3JoiningFeeAndBrandFiltering(
       level2Cards,
       userProfile.joiningFeePreference,
       userProfile.preferredBrands,
     )
 
-    // Final Scoring
-    const finalRecommendations = this.finalScoringAndRecommendation(level3Cards, userProfile)
+    // Two-Tier Recommendation System
+    const twoTierResult = this.twoTierRecommendationSystem(level3Cards, userProfile)
 
     const funnelStats = {
       totalCards: allCards.length,
       level1Count: level1Cards.length,
       level2Count: level2Cards.length,
       level3Count: level3Cards.length,
-      finalCount: finalRecommendations.length,
+      finalCount: twoTierResult.finalTop7.length,
     }
 
     console.log("\n📈 FUNNEL STATISTICS:")
     console.log(`Total Cards: ${funnelStats.totalCards}`)
     console.log(`Level 1 (Basic): ${funnelStats.level1Count}`)
     console.log(`Level 2 (Category): ${funnelStats.level2Count}`)
-    console.log(`Level 3 (Fee/Brand): ${funnelStats.level3Count}`)
-    console.log(`Final Recommendations: ${funnelStats.finalCount}`)
+    console.log(`Level 3 (Fee): ${funnelStats.level3Count}`)
+    console.log(`Final TOP 7: ${funnelStats.finalCount}`)
 
     return {
       level1Cards,
       level2Cards,
       level3Cards,
       availableBrands,
-      finalRecommendations,
+      finalRecommendations: twoTierResult.finalTop7,
       funnelStats,
+      twoTierResult,
     }
   }
 
@@ -417,31 +471,6 @@ export class FunnelRecommendationEngine {
   }
 
   /**
-   * Apply sorting logic with brand preference priority
-   * Even if preferred brands don't exist, still provide recommendations
-   */
-  private static applySortingLogic(scoredCards: ScoredCard[], preferredBrands: string[]): ScoredCard[] {
-    if (preferredBrands.length === 0) {
-      // No brand preference - sort by score only
-      return scoredCards.sort((a, b) => b.score - a.score)
-    }
-
-    // Check if any preferred brand cards exist
-    const preferredBrandCards = scoredCards.filter((scored) => preferredBrands.includes(scored.card.bank))
-
-    if (preferredBrandCards.length > 0) {
-      // Case 1: Preferred brand cards exist - rank them first
-      const otherCards = scoredCards.filter((scored) => !preferredBrands.includes(scored.card.bank))
-
-      return [...preferredBrandCards.sort((a, b) => b.score - a.score), ...otherCards.sort((a, b) => b.score - a.score)]
-    } else {
-      // Case 2: No preferred brand cards - show notice and rank by score
-      console.log("⚠️ NOTICE: Your chosen brand did not match; showing best alternatives")
-      return scoredCards.sort((a, b) => b.score - a.score)
-    }
-  }
-
-  /**
    * Generate reasoning text for each recommendation
    */
   private static generateReasoning(
@@ -449,16 +478,17 @@ export class FunnelRecommendationEngine {
     matchPercentage: number,
     scoringScenario: string,
     userProfile: UserProfile,
+    tier: "preferred_brand" | "general",
   ): string {
     const parts = []
 
     parts.push(`${matchPercentage.toFixed(1)}% category match`)
     parts.push(`${card.rewardsRate}% rewards rate`)
 
-    if (userProfile.preferredBrands.includes(card.bank)) {
-      parts.push("preferred brand bonus")
-    } else if (userProfile.preferredBrands.length > 0) {
-      parts.push("best alternative (preferred brand unavailable)")
+    if (tier === "preferred_brand" && userProfile.preferredBrands.includes(card.bank)) {
+      parts.push("preferred brand match")
+    } else if (tier === "general" && userProfile.preferredBrands.length > 0) {
+      parts.push("best alternative option")
     }
 
     if (card.joiningFee === 0) {
@@ -469,6 +499,7 @@ export class FunnelRecommendationEngine {
       parts.push(`₹${card.signUpBonus.toLocaleString()} welcome bonus`)
     }
 
-    return `Selected based on ${parts.join(", ")}. Scoring: ${scoringScenario}.`
+    const tierLabel = tier === "preferred_brand" ? "Preferred Brand Tier" : "General Tier"
+    return `Selected from ${tierLabel} based on ${parts.join(", ")}. Scoring: ${scoringScenario}.`
   }
 }

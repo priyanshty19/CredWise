@@ -5,15 +5,15 @@ import { FunnelRecommendationEngine, type UserProfile } from "@/lib/funnel-recom
 import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
 
 /**
- * NEW FUNNEL-BASED CARD RECOMMENDATION SERVER ACTION
+ * FUNNEL-BASED CARD RECOMMENDATION WITH TWO-TIER SYSTEM
  *
  * Implements the 3-level filtering system:
  * Level 1: Basic Eligibility (Income + Credit Score)
  * Level 2: Category Preference (>65% match required)
- * Level 3: Joining Fee + Brand Filtering
- * Final: Adaptive Scoring based on user selections
+ * Level 3: Joining Fee Filtering
+ * Final: Two-Tier System (Preferred Brand + General)
  *
- * LIMITS RECOMMENDATIONS TO TOP 7 CARDS
+ * ALWAYS RETURNS TOP 7 CARDS WITH OPTIMAL USER EXPERIENCE
  */
 export async function getFunnelCardRecommendations(formData: {
   monthlyIncome: string
@@ -25,7 +25,7 @@ export async function getFunnelCardRecommendations(formData: {
   joiningFeePreference: string
 }) {
   try {
-    console.log("🚀 FUNNEL-BASED RECOMMENDATION ENGINE STARTING")
+    console.log("🚀 FUNNEL-BASED RECOMMENDATION ENGINE WITH TWO-TIER SYSTEM STARTING")
     console.log("=".repeat(70))
     console.log("📝 Form Data Received:", formData)
 
@@ -70,28 +70,26 @@ export async function getFunnelCardRecommendations(formData: {
         userProfile: null,
         funnelStats: null,
         availableBrands: [],
+        twoTierInfo: null,
       }
     }
 
     console.log(`📊 Total cards loaded: ${allCards.length}`)
 
-    // Process through the funnel
+    // Process through the funnel with two-tier system
     const funnelResult = FunnelRecommendationEngine.processFunnel(allCards, userProfile)
 
-    // Check for brand mismatch scenario
-    const brandMismatchNotice =
-      userProfile.preferredBrands.length > 0 &&
-      !funnelResult.finalRecommendations.some((scored) => userProfile.preferredBrands.includes(scored.card.bank))
+    // Extract two-tier information
+    const twoTierInfo = funnelResult.twoTierResult
+    const showGeneralMessage = twoTierInfo?.showGeneralMessage || false
+    const preferredBrandCount = twoTierInfo?.preferredBrandCards.length || 0
+    const generalCount = Math.min(twoTierInfo?.generalCards.length || 0, 7 - preferredBrandCount)
 
-    // LIMIT TO TOP 7 RECOMMENDATIONS
-    const top7Recommendations = funnelResult.finalRecommendations.slice(0, 7)
-
-    console.log(`✅ Funnel processing complete. Total recommendations: ${funnelResult.finalRecommendations.length}`)
-    console.log(`🎯 Limiting to TOP 7 recommendations: ${top7Recommendations.length}`)
-
-    if (brandMismatchNotice) {
-      console.log("⚠️ BRAND MISMATCH NOTICE: Selected brand(s) not available, showing best alternatives")
-    }
+    console.log(`✅ Two-tier processing complete:`)
+    console.log(`   Preferred Brand Cards: ${preferredBrandCount}`)
+    console.log(`   General Cards: ${generalCount}`)
+    console.log(`   Show General Message: ${showGeneralMessage}`)
+    console.log(`   Final TOP 7: ${funnelResult.finalRecommendations.length}`)
 
     // Log the funnel-based form submission to Google Sheets
     try {
@@ -104,28 +102,32 @@ export async function getFunnelCardRecommendations(formData: {
         spendingCategories: formData.spendingCategories,
         preferredBanks: formData.preferredBanks,
         joiningFeePreference: formData.joiningFeePreference,
-        submissionType: "funnel_based_recommendation_engine_top7",
+        submissionType: "funnel_two_tier_recommendation_engine",
         userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Server",
         funnelStats: funnelResult.funnelStats,
-        finalRecommendationCount: top7Recommendations.length,
-        brandMismatchNotice,
+        twoTierStats: {
+          preferredBrandCount,
+          generalCount,
+          showGeneralMessage,
+          totalRecommendations: funnelResult.finalRecommendations.length,
+        },
       }
 
-      console.log("📝 Submitting funnel-based form data to Google Sheets:", submissionData)
+      console.log("📝 Submitting two-tier funnel form data to Google Sheets:", submissionData)
       const submissionSuccess = await submitEnhancedFormData(submissionData)
 
       if (submissionSuccess) {
-        console.log("✅ Funnel-based form data submitted successfully to Google Sheets")
+        console.log("✅ Two-tier funnel form data submitted successfully to Google Sheets")
       } else {
-        console.warn("⚠️ Failed to submit funnel-based form data to Google Sheets")
+        console.warn("⚠️ Failed to submit two-tier funnel form data to Google Sheets")
       }
     } catch (submissionError) {
-      console.error("❌ Error submitting funnel-based form data:", submissionError)
+      console.error("❌ Error submitting two-tier funnel form data:", submissionError)
       // Don't fail the recommendation request if logging fails
     }
 
     // Transform TOP 7 recommendations to match expected format
-    const transformedRecommendations = top7Recommendations.map((scored, index) => ({
+    const transformedRecommendations = funnelResult.finalRecommendations.map((scored, index) => ({
       name: scored.card.cardName,
       bank: scored.card.bank,
       type: scored.card.cardType.toLowerCase(),
@@ -145,7 +147,8 @@ export async function getFunnelCardRecommendations(formData: {
       spendingCategories: scored.card.spendingCategories,
       scoreBreakdown: scored.scoreBreakdown,
       matchPercentage: scored.matchPercentage,
-      rank: index + 1, // Add ranking
+      rank: index + 1,
+      tier: scored.tier || "general",
     }))
 
     return {
@@ -162,13 +165,20 @@ export async function getFunnelCardRecommendations(formData: {
       allCards, // Include all cards for testing component
       funnelStats: funnelResult.funnelStats,
       availableBrands: funnelResult.availableBrands,
-      brandMismatchNotice,
+      twoTierInfo: {
+        showGeneralMessage,
+        preferredBrandCount,
+        generalCount,
+        totalRecommendations: funnelResult.finalRecommendations.length,
+        preferredBrands: formData.preferredBanks,
+      },
       funnelBreakdown: {
         level1Cards: funnelResult.level1Cards.length,
         level2Cards: funnelResult.level2Cards.length,
         level3Cards: funnelResult.level3Cards.length,
         finalRecommendations: funnelResult.finalRecommendations.length,
-        top7Recommendations: top7Recommendations.length,
+        preferredBrandCards: preferredBrandCount,
+        generalCards: generalCount,
       },
     }
   } catch (error) {
@@ -181,6 +191,7 @@ export async function getFunnelCardRecommendations(formData: {
       userProfile: null,
       funnelStats: null,
       availableBrands: [],
+      twoTierInfo: null,
     }
   }
 }
