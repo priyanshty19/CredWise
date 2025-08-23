@@ -1,494 +1,414 @@
 "use client"
 
+import type React from "react"
+
 import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
-import { Badge } from "@/components/ui/badge"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
-  CartesianGrid,
-  Tooltip,
-  ResponsiveContainer,
-  PieChart,
-  Pie,
-  Cell,
-  LineChart,
-  Line,
-} from "recharts"
-import {
   Upload,
   FileText,
-  TrendingUp,
-  CreditCard,
-  PieChartIcon,
+  X,
+  Plus,
   BarChart3,
-  AlertCircle,
-  CheckCircle2,
+  PieChart,
+  TrendingUp,
+  DollarSign,
   Target,
-  Zap,
+  Settings,
+  Construction,
+  Clock,
 } from "lucide-react"
-import PortfolioDashboard from "./portfolio-dashboard"
 
-interface SpendingData {
-  category: string
-  amount: number
-  percentage: number
-  color: string
+interface UploadedFile {
+  id: string
+  name: string
+  type: string
+  size: number
+  category: "income" | "investments" | "expenses" | "other"
 }
-
-interface MonthlyData {
-  month: string
-  spending: number
-  income: number
-}
-
-interface RecommendationInsight {
-  title: string
-  description: string
-  impact: "high" | "medium" | "low"
-  actionable: boolean
-}
-
-const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884D8", "#82CA9D", "#FFC658", "#FF7C7C"]
-
-// Sample data for demonstration
-const sampleSpendingData: SpendingData[] = [
-  { category: "Dining", amount: 8500, percentage: 34, color: "#0088FE" },
-  { category: "Groceries", amount: 6200, percentage: 25, color: "#00C49F" },
-  { category: "Fuel", amount: 4800, percentage: 19, color: "#FFBB28" },
-  { category: "Shopping", amount: 3200, percentage: 13, color: "#FF8042" },
-  { category: "Entertainment", amount: 2300, percentage: 9, color: "#8884D8" },
-]
-
-const sampleMonthlyData: MonthlyData[] = [
-  { month: "Jan", spending: 22000, income: 85000 },
-  { month: "Feb", spending: 25000, income: 85000 },
-  { month: "Mar", spending: 28000, income: 85000 },
-  { month: "Apr", spending: 24000, income: 85000 },
-  { month: "May", spending: 26000, income: 85000 },
-  { month: "Jun", spending: 25000, income: 85000 },
-]
-
-const sampleInsights: RecommendationInsight[] = [
-  {
-    title: "High Dining Spend Opportunity",
-    description:
-      "34% of your spending is on dining. Consider cards with high dining rewards like HDFC Millennia or SBI SimplyCLICK.",
-    impact: "high",
-    actionable: true,
-  },
-  {
-    title: "Fuel Spending Optimization",
-    description:
-      "₹4,800 monthly fuel spend can earn significant rewards with fuel-focused cards like HDFC HPCL or Indian Oil cards.",
-    impact: "medium",
-    actionable: true,
-  },
-  {
-    title: "Spending Pattern Consistency",
-    description:
-      "Your spending is consistent month-over-month, making you eligible for premium cards with higher limits.",
-    impact: "low",
-    actionable: false,
-  },
-]
 
 export default function DeepDiveSection() {
-  const [activeTab, setActiveTab] = useState("upload")
-  const [analysisData, setAnalysisData] = useState<any>(null)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
+  const [dragActive, setDragActive] = useState(false)
 
-  const handleFileUpload = async (file: File) => {
-    setIsAnalyzing(true)
+  const handleFileUpload = (files: FileList | null, category = "other") => {
+    if (!files) return
 
-    // Simulate analysis delay
-    setTimeout(() => {
-      setAnalysisData({
-        spendingData: sampleSpendingData,
-        monthlyData: sampleMonthlyData,
-        insights: sampleInsights,
-        totalSpending: 25000,
-        avgMonthlySpending: 25000,
-        topCategory: "Dining",
-        spendingTrend: "stable",
-      })
-      setIsAnalyzing(false)
-      setActiveTab("analysis")
-    }, 2000)
+    const newFiles: UploadedFile[] = Array.from(files).map((file) => ({
+      id: Math.random().toString(36).substr(2, 9),
+      name: file.name,
+      type: file.type,
+      size: file.size,
+      category: category as "income" | "investments" | "expenses" | "other",
+    }))
+
+    setUploadedFiles((prev) => [...prev, ...newFiles])
   }
 
-  const renderSpendingChart = () => (
-    <ResponsiveContainer width="100%" height={300}>
-      <BarChart data={sampleSpendingData}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="category" />
-        <YAxis />
-        <Tooltip formatter={(value) => [`₹${value.toLocaleString()}`, "Amount"]} />
-        <Bar dataKey="amount" fill="#0088FE" />
-      </BarChart>
-    </ResponsiveContainer>
-  )
+  const removeFile = (id: string) => {
+    setUploadedFiles((prev) => prev.filter((file) => file.id !== id))
+  }
 
-  const renderSpendingPieChart = () => (
-    <ResponsiveContainer width="100%" height={300}>
-      <PieChart>
-        <Pie
-          data={sampleSpendingData}
-          cx="50%"
-          cy="50%"
-          labelLine={false}
-          label={({ category, percentage }) => `${category} ${percentage}%`}
-          outerRadius={80}
-          fill="#8884d8"
-          dataKey="amount"
-        >
-          {sampleSpendingData.map((entry, index) => (
-            <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-          ))}
-        </Pie>
-        <Tooltip formatter={(value) => [`₹${value.toLocaleString()}`, "Amount"]} />
-      </PieChart>
-    </ResponsiveContainer>
-  )
+  const formatFileSize = (bytes: number) => {
+    if (bytes === 0) return "0 Bytes"
+    const k = 1024
+    const sizes = ["Bytes", "KB", "MB", "GB"]
+    const i = Math.floor(Math.log(bytes) / Math.log(k))
+    return Number.parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + " " + sizes[i]
+  }
 
-  const renderTrendChart = () => (
-    <ResponsiveContainer width="100%" height={300}>
-      <LineChart data={sampleMonthlyData}>
-        <CartesianGrid strokeDasharray="3 3" />
-        <XAxis dataKey="month" />
-        <YAxis />
-        <Tooltip formatter={(value) => [`₹${value.toLocaleString()}`, "Amount"]} />
-        <Line type="monotone" dataKey="spending" stroke="#0088FE" strokeWidth={2} name="Spending" />
-        <Line type="monotone" dataKey="income" stroke="#00C49F" strokeWidth={2} name="Income" />
-      </LineChart>
-    </ResponsiveContainer>
-  )
+  const getCategoryColor = (category: string) => {
+    switch (category) {
+      case "income":
+        return "bg-green-100 text-green-800"
+      case "investments":
+        return "bg-blue-100 text-blue-800"
+      case "expenses":
+        return "bg-red-100 text-red-800"
+      default:
+        return "bg-gray-100 text-gray-800"
+    }
+  }
+
+  const handleDrag = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    if (e.type === "dragenter" || e.type === "dragover") {
+      setDragActive(true)
+    } else if (e.type === "dragleave") {
+      setDragActive(false)
+    }
+  }
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setDragActive(false)
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      handleFileUpload(e.dataTransfer.files)
+    }
+  }
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
       <div className="text-center">
         <h1 className="text-3xl font-bold mb-2">🔍 Deep Dive Portfolio Analysis</h1>
-        <p className="text-gray-600">Upload your bank statements for personalized insights and card recommendations</p>
+        <p className="text-gray-600">Comprehensive financial analysis and portfolio management tools</p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
-          <TabsTrigger value="upload" className="flex items-center gap-2">
+      <Tabs defaultValue="portfolio" className="w-full">
+        <TabsList className="grid w-full grid-cols-3">
+          <TabsTrigger value="portfolio" className="flex items-center gap-2">
             <Upload className="h-4 w-4" />
-            Upload
-          </TabsTrigger>
-          <TabsTrigger value="analysis" className="flex items-center gap-2">
-            <BarChart3 className="h-4 w-4" />
-            Analysis
+            Current Portfolio Analysis
           </TabsTrigger>
           <TabsTrigger value="insights" className="flex items-center gap-2">
             <Target className="h-4 w-4" />
             Insights
           </TabsTrigger>
-          
+          <TabsTrigger value="handle" className="flex items-center gap-2">
+            <Settings className="h-4 w-4" />
+            Handle Portfolio
+          </TabsTrigger>
         </TabsList>
 
-        <TabsContent value="upload" className="space-y-6">
+        <TabsContent value="portfolio" className="space-y-6">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            {/* File Upload Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Upload className="h-5 w-5" />
+                  Upload Financial Documents
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {/* Drag and Drop Area */}
+                <div
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                    dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"
+                  }`}
+                  onDragEnter={handleDrag}
+                  onDragLeave={handleDrag}
+                  onDragOver={handleDrag}
+                  onDrop={handleDrop}
+                >
+                  <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-lg font-medium text-gray-700 mb-2">Drop files here or click to upload</p>
+                  <p className="text-sm text-gray-500 mb-4">Support for PDF, CSV, Excel files (Max 10MB each)</p>
+                  <Input
+                    type="file"
+                    multiple
+                    accept=".pdf,.csv,.xlsx,.xls"
+                    onChange={(e) => handleFileUpload(e.target.files)}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <Label htmlFor="file-upload">
+                    <Button variant="outline" className="cursor-pointer bg-transparent">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Choose Files
+                    </Button>
+                  </Label>
+                </div>
+
+                {/* Category-specific Upload Buttons */}
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Input
+                      type="file"
+                      multiple
+                      accept=".pdf,.csv,.xlsx,.xls"
+                      onChange={(e) => handleFileUpload(e.target.files, "income")}
+                      className="hidden"
+                      id="income-upload"
+                    />
+                    <Label htmlFor="income-upload">
+                      <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
+                        <DollarSign className="h-4 w-4 mr-1" />
+                        Income
+                      </Button>
+                    </Label>
+                  </div>
+                  <div>
+                    <Input
+                      type="file"
+                      multiple
+                      accept=".pdf,.csv,.xlsx,.xls"
+                      onChange={(e) => handleFileUpload(e.target.files, "investments")}
+                      className="hidden"
+                      id="investments-upload"
+                    />
+                    <Label htmlFor="investments-upload">
+                      <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        Investments
+                      </Button>
+                    </Label>
+                  </div>
+                  <div>
+                    <Input
+                      type="file"
+                      multiple
+                      accept=".pdf,.csv,.xlsx,.xls"
+                      onChange={(e) => handleFileUpload(e.target.files, "expenses")}
+                      className="hidden"
+                      id="expenses-upload"
+                    />
+                    <Label htmlFor="expenses-upload">
+                      <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
+                        <FileText className="h-4 w-4 mr-1" />
+                        Expenses
+                      </Button>
+                    </Label>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Manual Data Entry */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <FileText className="h-5 w-5" />
+                  Manual Data Entry
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="monthly-income">Monthly Income</Label>
+                    <Input id="monthly-income" type="number" placeholder="₹ 50,000" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label htmlFor="monthly-expenses">Monthly Expenses</Label>
+                    <Input id="monthly-expenses" type="number" placeholder="₹ 30,000" className="mt-1" />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label htmlFor="total-investments">Total Investments</Label>
+                    <Input id="total-investments" type="number" placeholder="₹ 5,00,000" className="mt-1" />
+                  </div>
+                  <div>
+                    <Label htmlFor="emergency-fund">Emergency Fund</Label>
+                    <Input id="emergency-fund" type="number" placeholder="₹ 1,00,000" className="mt-1" />
+                  </div>
+                </div>
+
+                <div>
+                  <Label htmlFor="financial-goals">Financial Goals</Label>
+                  <Input
+                    id="financial-goals"
+                    placeholder="House purchase, retirement planning, etc."
+                    className="mt-1"
+                  />
+                </div>
+
+                <Button className="w-full">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Manual Data
+                </Button>
+              </CardContent>
+            </Card>
+          </div>
+
+          {/* Uploaded Files List */}
+          {uploadedFiles.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Uploaded Files ({uploadedFiles.length})
+                  </span>
+                  <Button variant="outline" size="sm" onClick={() => setUploadedFiles([])}>
+                    Clear All
+                  </Button>
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {uploadedFiles.map((file) => (
+                    <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-gray-500" />
+                        <div>
+                          <p className="font-medium text-sm">{file.name}</p>
+                          <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
+                        </div>
+                        <span
+                          className={`px-2 py-1 rounded-full text-xs font-medium ${getCategoryColor(file.category)}`}
+                        >
+                          {file.category}
+                        </span>
+                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => removeFile(file.id)}>
+                        <X className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Graphical Insights Placeholder */}
           <Card>
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Portfolio Upload
+                <BarChart3 className="h-5 w-5" />
+                Portfolio Insights & Analytics
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <PortfolioDashboard
-                onAnalysisComplete={(data) => {
-                  setAnalysisData(data)
-                  setActiveTab("analysis")
-                }}
-              />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Placeholder for charts */}
+                <div className="bg-gray-50 rounded-lg p-8 text-center">
+                  <PieChart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="font-medium text-gray-700 mb-2">Expense Distribution</h3>
+                  <p className="text-sm text-gray-500">Dynamic chart will appear here based on uploaded data</p>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-8 text-center">
+                  <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="font-medium text-gray-700 mb-2">Income vs Expenses</h3>
+                  <p className="text-sm text-gray-500">Monthly comparison chart will be generated automatically</p>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-8 text-center">
+                  <TrendingUp className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="font-medium text-gray-700 mb-2">Investment Growth</h3>
+                  <p className="text-sm text-gray-500">Portfolio performance tracking and projections</p>
+                </div>
+              </div>
+
+              {uploadedFiles.length === 0 && (
+                <Alert className="mt-6">
+                  <AlertDescription>
+                    Upload your financial documents or enter manual data to see personalized insights and analytics.
+                  </AlertDescription>
+                </Alert>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
 
-        <TabsContent value="analysis" className="space-y-6">
-          {analysisData ? (
-            <>
-              {/* Summary Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Total Spending</p>
-                        <p className="text-2xl font-bold">₹{analysisData.totalSpending?.toLocaleString()}</p>
-                      </div>
-                      <TrendingUp className="h-8 w-8 text-blue-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Avg Monthly</p>
-                        <p className="text-2xl font-bold">₹{analysisData.avgMonthlySpending?.toLocaleString()}</p>
-                      </div>
-                      <BarChart3 className="h-8 w-8 text-green-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Top Category</p>
-                        <p className="text-2xl font-bold">{analysisData.topCategory}</p>
-                      </div>
-                      <PieChartIcon className="h-8 w-8 text-orange-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-
-                <Card>
-                  <CardContent className="p-4">
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-sm text-gray-600">Trend</p>
-                        <p className="text-2xl font-bold capitalize">{analysisData.spendingTrend}</p>
-                      </div>
-                      <Zap className="h-8 w-8 text-purple-600" />
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-
-              {/* Charts */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Spending by Category</CardTitle>
-                  </CardHeader>
-                  <CardContent>{renderSpendingChart()}</CardContent>
-                </Card>
-
-                <Card>
-                  <CardHeader>
-                    <CardTitle>Category Distribution</CardTitle>
-                  </CardHeader>
-                  <CardContent>{renderSpendingPieChart()}</CardContent>
-                </Card>
-              </div>
-
-              <Card>
-                <CardHeader>
-                  <CardTitle>Monthly Spending Trend</CardTitle>
-                </CardHeader>
-                <CardContent>{renderTrendChart()}</CardContent>
-              </Card>
-            </>
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <FileText className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Analysis Data</h3>
-                <p className="text-gray-600">Upload your portfolio to see detailed analysis</p>
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
-
         <TabsContent value="insights" className="space-y-6">
-          {analysisData ? (
-            <div className="space-y-4">
-              <h2 className="text-2xl font-bold">💡 Personalized Insights</h2>
-              {sampleInsights.map((insight, index) => (
-                <Card key={index}>
-                  <CardContent className="p-6">
-                    <div className="flex items-start gap-4">
-                      <div
-                        className={`p-2 rounded-full ${
-                          insight.impact === "high"
-                            ? "bg-red-100"
-                            : insight.impact === "medium"
-                              ? "bg-yellow-100"
-                              : "bg-green-100"
-                        }`}
-                      >
-                        {insight.actionable ? (
-                          <Target
-                            className={`h-5 w-5 ${
-                              insight.impact === "high"
-                                ? "text-red-600"
-                                : insight.impact === "medium"
-                                  ? "text-yellow-600"
-                                  : "text-green-600"
-                            }`}
-                          />
-                        ) : (
-                          <AlertCircle
-                            className={`h-5 w-5 ${
-                              insight.impact === "high"
-                                ? "text-red-600"
-                                : insight.impact === "medium"
-                                  ? "text-yellow-600"
-                                  : "text-green-600"
-                            }`}
-                          />
-                        )}
-                      </div>
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-2">
-                          <h3 className="font-semibold">{insight.title}</h3>
-                          <Badge
-                            variant={
-                              insight.impact === "high"
-                                ? "destructive"
-                                : insight.impact === "medium"
-                                  ? "default"
-                                  : "secondary"
-                            }
-                          >
-                            {insight.impact} impact
-                          </Badge>
-                          {insight.actionable && <Badge variant="outline">Actionable</Badge>}
-                        </div>
-                        <p className="text-gray-600">{insight.description}</p>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <Target className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Insights Available</h3>
-                <p className="text-gray-600">Upload your portfolio to get personalized insights</p>
-              </CardContent>
-            </Card>
-          )}
+          <Card>
+            <CardContent className="p-12 text-center">
+              <div className="max-w-md mx-auto">
+                <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Construction className="h-10 w-10 text-orange-600" />
+                </div>
+
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Under Development</h2>
+
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <Clock className="h-5 w-5 text-gray-500" />
+                  <span className="text-gray-600">Coming Soon</span>
+                </div>
+
+                <p className="text-gray-600 leading-relaxed">
+                  This segment will offer insightful trends and personalized recommendations based on your portfolio and
+                  financial health. Our AI-powered analytics will provide actionable insights to optimize your financial
+                  strategy.
+                </p>
+
+                <div className="mt-8 p-4 bg-blue-50 rounded-lg">
+                  <h3 className="font-semibold text-blue-900 mb-2">What to Expect:</h3>
+                  <ul className="text-sm text-blue-800 space-y-1">
+                    <li>• Spending pattern analysis</li>
+                    <li>• Investment performance insights</li>
+                    <li>• Personalized financial recommendations</li>
+                    <li>• Risk assessment and optimization tips</li>
+                  </ul>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
         </TabsContent>
 
-        <TabsContent value="recommendations" className="space-y-6">
-          {analysisData ? (
-            <div className="space-y-6">
-              <Alert>
-                <CheckCircle2 className="h-4 w-4" />
-                <AlertDescription>
-                  Based on your spending analysis, here are the top card recommendations optimized for your spending
-                  patterns.
-                </AlertDescription>
-              </Alert>
+        <TabsContent value="handle" className="space-y-6">
+          <Card>
+            <CardContent className="p-12 text-center">
+              <div className="max-w-md mx-auto">
+                <div className="w-20 h-20 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                  <Settings className="h-10 w-10 text-purple-600" />
+                </div>
 
-              <div className="grid gap-4">
-                {/* Sample recommendations based on analysis */}
-                <Card className="hover:shadow-lg transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="secondary">#1</Badge>
-                          <h3 className="text-xl font-bold">HDFC Millennia Credit Card</h3>
-                          <Badge variant="outline">HDFC</Badge>
-                        </div>
-                        <p className="text-gray-600">Perfect for your high dining and online spending</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-blue-600">92.5</div>
-                        <div className="text-sm text-gray-500">Match Score</div>
-                      </div>
-                    </div>
+                <h2 className="text-2xl font-bold text-gray-900 mb-4">Under Development</h2>
 
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      <div className="text-center">
-                        <div className="font-bold text-green-600">5%</div>
-                        <div className="text-sm text-gray-500">Dining Rewards</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-bold">₹1,000</div>
-                        <div className="text-sm text-gray-500">Joining Fee</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-bold">₹1,000</div>
-                        <div className="text-sm text-gray-500">Annual Fee</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-bold text-orange-600">₹2,000</div>
-                        <div className="text-sm text-gray-500">Welcome Bonus</div>
-                      </div>
-                    </div>
+                <div className="flex items-center justify-center gap-2 mb-4">
+                  <Clock className="h-5 w-5 text-gray-500" />
+                  <span className="text-gray-600">Coming Soon</span>
+                </div>
 
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      <Badge variant="default">Dining</Badge>
-                      <Badge variant="default">Online Shopping</Badge>
-                      <Badge variant="secondary">Groceries</Badge>
-                    </div>
+                <p className="text-gray-600 leading-relaxed">
+                  Here you will be able to manage your portfolio actively with options to adjust investments, track
+                  goals, and more. Take control of your financial future with our comprehensive portfolio management
+                  tools.
+                </p>
 
-                    <Button className="w-full">Apply Now - Estimated Monthly Savings: ₹850</Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="hover:shadow-lg transition-shadow">
-                  <CardContent className="p-6">
-                    <div className="flex justify-between items-start mb-4">
-                      <div>
-                        <div className="flex items-center gap-2 mb-1">
-                          <Badge variant="secondary">#2</Badge>
-                          <h3 className="text-xl font-bold">SBI SimplyCLICK Credit Card</h3>
-                          <Badge variant="outline">SBI</Badge>
-                        </div>
-                        <p className="text-gray-600">Great for online spending and fuel</p>
-                      </div>
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-blue-600">88.2</div>
-                        <div className="text-sm text-gray-500">Match Score</div>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4">
-                      <div className="text-center">
-                        <div className="font-bold text-green-600">10X</div>
-                        <div className="text-sm text-gray-500">Online Rewards</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-bold">₹499</div>
-                        <div className="text-sm text-gray-500">Joining Fee</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-bold">₹499</div>
-                        <div className="text-sm text-gray-500">Annual Fee</div>
-                      </div>
-                      <div className="text-center">
-                        <div className="font-bold text-orange-600">₹500</div>
-                        <div className="text-sm text-gray-500">Welcome Bonus</div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2 mb-4">
-                      <Badge variant="default">Online Shopping</Badge>
-                      <Badge variant="default">Fuel</Badge>
-                      <Badge variant="secondary">Entertainment</Badge>
-                    </div>
-
-                    <Button className="w-full">Apply Now - Estimated Monthly Savings: ₹720</Button>
-                  </CardContent>
-                </Card>
+                <div className="mt-8 p-4 bg-purple-50 rounded-lg">
+                  <h3 className="font-semibold text-purple-900 mb-2">Planned Features:</h3>
+                  <ul className="text-sm text-purple-800 space-y-1">
+                    <li>• Portfolio rebalancing tools</li>
+                    <li>• Goal tracking and planning</li>
+                    <li>• Investment recommendations</li>
+                    <li>• Risk management controls</li>
+                    <li>• Automated savings strategies</li>
+                  </ul>
+                </div>
               </div>
-            </div>
-          ) : (
-            <Card>
-              <CardContent className="p-8 text-center">
-                <CreditCard className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Recommendations Available</h3>
-                <p className="text-gray-600">Upload your portfolio to get personalized card recommendations</p>
-              </CardContent>
-            </Card>
-          )}
+            </CardContent>
+          </Card>
         </TabsContent>
       </Tabs>
     </div>
