@@ -6,7 +6,18 @@ import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { CreditCard, TrendingUp, Award, AlertCircle, CheckCircle2, Filter, BarChart3, Target, Zap } from "lucide-react"
+import {
+  CreditCard,
+  TrendingUp,
+  Award,
+  AlertCircle,
+  CheckCircle2,
+  Filter,
+  BarChart3,
+  Target,
+  Zap,
+  Trophy,
+} from "lucide-react"
 import { getFunnelCardRecommendations } from "@/app/actions/funnel-card-recommendation"
 
 interface EnhancedRecommendationsProps {
@@ -41,6 +52,7 @@ interface Recommendation {
     signUpBonus?: number
   }
   matchPercentage: number
+  rank: number
 }
 
 interface FunnelStats {
@@ -66,7 +78,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
         setLoading(true)
         setError(null)
 
-        console.log("🔄 Fetching funnel-based recommendations...")
+        console.log("🔄 Fetching TOP 7 funnel-based recommendations...")
         const result = await getFunnelCardRecommendations(formData)
 
         if (result.success) {
@@ -74,7 +86,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
           setFunnelStats(result.funnelStats)
           setAvailableBrands(result.availableBrands || [])
           setBrandMismatchNotice(result.brandMismatchNotice || false)
-          console.log("✅ Funnel-based recommendations loaded successfully")
+          console.log(`✅ TOP 7 funnel-based recommendations loaded: ${result.recommendations?.length || 0}`)
         } else {
           setError(result.error || "Failed to load recommendations")
           console.error("❌ Failed to load funnel-based recommendations:", result.error)
@@ -99,7 +111,8 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
             <div className="space-y-2">
               <p className="text-lg font-medium">Processing Your Profile Through Our Funnel...</p>
               <p className="text-sm text-gray-600">
-                Level 1: Basic Eligibility → Level 2: Category Matching → Level 3: Fee & Brand Filtering
+                Level 1: Basic Eligibility → Level 2: Category Matching → Level 3: Fee & Brand Filtering → TOP 7
+                Selection
               </p>
             </div>
           </div>
@@ -117,27 +130,23 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
     )
   }
 
-  const getFunnelStageColor = (stage: number, count: number) => {
-    if (count === 0) return "bg-gray-200"
-    switch (stage) {
-      case 1:
-        return "bg-blue-500"
-      case 2:
-        return "bg-green-500"
-      case 3:
-        return "bg-orange-500"
-      case 4:
-        return "bg-purple-500"
-      default:
-        return "bg-gray-400"
-    }
-  }
-
   const getScoreColor = (score: number) => {
     if (score >= 80) return "text-green-600 bg-green-50"
     if (score >= 60) return "text-blue-600 bg-blue-50"
     if (score >= 40) return "text-orange-600 bg-orange-50"
     return "text-red-600 bg-red-50"
+  }
+
+  const getRankBadge = (rank: number) => {
+    if (rank === 1)
+      return (
+        <Badge className="bg-yellow-500 text-white">
+          <Trophy className="h-3 w-3 mr-1" />
+          TOP PICK
+        </Badge>
+      )
+    if (rank <= 3) return <Badge variant="secondary">TOP {rank}</Badge>
+    return <Badge variant="outline">#{rank}</Badge>
   }
 
   return (
@@ -147,9 +156,11 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-blue-600" />
-            Funnel-Based Card Recommendations
+            Your TOP 7 Funnel-Based Recommendations
           </CardTitle>
-          <p className="text-sm text-gray-600">Your personalized recommendations using our 3-level filtering system</p>
+          <p className="text-sm text-gray-600">
+            Personalized recommendations using our 3-level filtering system, limited to the best 7 cards for you
+          </p>
         </CardHeader>
       </Card>
 
@@ -158,8 +169,8 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
         <Alert className="border-orange-200 bg-orange-50">
           <AlertCircle className="h-4 w-4 text-orange-600" />
           <AlertDescription className="text-orange-800">
-            <strong>Notice:</strong> Your chosen brand did not match our filtering criteria. Here are the best
-            alternatives based on your preferences.
+            <strong>Notice:</strong> Your preferred brand(s) [{formData.preferredBanks.join(", ")}] did not match our
+            filtering criteria. Here are the best alternatives based on your other preferences.
           </AlertDescription>
         </Alert>
       )}
@@ -168,7 +179,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="recommendations" className="flex items-center gap-2">
             <Award className="h-4 w-4" />
-            Recommendations ({recommendations.length})
+            TOP 7 Cards ({recommendations.length})
           </TabsTrigger>
           <TabsTrigger value="funnel" className="flex items-center gap-2">
             <Filter className="h-4 w-4" />
@@ -180,7 +191,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
           </TabsTrigger>
         </TabsList>
 
-        {/* Recommendations Tab */}
+        {/* TOP 7 Recommendations Tab */}
         <TabsContent value="recommendations" className="space-y-4">
           {recommendations.length === 0 ? (
             <Alert>
@@ -192,12 +203,20 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
           ) : (
             <div className="grid gap-4">
               {recommendations.map((card, index) => (
-                <Card key={index} className="hover:shadow-lg transition-shadow">
+                <Card
+                  key={index}
+                  className={`hover:shadow-lg transition-shadow ${index === 0 ? "ring-2 ring-yellow-400" : ""}`}
+                >
                   <CardHeader>
                     <div className="flex justify-between items-start">
-                      <div>
-                        <CardTitle className="text-lg">{card.name}</CardTitle>
-                        <p className="text-sm text-gray-600">{card.bank}</p>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-2">
+                          <CardTitle className="text-lg">{card.name}</CardTitle>
+                          {getRankBadge(card.rank)}
+                        </div>
+                        <p className="text-sm text-gray-600">
+                          {card.bank} • {card.type}
+                        </p>
                       </div>
                       <div className="text-right">
                         <Badge className={`${getScoreColor(card.score)} border-0`}>{card.score}/100</Badge>
@@ -292,7 +311,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
                     {/* Action Button */}
                     <Button className="w-full" variant={index === 0 ? "default" : "outline"}>
                       <CreditCard className="h-4 w-4 mr-2" />
-                      {index === 0 ? "Apply Now (Top Pick)" : "Learn More"}
+                      {index === 0 ? "Apply Now (TOP PICK)" : `Apply for Rank #${card.rank}`}
                     </Button>
                   </CardContent>
                 </Card>
@@ -307,10 +326,10 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Filter className="h-5 w-5 text-blue-600" />
-                Funnel Analysis
+                3-Level Funnel Analysis
               </CardTitle>
               <p className="text-sm text-gray-600">
-                How your profile was processed through our 3-level filtering system
+                How your profile was processed through our filtering system to get TOP 7 recommendations
               </p>
             </CardHeader>
             <CardContent className="space-y-6">
@@ -397,17 +416,12 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
 
                     <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-lg border-2 border-indigo-200">
                       <div>
-                        <p className="font-medium">Final Recommendations</p>
-                        <p className="text-sm text-gray-600">Scored and ranked by adaptive algorithm</p>
+                        <p className="font-medium">TOP 7 Final Recommendations</p>
+                        <p className="text-sm text-gray-600">Scored, ranked, and limited to best 7 cards</p>
                       </div>
                       <div className="text-right">
-                        <p className="text-2xl font-bold text-indigo-600">{funnelStats.finalCount}</p>
-                        <p className="text-xs text-gray-500">
-                          {funnelStats.totalCards > 0
-                            ? ((funnelStats.finalCount / funnelStats.totalCards) * 100).toFixed(1)
-                            : 0}
-                          % of total
-                        </p>
+                        <p className="text-2xl font-bold text-indigo-600">{recommendations.length}</p>
+                        <p className="text-xs text-gray-500">Limited from {funnelStats.finalCount} eligible cards</p>
                       </div>
                     </div>
                   </div>
@@ -437,7 +451,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <TrendingUp className="h-5 w-5 text-blue-600" />
-                Personalization Insights
+                TOP 7 Personalization Insights
               </CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
@@ -457,23 +471,31 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
                       <CheckCircle2 className="h-4 w-4 text-green-500" />
                       Clear spending preferences help targeted matching
                     </li>
+                    <li className="flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-500" />
+                      Funnel system ensures only relevant cards reach you
+                    </li>
                   </ul>
                 </div>
 
                 <div className="space-y-3">
-                  <h4 className="font-medium">Optimization Tips:</h4>
+                  <h4 className="font-medium">TOP 7 Selection Benefits:</h4>
                   <ul className="text-sm space-y-2">
                     <li className="flex items-center gap-2">
                       <Zap className="h-4 w-4 text-blue-500" />
-                      Consider cards with higher category match percentages
+                      Quality over quantity - only the best matches
                     </li>
                     <li className="flex items-center gap-2">
                       <Zap className="h-4 w-4 text-blue-500" />
-                      Balance joining fees with long-term rewards value
+                      Easier decision making with focused options
                     </li>
                     <li className="flex items-center gap-2">
                       <Zap className="h-4 w-4 text-blue-500" />
-                      Preferred brands get priority in our scoring
+                      Ranked by personalized scoring algorithm
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <Zap className="h-4 w-4 text-blue-500" />
+                      Brand preferences prioritized when available
                     </li>
                   </ul>
                 </div>
@@ -481,22 +503,38 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
 
               {/* Scoring Logic Explanation */}
               <div className="bg-gray-50 p-4 rounded-lg">
-                <h4 className="font-medium mb-2">How We Score Your Recommendations:</h4>
+                <h4 className="font-medium mb-2">How We Score Your TOP 7 Recommendations:</h4>
                 <div className="text-sm space-y-1">
                   <p>
-                    • <strong>Category Match (30-40%):</strong> How well card categories align with your spending
+                    • <strong>Category Match (30%):</strong> How well card categories align with your spending (&gt;65%
+                    required)
                   </p>
                   <p>
                     • <strong>Rewards Rate (20-60%):</strong> Higher cashback/points percentage gets higher score
                   </p>
                   <p>
-                    • <strong>Brand Match (0-50%):</strong> Bonus points for your preferred brands
+                    • <strong>Brand Match (0-50%):</strong> Bonus points for your preferred brands (when available)
                   </p>
                   <p>
                     • <strong>Sign-up Bonus (0-10%):</strong> Welcome offers add value to your score
                   </p>
+                  <p className="mt-2 text-blue-600 font-medium">
+                    🎯 Final step: Select TOP 7 highest-scoring cards for focused recommendations
+                  </p>
                 </div>
               </div>
+
+              {/* Brand Mismatch Explanation */}
+              {brandMismatchNotice && (
+                <div className="bg-orange-50 p-4 rounded-lg border border-orange-200">
+                  <h4 className="font-medium mb-2 text-orange-800">About Your Brand Preference:</h4>
+                  <p className="text-sm text-orange-700">
+                    Your preferred brand(s) [{formData.preferredBanks.join(", ")}] didn't pass our 3-level filtering
+                    system based on your income, credit score, spending categories, and joining fee preferences. The TOP
+                    7 cards shown are the best alternatives that match your other criteria perfectly.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

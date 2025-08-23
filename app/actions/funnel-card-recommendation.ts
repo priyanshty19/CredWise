@@ -12,6 +12,8 @@ import { submitEnhancedFormData } from "@/lib/google-sheets-submissions"
  * Level 2: Category Preference (>65% match required)
  * Level 3: Joining Fee + Brand Filtering
  * Final: Adaptive Scoring based on user selections
+ *
+ * LIMITS RECOMMENDATIONS TO TOP 7 CARDS
  */
 export async function getFunnelCardRecommendations(formData: {
   monthlyIncome: string
@@ -81,7 +83,15 @@ export async function getFunnelCardRecommendations(formData: {
       userProfile.preferredBrands.length > 0 &&
       !funnelResult.finalRecommendations.some((scored) => userProfile.preferredBrands.includes(scored.card.bank))
 
-    console.log(`✅ Funnel processing complete. Final recommendations: ${funnelResult.finalRecommendations.length}`)
+    // LIMIT TO TOP 7 RECOMMENDATIONS
+    const top7Recommendations = funnelResult.finalRecommendations.slice(0, 7)
+
+    console.log(`✅ Funnel processing complete. Total recommendations: ${funnelResult.finalRecommendations.length}`)
+    console.log(`🎯 Limiting to TOP 7 recommendations: ${top7Recommendations.length}`)
+
+    if (brandMismatchNotice) {
+      console.log("⚠️ BRAND MISMATCH NOTICE: Selected brand(s) not available, showing best alternatives")
+    }
 
     // Log the funnel-based form submission to Google Sheets
     try {
@@ -94,9 +104,11 @@ export async function getFunnelCardRecommendations(formData: {
         spendingCategories: formData.spendingCategories,
         preferredBanks: formData.preferredBanks,
         joiningFeePreference: formData.joiningFeePreference,
-        submissionType: "funnel_based_recommendation_engine",
+        submissionType: "funnel_based_recommendation_engine_top7",
         userAgent: typeof navigator !== "undefined" ? navigator.userAgent : "Server",
         funnelStats: funnelResult.funnelStats,
+        finalRecommendationCount: top7Recommendations.length,
+        brandMismatchNotice,
       }
 
       console.log("📝 Submitting funnel-based form data to Google Sheets:", submissionData)
@@ -112,8 +124,8 @@ export async function getFunnelCardRecommendations(formData: {
       // Don't fail the recommendation request if logging fails
     }
 
-    // Transform recommendations to match expected format
-    const transformedRecommendations = funnelResult.finalRecommendations.map((scored) => ({
+    // Transform TOP 7 recommendations to match expected format
+    const transformedRecommendations = top7Recommendations.map((scored, index) => ({
       name: scored.card.cardName,
       bank: scored.card.bank,
       type: scored.card.cardType.toLowerCase(),
@@ -133,6 +145,7 @@ export async function getFunnelCardRecommendations(formData: {
       spendingCategories: scored.card.spendingCategories,
       scoreBreakdown: scored.scoreBreakdown,
       matchPercentage: scored.matchPercentage,
+      rank: index + 1, // Add ranking
     }))
 
     return {
@@ -155,6 +168,7 @@ export async function getFunnelCardRecommendations(formData: {
         level2Cards: funnelResult.level2Cards.length,
         level3Cards: funnelResult.level3Cards.length,
         finalRecommendations: funnelResult.finalRecommendations.length,
+        top7Recommendations: top7Recommendations.length,
       },
     }
   } catch (error) {

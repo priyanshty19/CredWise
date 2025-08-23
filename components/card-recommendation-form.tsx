@@ -21,9 +21,11 @@ import {
   ArrowRight,
   CheckCircle2,
   AlertCircle,
+  Loader2,
 } from "lucide-react"
 import EnhancedRecommendations from "./enhanced-recommendations"
-import { fetchAvailableSpendingCategories } from "@/lib/google-sheets"
+import { fetchAvailableSpendingCategories, fetchCreditCards } from "@/lib/google-sheets"
+import { FunnelRecommendationEngine } from "@/lib/funnel-recommendation-engine"
 
 // Icon mapping for spending categories
 const categoryIcons: { [key: string]: any } = {
@@ -35,47 +37,15 @@ const categoryIcons: { [key: string]: any } = {
   entertainment: Smartphone,
   utilities: Zap,
   transport: Car,
-  // Add more mappings as needed
 }
-
-// Updated banks list from the provided data
-const banks = [
-  "SBI",
-  "PNB",
-  "Bank Of Baroda",
-  "Canara Bank",
-  "Indian Bank",
-  "Union Bank",
-  "Central Bank",
-  "BOI",
-  "IOB",
-  "HDFC",
-  "ICICI Bank",
-  "Axis Bank",
-  "Kotak",
-  "Yes Bank",
-  "FIRST",
-  "RBL",
-  "Induslnd Bank",
-  "SIB",
-  "Citi",
-  "Standard Chartered",
-  "HSBC",
-  "Barclays",
-  "Bajaj",
-  "Tata",
-  "Slice",
-  "Uni",
-  "Jupiter",
-  "Niyo",
-  "Federal",
-  "American Express",
-]
 
 export default function CardRecommendationForm() {
   const [currentStep, setCurrentStep] = useState(1)
   const [availableSpendingCategories, setAvailableSpendingCategories] = useState<string[]>([])
   const [loadingCategories, setLoadingCategories] = useState(true)
+  const [availableBrands, setAvailableBrands] = useState<string[]>([])
+  const [loadingBrands, setLoadingBrands] = useState(false)
+  const [allCards, setAllCards] = useState<any[]>([])
   const [formData, setFormData] = useState({
     monthlyIncome: "",
     spendingCategories: [] as string[],
@@ -116,6 +86,101 @@ export default function CardRecommendationForm() {
 
     loadSpendingCategories()
   }, [])
+
+  // Load all cards on component mount for dynamic brand filtering
+  useEffect(() => {
+    const loadAllCards = async () => {
+      try {
+        console.log("🔄 Loading all cards for dynamic brand filtering...")
+        const cards = await fetchCreditCards()
+        setAllCards(cards)
+        console.log("✅ Loaded cards for brand filtering:", cards.length)
+      } catch (error) {
+        console.error("❌ Error loading cards for brand filtering:", error)
+      }
+    }
+
+    loadAllCards()
+  }, [])
+
+  // Dynamic brand filtering based on current form state
+  useEffect(() => {
+    const updateAvailableBrands = async () => {
+      if (
+        !formData.monthlyIncome ||
+        !formData.creditScore ||
+        formData.spendingCategories.length === 0 ||
+        !formData.joiningFeePreference ||
+        allCards.length === 0
+      ) {
+        setAvailableBrands([])
+        return
+      }
+
+      setLoadingBrands(true)
+      console.log("🔄 DYNAMIC BRAND FILTERING - Updating available brands...")
+
+      try {
+        // Convert form data to user profile for filtering
+        const creditScore = getCreditScoreValue(formData.creditScore) || 650
+        const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 50000
+
+        let joiningFeePreference: "no_fee" | "low_fee" | "no_concern" = "no_concern"
+        switch (formData.joiningFeePreference) {
+          case "no_fee":
+            joiningFeePreference = "no_fee"
+            break
+          case "low_fee":
+            joiningFeePreference = "low_fee"
+            break
+          case "any_amount":
+          default:
+            joiningFeePreference = "no_concern"
+            break
+        }
+
+        console.log("👤 Current form state for brand filtering:")
+        console.log(`- Income: ₹${monthlyIncome.toLocaleString()}`)
+        console.log(`- Credit Score: ${creditScore}`)
+        console.log(`- Categories: [${formData.spendingCategories.join(", ")}]`)
+        console.log(`- Joining Fee Preference: ${joiningFeePreference}`)
+
+        // Run through Level 1 and Level 2 filtering
+        const level1Cards = FunnelRecommendationEngine.level1BasicEligibility(allCards, monthlyIncome, creditScore)
+        const level2Cards = FunnelRecommendationEngine.level2CategoryFiltering(level1Cards, formData.spendingCategories)
+
+        // Apply Level 3 joining fee filtering (without brand preference)
+        const { availableBrands: dynamicBrands } = FunnelRecommendationEngine.level3JoiningFeeAndBrandFiltering(
+          level2Cards,
+          joiningFeePreference,
+          [], // No brand preference for this filtering
+        )
+
+        console.log(`🏦 Dynamic brands available: [${dynamicBrands.join(", ")}]`)
+        setAvailableBrands(dynamicBrands)
+
+        // Clear selected brands that are no longer available
+        const validSelectedBrands = formData.preferredBanks.filter((bank) => dynamicBrands.includes(bank))
+        if (validSelectedBrands.length !== formData.preferredBanks.length) {
+          console.log("🧹 Clearing invalid brand selections...")
+          setFormData((prev) => ({ ...prev, preferredBanks: validSelectedBrands }))
+        }
+      } catch (error) {
+        console.error("❌ Error in dynamic brand filtering:", error)
+        setAvailableBrands([])
+      } finally {
+        setLoadingBrands(false)
+      }
+    }
+
+    updateAvailableBrands()
+  }, [
+    formData.monthlyIncome,
+    formData.creditScore,
+    formData.spendingCategories,
+    formData.joiningFeePreference,
+    allCards,
+  ])
 
   // Create spending category objects with icons and labels
   const spendingCategories = availableSpendingCategories.map((category) => {
@@ -374,73 +439,111 @@ export default function CardRecommendationForm() {
                 </Select>
               </div>
 
+              {/* DYNAMIC PREFERRED BRANDS SECTION */}
               <div className="space-y-3">
                 <div className="flex items-center gap-2">
                   <Label>Preferred Brands (Optional)</Label>
                   <Badge variant="outline" className="text-xs">
                     Max 3 selections
                   </Badge>
+                  {loadingBrands && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
                 </div>
                 <p className="text-sm text-gray-600">
-                  Select up to 3 brands you prefer or have existing relationships with.
+                  Select up to 3 brands you prefer. Options are filtered based on your eligibility and preferences.
                 </p>
 
-                {/* Selection limit warning */}
-                {formData.preferredBanks.length >= 3 && (
+                {/* Show message when no joining fee preference is selected */}
+                {!formData.joiningFeePreference && (
                   <Alert>
                     <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      You've reached the maximum of 3 brand selections. Unselect a brand to choose a different one.
+                      Please select your joining fee preference first to see available brands.
                     </AlertDescription>
                   </Alert>
                 )}
 
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
-                  {banks.map((bank) => {
-                    const isSelected = formData.preferredBanks.includes(bank)
-                    const isDisabled = !isSelected && formData.preferredBanks.length >= 3
+                {/* Show loading state */}
+                {loadingBrands && formData.joiningFeePreference && (
+                  <Alert>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertDescription>Loading available brands based on your preferences...</AlertDescription>
+                  </Alert>
+                )}
 
-                    return (
-                      <div
-                        key={bank}
-                        className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-colors ${
-                          isSelected
-                            ? "border-blue-500 bg-blue-50"
-                            : isDisabled
-                              ? "border-gray-200 bg-gray-100 cursor-not-allowed opacity-50"
-                              : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
-                        }`}
-                        onClick={() => !isDisabled && handleBankToggle(bank)}
-                      >
-                        <Checkbox
-                          checked={isSelected}
-                          disabled={isDisabled}
-                          onChange={() => !isDisabled && handleBankToggle(bank)}
-                        />
-                        <span className={`text-sm font-medium ${isDisabled ? "text-gray-400" : ""}`}>{bank}</span>
-                      </div>
-                    )
-                  })}
-                </div>
+                {/* Show available brands */}
+                {!loadingBrands && formData.joiningFeePreference && availableBrands.length > 0 && (
+                  <>
+                    {/* Selection limit warning */}
+                    {formData.preferredBanks.length >= 3 && (
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          You've reached the maximum of 3 brand selections. Unselect a brand to choose a different one.
+                        </AlertDescription>
+                      </Alert>
+                    )}
 
-                {formData.preferredBanks.length > 0 && (
-                  <div className="mt-3">
-                    <p className="text-sm text-gray-600 mb-2">Selected brands ({formData.preferredBanks.length}/3):</p>
-                    <div className="flex flex-wrap gap-2">
-                      {formData.preferredBanks.map((bank) => (
-                        <Badge key={bank} variant="secondary" className="flex items-center gap-1">
-                          {bank}
-                          <button
-                            onClick={() => handleBankToggle(bank)}
-                            className="ml-1 text-gray-500 hover:text-gray-700"
-                            aria-label={`Remove ${bank}`}
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                      {availableBrands.map((bank) => {
+                        const isSelected = formData.preferredBanks.includes(bank)
+                        const isDisabled = !isSelected && formData.preferredBanks.length >= 3
+
+                        return (
+                          <div
+                            key={bank}
+                            className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                              isSelected
+                                ? "border-blue-500 bg-blue-50"
+                                : isDisabled
+                                  ? "border-gray-200 bg-gray-100 cursor-not-allowed opacity-50"
+                                  : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                            }`}
+                            onClick={() => !isDisabled && handleBankToggle(bank)}
                           >
-                            ×
-                          </button>
-                        </Badge>
-                      ))}
+                            <Checkbox
+                              checked={isSelected}
+                              disabled={isDisabled}
+                              onChange={() => !isDisabled && handleBankToggle(bank)}
+                            />
+                            <span className={`text-sm font-medium ${isDisabled ? "text-gray-400" : ""}`}>{bank}</span>
+                          </div>
+                        )
+                      })}
                     </div>
-                  </div>
+
+                    {formData.preferredBanks.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-sm text-gray-600 mb-2">
+                          Selected brands ({formData.preferredBanks.length}/3):
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {formData.preferredBanks.map((bank) => (
+                            <Badge key={bank} variant="secondary" className="flex items-center gap-1">
+                              {bank}
+                              <button
+                                onClick={() => handleBankToggle(bank)}
+                                className="ml-1 text-gray-500 hover:text-gray-700"
+                                aria-label={`Remove ${bank}`}
+                              >
+                                ×
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Show message when no brands are available */}
+                {!loadingBrands && formData.joiningFeePreference && availableBrands.length === 0 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No brands are available based on your current preferences. You may still get recommendations from
+                      the best available options.
+                    </AlertDescription>
+                  </Alert>
                 )}
               </div>
             </div>
@@ -472,4 +575,20 @@ export default function CardRecommendationForm() {
       </Card>
     </div>
   )
+}
+
+// Helper function to get credit score value from range
+function getCreditScoreValue(range: string): number {
+  switch (range) {
+    case "300-549":
+      return 425
+    case "550-649":
+      return 600
+    case "650-749":
+      return 700
+    case "750-850":
+      return 800
+    default:
+      return 700
+  }
 }

@@ -171,11 +171,22 @@ export class FunnelRecommendationEngine {
     let level3Cards = feeFilteredCards
 
     if (preferredBrands.length > 0) {
-      level3Cards = feeFilteredCards.filter((card) => preferredBrands.includes(card.bank))
-      console.log(`🏦 After brand filtering: ${level3Cards.length} cards`)
+      const brandFilteredCards = feeFilteredCards.filter((card) => preferredBrands.includes(card.bank))
+      console.log(`🏦 Cards matching preferred brands: ${brandFilteredCards.length}`)
+
+      if (brandFilteredCards.length > 0) {
+        // Use brand-filtered cards if available
+        level3Cards = brandFilteredCards
+        console.log(`✅ Using brand-filtered cards: ${level3Cards.length}`)
+      } else {
+        // Keep all fee-filtered cards if no brand matches (will show mismatch notice)
+        level3Cards = feeFilteredCards
+        console.log(`⚠️ No brand matches found, keeping all fee-filtered cards: ${level3Cards.length}`)
+      }
 
       level3Cards.forEach((card) => {
-        console.log(`   ✅ ${card.cardName} (${card.bank})`)
+        const isBrandMatch = preferredBrands.includes(card.bank)
+        console.log(`   ${isBrandMatch ? "✅" : "⚠️"} ${card.cardName} (${card.bank})`)
       })
     }
 
@@ -187,6 +198,7 @@ export class FunnelRecommendationEngine {
   /**
    * FINAL SCORING AND RECOMMENDATION
    * Apply adaptive scoring based on joining fee and brand match scenarios
+   * Even if brand doesn't match, still provide recommendations from available cards
    */
   static finalScoringAndRecommendation(level3Cards: CreditCard[], userProfile: UserProfile): ScoredCard[] {
     console.log("\n🎯 FINAL SCORING AND RECOMMENDATION")
@@ -200,7 +212,8 @@ export class FunnelRecommendationEngine {
 
     // Determine scoring scenario
     const hasZeroJoiningFee = userProfile.joiningFeePreference === "no_fee"
-    const hasBrandMatch = userProfile.preferredBrands.length > 0
+    const hasBrandPreference = userProfile.preferredBrands.length > 0
+    const hasBrandMatch = level3Cards.some((card) => userProfile.preferredBrands.includes(card.bank))
 
     let scoringScenario: string
     let weights: { categoryMatch: number; rewardsRate: number; brandMatch?: number; signUpBonus?: number }
@@ -221,6 +234,10 @@ export class FunnelRecommendationEngine {
 
     console.log(`🎯 Scoring Scenario: ${scoringScenario}`)
     console.log(`⚖️ Weights: ${JSON.stringify(weights)}`)
+
+    if (hasBrandPreference && !hasBrandMatch) {
+      console.log("⚠️ BRAND MISMATCH: User preferred brands not available, scoring all available cards")
+    }
 
     // Calculate max values for normalization
     const maxRewardsRate = Math.max(...level3Cards.map((c) => c.rewardsRate), 1)
@@ -401,6 +418,7 @@ export class FunnelRecommendationEngine {
 
   /**
    * Apply sorting logic with brand preference priority
+   * Even if preferred brands don't exist, still provide recommendations
    */
   private static applySortingLogic(scoredCards: ScoredCard[], preferredBrands: string[]): ScoredCard[] {
     if (preferredBrands.length === 0) {
@@ -439,6 +457,8 @@ export class FunnelRecommendationEngine {
 
     if (userProfile.preferredBrands.includes(card.bank)) {
       parts.push("preferred brand bonus")
+    } else if (userProfile.preferredBrands.length > 0) {
+      parts.push("best alternative (preferred brand unavailable)")
     }
 
     if (card.joiningFee === 0) {
