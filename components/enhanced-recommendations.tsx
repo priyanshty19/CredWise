@@ -16,12 +16,9 @@ import {
   BarChart3,
   Target,
   Zap,
+  Trophy,
   Star,
   Info,
-  Gift,
-  Percent,
-  IndianRupee,
-  ExternalLink,
 } from "lucide-react"
 import { getFunnelCardRecommendations } from "@/app/actions/funnel-card-recommendation"
 
@@ -38,7 +35,6 @@ interface EnhancedRecommendationsProps {
 }
 
 interface Recommendation {
-  id: string
   name: string
   bank: string
   type: string
@@ -50,6 +46,16 @@ interface Recommendation {
   bestFor: string[]
   score: number
   reasoning: string
+  spendingCategories: string[]
+  scoreBreakdown: {
+    categoryMatch: number
+    rewardsRate: number
+    brandMatch?: number
+    signUpBonus?: number
+  }
+  matchPercentage: number
+  rank: number
+  tier: "preferred_brand" | "general"
 }
 
 interface FunnelStats {
@@ -132,19 +138,48 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
   }
 
   const getScoreColor = (score: number) => {
-    if (score >= 90) return "text-green-600 bg-green-50"
-    if (score >= 80) return "text-blue-600 bg-blue-50"
-    if (score >= 70) return "text-yellow-600 bg-yellow-50"
-    return "text-gray-600 bg-gray-50"
+    if (score >= 80) return "text-green-600 bg-green-50"
+    if (score >= 60) return "text-blue-600 bg-blue-50"
+    if (score >= 40) return "text-orange-600 bg-orange-50"
+    return "text-red-600 bg-red-50"
   }
 
-  const getStarRating = (score: number) => {
-    return Math.min(5, Math.max(1, Math.round(score / 20)))
+  const getRankBadge = (rank: number, tier: string) => {
+    if (rank === 1 && tier === "preferred_brand")
+      return (
+        <Badge className="bg-yellow-500 text-white">
+          <Trophy className="h-3 w-3 mr-1" />
+          PREFERRED #1
+        </Badge>
+      )
+    if (rank === 1)
+      return (
+        <Badge className="bg-blue-600 text-white">
+          <Trophy className="h-3 w-3 mr-1" />
+          TOP PICK
+        </Badge>
+      )
+    if (tier === "preferred_brand")
+      return (
+        <Badge className="bg-green-600 text-white">
+          <Star className="h-3 w-3 mr-1" />
+          PREFERRED #{rank}
+        </Badge>
+      )
+    if (rank <= 3) return <Badge variant="secondary">TOP {rank}</Badge>
+    return <Badge variant="outline">#{rank}</Badge>
+  }
+
+  const getTierBadge = (tier: string) => {
+    if (tier === "preferred_brand") {
+      return <Badge className="bg-green-100 text-green-800 border-green-300">Preferred Brand</Badge>
+    }
+    return <Badge className="bg-blue-100 text-blue-800 border-blue-300">General</Badge>
   }
 
   // Separate recommendations by tier for display
-  const preferredBrandCards = recommendations.filter((card) => formData.preferredBanks.includes(card.bank))
-  const generalCards = recommendations.filter((card) => !formData.preferredBanks.includes(card.bank))
+  const preferredBrandCards = recommendations.filter((card) => card.tier === "preferred_brand")
+  const generalCards = recommendations.filter((card) => card.tier === "general")
 
   return (
     <div className="space-y-6">
@@ -240,91 +275,114 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
                         key={`preferred-${index}`}
                         className="hover:shadow-lg transition-shadow ring-2 ring-green-200"
                       >
-                        <div className="absolute top-4 right-4">
-                          <Badge className={`${getScoreColor(card.score)} border-0`}>Score: {card.score}/100</Badge>
-                        </div>
-                        <CardHeader className="pb-4">
-                          <div className="flex items-start justify-between">
-                            <div className="space-y-2">
-                              <CardTitle className="text-xl flex items-center gap-2">
-                                <CreditCard className="h-5 w-5 text-blue-600" />
-                                {card.name}
-                              </CardTitle>
-                              <div className="flex items-center gap-4">
-                                <Badge variant="outline">{card.bank}</Badge>
-                                <Badge variant="secondary">{card.type}</Badge>
-                                <div className="flex items-center gap-1">
-                                  {Array.from({ length: getStarRating(card.score) }).map((_, i) => (
-                                    <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                  ))}
-                                  {Array.from({ length: 5 - getStarRating(card.score) }).map((_, i) => (
-                                    <Star key={i} className="h-4 w-4 text-gray-300" />
-                                  ))}
-                                </div>
+                        <CardHeader>
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <CardTitle className="text-lg">{card.name}</CardTitle>
+                                {getRankBadge(card.rank, card.tier)}
+                                {getTierBadge(card.tier)}
                               </div>
+                              <p className="text-sm text-gray-600">
+                                {card.bank} • {card.type}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <Badge className={`${getScoreColor(card.score)} border-0`}>{card.score}/100</Badge>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {card.matchPercentage.toFixed(1)}% category match
+                              </p>
                             </div>
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                           {/* Key Metrics */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="text-center p-3 bg-gray-50 rounded-lg">
-                              <IndianRupee className="h-5 w-5 mx-auto mb-1 text-green-600" />
-                              <div className="text-sm font-medium">Joining Fee</div>
-                              <div className="text-lg font-bold">₹{card.joiningFee.toLocaleString()}</div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-600">Joining Fee</p>
+                              <p className="font-medium">
+                                {card.joiningFee === 0 ? "Free" : `₹${card.joiningFee.toLocaleString()}`}
+                              </p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg">
-                              <IndianRupee className="h-5 w-5 mx-auto mb-1 text-blue-600" />
-                              <div className="text-sm font-medium">Annual Fee</div>
-                              <div className="text-lg font-bold">₹{card.annualFee.toLocaleString()}</div>
+                            <div>
+                              <p className="text-gray-600">Annual Fee</p>
+                              <p className="font-medium">
+                                {card.annualFee === 0 ? "Free" : `₹${card.annualFee.toLocaleString()}`}
+                              </p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg">
-                              <Percent className="h-5 w-5 mx-auto mb-1 text-purple-600" />
-                              <div className="text-sm font-medium">Reward Rate</div>
-                              <div className="text-lg font-bold">{card.rewardRate}</div>
+                            <div>
+                              <p className="text-gray-600">Reward Rate</p>
+                              <p className="font-medium">{card.rewardRate}</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg">
-                              <Gift className="h-5 w-5 mx-auto mb-1 text-orange-600" />
-                              <div className="text-sm font-medium">Welcome Bonus</div>
-                              <div className="text-sm font-bold">{card.welcomeBonus}</div>
+                            <div>
+                              <p className="text-gray-600">Welcome Bonus</p>
+                              <p className="font-medium">{card.welcomeBonus || "None"}</p>
                             </div>
                           </div>
+
+                          {/* Score Breakdown */}
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Score Breakdown:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                              <div className="flex justify-between">
+                                <span>Category:</span>
+                                <span className="font-medium">{card.scoreBreakdown.categoryMatch.toFixed(1)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Rewards:</span>
+                                <span className="font-medium">{card.scoreBreakdown.rewardsRate.toFixed(1)}</span>
+                              </div>
+                              {card.scoreBreakdown.brandMatch !== undefined && (
+                                <div className="flex justify-between">
+                                  <span>Brand:</span>
+                                  <span className="font-medium">{card.scoreBreakdown.brandMatch.toFixed(1)}</span>
+                                </div>
+                              )}
+                              {card.scoreBreakdown.signUpBonus !== undefined && (
+                                <div className="flex justify-between">
+                                  <span>Bonus:</span>
+                                  <span className="font-medium">{card.scoreBreakdown.signUpBonus.toFixed(1)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Best For Categories */}
+                          {card.bestFor.length > 0 && (
+                            <div>
+                              <p className="text-sm font-medium mb-2">Best for:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {card.bestFor.map((category, idx) => (
+                                  <Badge key={idx} variant="secondary" className="text-xs">
+                                    {category}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           {/* Key Features */}
                           <div>
-                            <h4 className="font-medium mb-2">Key Features:</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {card.keyFeatures.map((feature, idx) => (
-                                <div key={idx} className="flex items-center gap-2 text-sm">
-                                  <div className="w-1.5 h-1.5 bg-blue-600 rounded-full"></div>
+                            <p className="text-sm font-medium mb-2">Key Features:</p>
+                            <ul className="text-sm text-gray-600 space-y-1">
+                              {card.keyFeatures.slice(0, 3).map((feature, idx) => (
+                                <li key={idx} className="flex items-center gap-2">
+                                  <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
                                   {feature}
-                                </div>
+                                </li>
                               ))}
-                            </div>
-                          </div>
-
-                          {/* Best For */}
-                          <div>
-                            <h4 className="font-medium mb-2">Best For:</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {card.bestFor.map((category, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs">
-                                  {category}
-                                </Badge>
-                              ))}
-                            </div>
+                            </ul>
                           </div>
 
                           {/* Reasoning */}
-                          <div className="bg-blue-50 p-3 rounded-lg">
-                            <h4 className="font-medium text-blue-900 mb-1">Why This Card?</h4>
-                            <p className="text-sm text-blue-800">{card.reasoning}</p>
+                          <div className="bg-green-50 p-3 rounded-lg border border-green-200">
+                            <p className="text-sm text-green-800">{card.reasoning}</p>
                           </div>
 
                           {/* Action Button */}
-                          <Button className="w-full" size="lg">
-                            <ExternalLink className="h-4 w-4 mr-2" />
-                            Learn More & Apply
+                          <Button className="w-full bg-green-600 hover:bg-green-700">
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            Apply Now (Preferred Brand)
                           </Button>
                         </CardContent>
                       </Card>
@@ -346,91 +404,114 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
                   <div className="grid gap-4">
                     {generalCards.slice(0, 7 - preferredBrandCards.length).map((card, index) => (
                       <Card key={`general-${index}`} className="hover:shadow-lg transition-shadow">
-                        <div className="absolute top-4 right-4">
-                          <Badge className={`${getScoreColor(card.score)} border-0`}>Score: {card.score}/100</Badge>
-                        </div>
-                        <CardHeader className="pb-4">
-                          <div className="flex items-start justify-between">
-                            <div className="space-y-2">
-                              <CardTitle className="text-xl flex items-center gap-2">
-                                <CreditCard className="h-5 w-5 text-blue-600" />
-                                {card.name}
-                              </CardTitle>
-                              <div className="flex items-center gap-4">
-                                <Badge variant="outline">{card.bank}</Badge>
-                                <Badge variant="secondary">{card.type}</Badge>
-                                <div className="flex items-center gap-1">
-                                  {Array.from({ length: getStarRating(card.score) }).map((_, i) => (
-                                    <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
-                                  ))}
-                                  {Array.from({ length: 5 - getStarRating(card.score) }).map((_, i) => (
-                                    <Star key={i} className="h-4 w-4 text-gray-300" />
-                                  ))}
-                                </div>
+                        <CardHeader>
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-2">
+                                <CardTitle className="text-lg">{card.name}</CardTitle>
+                                {getRankBadge(card.rank, card.tier)}
+                                {getTierBadge(card.tier)}
                               </div>
+                              <p className="text-sm text-gray-600">
+                                {card.bank} • {card.type}
+                              </p>
+                            </div>
+                            <div className="text-right">
+                              <Badge className={`${getScoreColor(card.score)} border-0`}>{card.score}/100</Badge>
+                              <p className="text-xs text-gray-500 mt-1">
+                                {card.matchPercentage.toFixed(1)}% category match
+                              </p>
                             </div>
                           </div>
                         </CardHeader>
                         <CardContent className="space-y-4">
                           {/* Key Metrics */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                            <div className="text-center p-3 bg-gray-50 rounded-lg">
-                              <IndianRupee className="h-5 w-5 mx-auto mb-1 text-green-600" />
-                              <div className="text-sm font-medium">Joining Fee</div>
-                              <div className="text-lg font-bold">₹{card.joiningFee.toLocaleString()}</div>
+                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-600">Joining Fee</p>
+                              <p className="font-medium">
+                                {card.joiningFee === 0 ? "Free" : `₹${card.joiningFee.toLocaleString()}`}
+                              </p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg">
-                              <IndianRupee className="h-5 w-5 mx-auto mb-1 text-blue-600" />
-                              <div className="text-sm font-medium">Annual Fee</div>
-                              <div className="text-lg font-bold">₹{card.annualFee.toLocaleString()}</div>
+                            <div>
+                              <p className="text-gray-600">Annual Fee</p>
+                              <p className="font-medium">
+                                {card.annualFee === 0 ? "Free" : `₹${card.annualFee.toLocaleString()}`}
+                              </p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg">
-                              <Percent className="h-5 w-5 mx-auto mb-1 text-purple-600" />
-                              <div className="text-sm font-medium">Reward Rate</div>
-                              <div className="text-lg font-bold">{card.rewardRate}</div>
+                            <div>
+                              <p className="text-gray-600">Reward Rate</p>
+                              <p className="font-medium">{card.rewardRate}</p>
                             </div>
-                            <div className="text-center p-3 bg-gray-50 rounded-lg">
-                              <Gift className="h-5 w-5 mx-auto mb-1 text-orange-600" />
-                              <div className="text-sm font-medium">Welcome Bonus</div>
-                              <div className="text-sm font-bold">{card.welcomeBonus}</div>
+                            <div>
+                              <p className="text-gray-600">Welcome Bonus</p>
+                              <p className="font-medium">{card.welcomeBonus || "None"}</p>
                             </div>
                           </div>
+
+                          {/* Score Breakdown */}
+                          <div className="space-y-2">
+                            <p className="text-sm font-medium">Score Breakdown:</p>
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+                              <div className="flex justify-between">
+                                <span>Category:</span>
+                                <span className="font-medium">{card.scoreBreakdown.categoryMatch.toFixed(1)}</span>
+                              </div>
+                              <div className="flex justify-between">
+                                <span>Rewards:</span>
+                                <span className="font-medium">{card.scoreBreakdown.rewardsRate.toFixed(1)}</span>
+                              </div>
+                              {card.scoreBreakdown.brandMatch !== undefined && (
+                                <div className="flex justify-between">
+                                  <span>Brand:</span>
+                                  <span className="font-medium">{card.scoreBreakdown.brandMatch.toFixed(1)}</span>
+                                </div>
+                              )}
+                              {card.scoreBreakdown.signUpBonus !== undefined && (
+                                <div className="flex justify-between">
+                                  <span>Bonus:</span>
+                                  <span className="font-medium">{card.scoreBreakdown.signUpBonus.toFixed(1)}</span>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+
+                          {/* Best For Categories */}
+                          {card.bestFor.length > 0 && (
+                            <div>
+                              <p className="text-sm font-medium mb-2">Best for:</p>
+                              <div className="flex flex-wrap gap-1">
+                                {card.bestFor.map((category, idx) => (
+                                  <Badge key={idx} variant="secondary" className="text-xs">
+                                    {category}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          )}
 
                           {/* Key Features */}
                           <div>
-                            <h4 className="font-medium mb-2">Key Features:</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                              {card.keyFeatures.map((feature, idx) => (
-                                <div key={idx} className="flex items-center gap-2 text-sm">
-                                  <div className="w-1.5 h-1.5 bg-blue-600 rounded-full"></div>
+                            <p className="text-sm font-medium mb-2">Key Features:</p>
+                            <ul className="text-sm text-gray-600 space-y-1">
+                              {card.keyFeatures.slice(0, 3).map((feature, idx) => (
+                                <li key={idx} className="flex items-center gap-2">
+                                  <CheckCircle2 className="h-3 w-3 text-green-500 flex-shrink-0" />
                                   {feature}
-                                </div>
+                                </li>
                               ))}
-                            </div>
-                          </div>
-
-                          {/* Best For */}
-                          <div>
-                            <h4 className="font-medium mb-2">Best For:</h4>
-                            <div className="flex flex-wrap gap-2">
-                              {card.bestFor.map((category, idx) => (
-                                <Badge key={idx} variant="outline" className="text-xs">
-                                  {category}
-                                </Badge>
-                              ))}
-                            </div>
+                            </ul>
                           </div>
 
                           {/* Reasoning */}
-                          <div className="bg-blue-50 p-3 rounded-lg">
-                            <h4 className="font-medium text-blue-900 mb-1">Why This Card?</h4>
-                            <p className="text-sm text-blue-800">{card.reasoning}</p>
+                          <div className="bg-gray-50 p-3 rounded-lg">
+                            <p className="text-sm text-gray-700">{card.reasoning}</p>
                           </div>
 
                           {/* Action Button */}
-                          <Button className="w-full" size="lg">
-                            <ExternalLink className="h-4 w-4 mr-2" />
-                            Learn More & Apply
+                          <Button className="w-full" variant={card.rank === 1 ? "default" : "outline"}>
+                            <CreditCard className="h-4 w-4 mr-2" />
+                            {card.rank === 1 ? "Apply Now (Top Alternative)" : `Apply for Rank #${card.rank}`}
                           </Button>
                         </CardContent>
                       </Card>

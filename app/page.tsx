@@ -1,255 +1,249 @@
 import Navigation from "@/components/navigation"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import { CreditCard, TrendingUp, Shield, Zap, ArrowRight, CheckCircle, BarChart3, PieChart, Target } from "lucide-react"
+import { Button } from "@/components/ui/button"
 import Link from "next/link"
+import { CreditCard, BarChart3, TrendingUp, Shield, Zap, Target, ArrowRight, CheckCircle2 } from "lucide-react"
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-gray-50">
       <Navigation currentPage="HOME" />
 
-      <main className="container mx-auto px-4 py-8">
-        {/* Hero Section */}
-        <div className="text-center mb-16">
-          <div className="max-w-4xl mx-auto">
-            <Badge variant="secondary" className="mb-4">
-              <Zap className="h-3 w-3 mr-1" />
-              AI-Powered Financial Intelligence
-            </Badge>
-            <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6">
-              Make <span className="text-blue-600">Smart</span> Financial Decisions
+      {/* Hero Section */}
+      <section className="bg-gradient-to-br from-blue-600 via-blue-700 to-blue-800 text-white">
+        <div className="container mx-auto px-4 py-16">
+          <div className="max-w-4xl mx-auto text-center">
+            <h1 className="text-5xl font-bold mb-6">
+              Welcome to <span className="text-blue-200">CredWise</span>
             </h1>
-            <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto">
-              CredWise combines AI-powered credit card recommendations with comprehensive portfolio analysis to help you
-              optimize your financial strategy and maximize rewards.
+            <p className="text-xl mb-8 text-blue-100 max-w-2xl mx-auto">
+              Your intelligent financial companion for smart credit card recommendations and comprehensive portfolio
+              analysis. Make informed financial decisions with AI-powered insights.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/cards">
-                <Button size="lg" className="bg-blue-600 hover:bg-blue-700">
-                  <CreditCard className="mr-2 h-5 w-5" />
+                <Button size="lg" className="bg-white text-blue-700 hover:bg-blue-50">
+                  <CreditCard className="h-5 w-5 mr-2" />
                   Get Card Recommendations
                 </Button>
               </Link>
               <Link href="/deep-dive">
-                <Button size="lg" variant="outline">
-                  <TrendingUp className="mr-2 h-5 w-5" />
+                <Button
+                  size="lg"
+                  variant="outline"
+                  className="border-white text-white hover:bg-white hover:text-blue-700 bg-transparent"
+                >
+                  <BarChart3 className="h-5 w-5 mr-2" />
                   Analyze Portfolio
                 </Button>
               </Link>
             </div>
           </div>
         </div>
+      </section>
 
-        {/* Features Overview */}
-        <div className="grid md:grid-cols-2 gap-8 mb-16">
-          <Card className="relative overflow-hidden">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center">
-                  <CreditCard className="h-6 w-6 text-blue-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl">Smart Card Recommendations</CardTitle>
-                  <p className="text-sm text-gray-600">AI-powered matching system</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Our advanced funnel-based algorithm analyzes your spending patterns, income, and preferences to
-                recommend the perfect credit cards for your lifestyle.
-              </p>
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>3-Level Filtering System</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>Dynamic Brand Filtering</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                  <span>TOP 7 Personalized Results</span>
-                </div>
-              </div>
-              <Link href="/cards">
-                <Button className="w-full">
-                  Start Recommendation
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-
-          <Card className="relative overflow-hidden">
-            <CardHeader>
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center">
-                  <TrendingUp className="h-6 w-6 text-green-600" />
-                </div>
-                <div>
-                  <CardTitle className="text-xl">Deep Dive Analysis</CardTitle>
-                  <p className="text-sm text-gray-600">Comprehensive portfolio insights</p>
-                </div>
-              </div>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600 mb-4">
-                Upload your financial statements and get detailed analysis of your spending patterns, investment
-                portfolio, and personalized optimization recommendations.
-              </p>
-              <div className="space-y-2 mb-4">
-                <div className="flex items-center gap-2 text-sm">
-                  <BarChart3 className="h-4 w-4 text-blue-600" />
-                  <span>Portfolio Analysis</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <PieChart className="h-4 w-4 text-blue-600" />
-                  <span>Spending Insights</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm">
-                  <Target className="h-4 w-4 text-blue-600" />
-                  <span>Goal Management</span>
-                </div>
-              </div>
-              <Link href="/deep-dive">
-                <Button variant="outline" className="w-full bg-transparent">
-                  Explore Deep Dive
-                  <ArrowRight className="ml-2 h-4 w-4" />
-                </Button>
-              </Link>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Key Benefits */}
-        <div className="mb-16">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Why Choose CredWise?</h2>
-            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Our platform combines cutting-edge AI with comprehensive financial analysis to give you the edge in
-              personal finance management.
+      {/* Features Overview */}
+      <section className="py-16">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Comprehensive Financial Solutions</h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              From personalized credit card recommendations to deep portfolio analysis, we've got your financial journey
+              covered.
             </p>
           </div>
 
-          <div className="grid md:grid-cols-3 gap-6">
-            <Card>
-              <CardContent className="p-6 text-center">
-                <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Zap className="h-8 w-8 text-blue-600" />
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 max-w-6xl mx-auto">
+            {/* Card Recommendations Feature */}
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-blue-100 rounded-lg">
+                    <CreditCard className="h-6 w-6 text-blue-600" />
+                  </div>
+                  <CardTitle className="text-xl">Smart Card Recommendations</CardTitle>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">AI-Powered Intelligence</h3>
-                <p className="text-gray-600">
-                  Advanced algorithms analyze thousands of data points to provide personalized recommendations tailored
-                  to your unique financial profile.
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600 mb-4">
+                  Get personalized credit card recommendations based on your spending patterns, income, and financial
+                  goals. Our AI analyzes your profile to find the perfect cards for maximum rewards and benefits.
                 </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6 text-center">
-                <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Shield className="h-8 w-8 text-green-600" />
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">Funnel-based recommendation system</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">Category-wise spending analysis</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">Brand preference matching</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">Top 7 curated recommendations</span>
+                  </div>
                 </div>
-                <h3 className="text-lg font-semibold mb-2">Secure & Private</h3>
-                <p className="text-gray-600">
-                  Your financial data is encrypted and processed securely. We never store sensitive information and
-                  prioritize your privacy above all.
-                </p>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-6 text-center">
-                <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                  <Target className="h-8 w-8 text-purple-600" />
-                </div>
-                <h3 className="text-lg font-semibold mb-2">Personalized Results</h3>
-                <p className="text-gray-600">
-                  Every recommendation is customized based on your spending habits, income level, and financial goals
-                  for maximum relevance.
-                </p>
-              </CardContent>
-            </Card>
-          </div>
-        </div>
-
-        {/* Statistics */}
-        <div className="bg-white rounded-2xl p-8 mb-16">
-          <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold text-gray-900 mb-4">Trusted by Thousands</h2>
-            <p className="text-lg text-gray-600">Join the growing community of smart financial decision makers</p>
-          </div>
-
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-            <div className="text-center">
-              <div className="text-3xl font-bold text-blue-600 mb-2">50K+</div>
-              <div className="text-sm text-gray-600">Recommendations Generated</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-green-600 mb-2">₹2.5Cr+</div>
-              <div className="text-sm text-gray-600">Rewards Optimized</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-purple-600 mb-2">95%</div>
-              <div className="text-sm text-gray-600">User Satisfaction</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold text-orange-600 mb-2">24/7</div>
-              <div className="text-sm text-gray-600">AI-Powered Support</div>
-            </div>
-          </div>
-        </div>
-
-        {/* Call to Action */}
-        <div className="text-center">
-          <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-            <CardContent className="p-8">
-              <h2 className="text-3xl font-bold mb-4">Ready to Optimize Your Finances?</h2>
-              <p className="text-lg mb-6 opacity-90">
-                Start your journey to smarter financial decisions today. Get personalized recommendations in minutes.
-              </p>
-              <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Link href="/cards">
-                  <Button size="lg" variant="secondary">
-                    <CreditCard className="mr-2 h-5 w-5" />
-                    Find My Perfect Card
+                  <Button className="w-full">
+                    Explore Card Recommendations
+                    <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 </Link>
+              </CardContent>
+            </Card>
+
+            {/* Deep Dive Feature */}
+            <Card className="hover:shadow-lg transition-shadow">
+              <CardHeader>
+                <div className="flex items-center gap-3 mb-2">
+                  <div className="p-2 bg-green-100 rounded-lg">
+                    <BarChart3 className="h-6 w-6 text-green-600" />
+                  </div>
+                  <CardTitle className="text-xl">Deep Dive Portfolio Analysis</CardTitle>
+                </div>
+              </CardHeader>
+              <CardContent>
+                <p className="text-gray-600 mb-4">
+                  Comprehensive financial portfolio analysis with advanced insights, goal planning, and portfolio
+                  management tools. Upload your statements and get detailed financial health reports.
+                </p>
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">Multi-file portfolio upload</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">Spending pattern analysis</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">Investment insights</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-green-600" />
+                    <span className="text-sm">Goal tracking & management</span>
+                  </div>
+                </div>
                 <Link href="/deep-dive">
-                  <Button
-                    size="lg"
-                    variant="outline"
-                    className="text-white border-white hover:bg-white hover:text-blue-600 bg-transparent"
-                  >
-                    <TrendingUp className="mr-2 h-5 w-5" />
-                    Analyze My Portfolio
+                  <Button className="w-full bg-transparent" variant="outline">
+                    Start Portfolio Analysis
+                    <ArrowRight className="h-4 w-4 ml-2" />
                   </Button>
                 </Link>
-              </div>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </div>
         </div>
-      </main>
+      </section>
+
+      {/* Key Benefits */}
+      <section className="py-16 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-12">
+            <h2 className="text-3xl font-bold text-gray-900 mb-4">Why Choose CredWise?</h2>
+            <p className="text-xl text-gray-600">Advanced AI technology meets personalized financial guidance</p>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
+            <div className="text-center">
+              <div className="p-3 bg-blue-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                <Zap className="h-8 w-8 text-blue-600" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">AI-Powered</h3>
+              <p className="text-gray-600 text-sm">
+                Advanced algorithms analyze your financial profile for optimal recommendations
+              </p>
+            </div>
+
+            <div className="text-center">
+              <div className="p-3 bg-green-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                <Shield className="h-8 w-8 text-green-600" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Secure & Private</h3>
+              <p className="text-gray-600 text-sm">Your financial data is protected with enterprise-grade security</p>
+            </div>
+
+            <div className="text-center">
+              <div className="p-3 bg-orange-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                <Target className="h-8 w-8 text-orange-600" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Personalized</h3>
+              <p className="text-gray-600 text-sm">Tailored recommendations based on your unique spending patterns</p>
+            </div>
+
+            <div className="text-center">
+              <div className="p-3 bg-purple-100 rounded-full w-16 h-16 mx-auto mb-4 flex items-center justify-center">
+                <TrendingUp className="h-8 w-8 text-purple-600" />
+              </div>
+              <h3 className="text-lg font-semibold mb-2">Growth Focused</h3>
+              <p className="text-gray-600 text-sm">
+                Maximize your rewards and optimize your financial growth potential
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* Stats Section */}
+      <section className="py-16 bg-gray-100">
+        <div className="container mx-auto px-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-4xl mx-auto text-center">
+            <div>
+              <div className="text-4xl font-bold text-blue-600 mb-2">500+</div>
+              <div className="text-gray-600">Credit Cards Analyzed</div>
+            </div>
+            <div>
+              <div className="text-4xl font-bold text-green-600 mb-2">95%</div>
+              <div className="text-gray-600">Recommendation Accuracy</div>
+            </div>
+            <div>
+              <div className="text-4xl font-bold text-purple-600 mb-2">₹2.5L+</div>
+              <div className="text-gray-600">Average Annual Savings</div>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* CTA Section */}
+      <section className="py-16 bg-gradient-to-r from-blue-600 to-blue-700 text-white">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-3xl font-bold mb-4">Ready to Optimize Your Financial Journey?</h2>
+          <p className="text-xl mb-8 text-blue-100 max-w-2xl mx-auto">
+            Join thousands of users who have already discovered their perfect credit cards and optimized their
+            portfolios with CredWise.
+          </p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Link href="/cards">
+              <Button size="lg" className="bg-white text-blue-700 hover:bg-blue-50">
+                Get Started with Card Recommendations
+              </Button>
+            </Link>
+            <Link href="/deep-dive">
+              <Button
+                size="lg"
+                variant="outline"
+                className="border-white text-white hover:bg-white hover:text-blue-700 bg-transparent"
+              >
+                Analyze Your Portfolio
+              </Button>
+            </Link>
+          </div>
+        </div>
+      </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-8 mt-16">
-        <div className="container mx-auto px-4">
-          <div className="flex flex-col md:flex-row items-center justify-between">
-            <div className="flex items-center gap-3 mb-4 md:mb-0">
-              <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-                <CreditCard className="h-5 w-5 text-white" />
-              </div>
-              <div>
-                <div className="font-bold">CredWise</div>
-                <div className="text-sm text-gray-400">Smart Financial Decisions</div>
-              </div>
-            </div>
-            <div className="text-sm text-gray-400">© 2024 CredWise. Empowering your financial future.</div>
+      <footer className="bg-gray-900 text-white py-8">
+        <div className="container mx-auto px-4 text-center">
+          <div className="flex items-center justify-center gap-2 mb-4">
+            <CreditCard className="h-6 w-6 text-blue-400" />
+            <span className="text-xl font-bold">CredWise</span>
           </div>
+          <p className="text-gray-400">Your intelligent financial companion for smart decisions and optimal growth.</p>
         </div>
       </footer>
     </div>

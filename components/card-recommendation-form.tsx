@@ -1,7 +1,5 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
@@ -11,367 +9,586 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
-import { Loader2, Search, AlertCircle, CheckCircle2, Filter, BarChart3 } from "lucide-react"
-import { submitCardRecommendation } from "@/app/actions/funnel-card-recommendation"
+import {
+  CreditCard,
+  Utensils,
+  Fuel,
+  ShoppingBag,
+  Plane,
+  Smartphone,
+  Zap,
+  Car,
+  ArrowRight,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
+} from "lucide-react"
 import EnhancedRecommendations from "./enhanced-recommendations"
-import { fetchCreditCards } from "@/lib/google-sheets"
+import { fetchAvailableSpendingCategories, fetchCreditCards } from "@/lib/google-sheets"
+import { FunnelRecommendationEngine } from "@/lib/funnel-recommendation-engine"
 
-interface CreditCard {
-  cardName: string
-  bank: string
-  cardType: string
-  joiningFee: number
-  annualFee: number
-  rewardRate: string
-  category: string[]
-  eligibilityIncome: number
-  welcomeBonus: string
-  keyFeatures: string[]
-}
-
-interface FormData {
-  monthlyIncome: string
-  spendingCategories: string[]
-  joiningFeePreference: string
-  preferredBrands: string[]
-}
-
-interface FunnelStats {
-  level1Count: number
-  level2Count: number
-  level3Count: number
-  finalCount: number
-  totalCards: number
+// Icon mapping for spending categories
+const categoryIcons: { [key: string]: any } = {
+  dining: Utensils,
+  fuel: Fuel,
+  groceries: ShoppingBag,
+  travel: Plane,
+  shopping: ShoppingBag,
+  entertainment: Smartphone,
+  utilities: Zap,
+  transport: Car,
 }
 
 export default function CardRecommendationForm() {
-  const [formData, setFormData] = useState<FormData>({
-    monthlyIncome: "",
-    spendingCategories: [],
-    joiningFeePreference: "",
-    preferredBrands: [],
-  })
-
-  const [recommendations, setRecommendations] = useState<any[]>([])
-  const [funnelStats, setFunnelStats] = useState<FunnelStats | null>(null)
-  const [isLoading, setIsLoading] = useState(false)
+  const [currentStep, setCurrentStep] = useState(1)
+  const [availableSpendingCategories, setAvailableSpendingCategories] = useState<string[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
   const [availableBrands, setAvailableBrands] = useState<string[]>([])
-  const [allCards, setAllCards] = useState<CreditCard[]>([])
-  const [brandMismatchNotice, setBrandMismatchNotice] = useState<string>("")
+  const [loadingBrands, setLoadingBrands] = useState(false)
+  const [allCards, setAllCards] = useState<any[]>([])
+  const [formData, setFormData] = useState({
+    monthlyIncome: "",
+    spendingCategories: [] as string[],
+    monthlySpending: "",
+    currentCards: "",
+    creditScore: "",
+    preferredBanks: [] as string[],
+    joiningFeePreference: "",
+  })
+  const [showRecommendations, setShowRecommendations] = useState(false)
 
-  // Load credit cards data on component mount
+  // Fetch available spending categories from Google Sheets on component mount
   useEffect(() => {
-    const loadCards = async () => {
+    const loadSpendingCategories = async () => {
       try {
-        const cards = await fetchCreditCards()
-        setAllCards(cards)
-        console.log("✅ Loaded credit cards:", cards.length)
+        console.log("🔄 Loading spending categories from Google Sheets...")
+        setLoadingCategories(true)
+        const categories = await fetchAvailableSpendingCategories()
+        console.log("✅ Loaded spending categories:", categories)
+        setAvailableSpendingCategories(categories)
       } catch (error) {
-        console.error("❌ Error loading cards:", error)
+        console.error("❌ Error loading spending categories:", error)
+        // Fallback to default categories if loading fails
+        setAvailableSpendingCategories([
+          "dining",
+          "fuel",
+          "groceries",
+          "travel",
+          "shopping",
+          "entertainment",
+          "utilities",
+          "transport",
+        ])
+      } finally {
+        setLoadingCategories(false)
       }
     }
-    loadCards()
+
+    loadSpendingCategories()
   }, [])
 
-  // Update available brands when joining fee preference changes
+  // Load all cards on component mount for dynamic brand filtering
   useEffect(() => {
-    if (formData.joiningFeePreference && allCards.length > 0) {
-      updateAvailableBrands()
-    }
-  }, [formData.joiningFeePreference, allCards])
-
-  const updateAvailableBrands = () => {
-    if (!formData.joiningFeePreference || allCards.length === 0) {
-      setAvailableBrands([])
-      return
-    }
-
-    // Filter cards through Level 1 (Income eligibility)
-    const level1Cards = allCards.filter((card) => {
-      const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 0
-      const annualIncome = monthlyIncome * 12
-      return annualIncome >= card.eligibilityIncome
-    })
-
-    // Filter through Level 2 (Category preference) - if categories are selected
-    let level2Cards = level1Cards
-    if (formData.spendingCategories.length > 0) {
-      level2Cards = level1Cards.filter((card) => {
-        return formData.spendingCategories.some((userCategory) =>
-          card.category.some(
-            (cardCategory) =>
-              cardCategory.toLowerCase().includes(userCategory.toLowerCase()) ||
-              userCategory.toLowerCase().includes(cardCategory.toLowerCase()),
-          ),
-        )
-      })
+    const loadAllCards = async () => {
+      try {
+        console.log("🔄 Loading all cards for dynamic brand filtering...")
+        const cards = await fetchCreditCards()
+        setAllCards(cards)
+        console.log("✅ Loaded cards for brand filtering:", cards.length)
+      } catch (error) {
+        console.error("❌ Error loading cards for brand filtering:", error)
+      }
     }
 
-    // Filter through Level 3 (Joining fee preference)
-    let level3Cards = level2Cards
-    if (formData.joiningFeePreference !== "Any Amount") {
-      const maxFee = Number.parseInt(formData.joiningFeePreference.replace(/[^\d]/g, "")) || 0
-      level3Cards = level2Cards.filter((card) => card.joiningFee <= maxFee)
-    }
+    loadAllCards()
+  }, [])
 
-    // Extract unique brands from filtered cards
-    const brands = [...new Set(level3Cards.map((card) => card.bank))].sort()
-    setAvailableBrands(brands)
+  // Dynamic brand filtering based on current form state
+  useEffect(() => {
+    const updateAvailableBrands = async () => {
+      if (
+        !formData.monthlyIncome ||
+        !formData.creditScore ||
+        formData.spendingCategories.length === 0 ||
+        !formData.joiningFeePreference ||
+        allCards.length === 0
+      ) {
+        setAvailableBrands([])
+        return
+      }
 
-    console.log("🔄 Dynamic brand filtering:", {
-      joiningFeePreference: formData.joiningFeePreference,
-      level1Cards: level1Cards.length,
-      level2Cards: level2Cards.length,
-      level3Cards: level3Cards.length,
-      availableBrands: brands.length,
-      brands: brands,
-    })
-  }
+      setLoadingBrands(true)
+      console.log("🔄 DYNAMIC BRAND FILTERING - Updating available brands...")
 
-  const spendingCategories = [
-    "Dining",
-    "Groceries",
-    "Fuel",
-    "Shopping",
-    "Travel",
-    "Entertainment",
-    "Utilities",
-    "Healthcare",
-    "Education",
-    "Online Shopping",
-  ]
+      try {
+        // Convert form data to user profile for filtering
+        const creditScore = getCreditScoreValue(formData.creditScore) || 650
+        const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 50000
 
-  const joiningFeeOptions = ["Free", "Up to ₹500", "Up to ₹1,000", "Up to ₹2,500", "Up to ₹5,000", "Any Amount"]
-
-  const handleSpendingCategoryChange = (category: string, checked: boolean) => {
-    setFormData((prev) => ({
-      ...prev,
-      spendingCategories: checked
-        ? [...prev.spendingCategories, category]
-        : prev.spendingCategories.filter((c) => c !== category),
-    }))
-  }
-
-  const handleBrandChange = (brand: string, checked: boolean) => {
-    setFormData((prev) => ({
-      ...prev,
-      preferredBrands: checked ? [...prev.preferredBrands, brand] : prev.preferredBrands.filter((b) => b !== brand),
-    }))
-  }
-
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setIsLoading(true)
-    setBrandMismatchNotice("")
-
-    try {
-      const result = await submitCardRecommendation(formData)
-
-      if (result.success) {
-        setRecommendations(result.recommendations || [])
-        setFunnelStats(result.funnelStats || null)
-
-        // Check for brand mismatch notice
-        if (result.brandMismatchNotice) {
-          setBrandMismatchNotice(result.brandMismatchNotice)
+        let joiningFeePreference: "no_fee" | "low_fee" | "no_concern" = "no_concern"
+        switch (formData.joiningFeePreference) {
+          case "no_fee":
+            joiningFeePreference = "no_fee"
+            break
+          case "low_fee":
+            joiningFeePreference = "low_fee"
+            break
+          case "any_amount":
+          default:
+            joiningFeePreference = "no_concern"
+            break
         }
 
-        console.log("✅ Form submitted successfully:", {
-          recommendationsCount: result.recommendations?.length || 0,
-          funnelStats: result.funnelStats,
-          brandMismatchNotice: result.brandMismatchNotice,
-        })
-      } else {
-        console.error("❌ Form submission failed:", result.error)
+        console.log("👤 Current form state for brand filtering:")
+        console.log(`- Income: ₹${monthlyIncome.toLocaleString()}`)
+        console.log(`- Credit Score: ${creditScore}`)
+        console.log(`- Categories: [${formData.spendingCategories.join(", ")}]`)
+        console.log(`- Joining Fee Preference: ${joiningFeePreference}`)
+
+        // Run through Level 1 and Level 2 filtering
+        const level1Cards = FunnelRecommendationEngine.level1BasicEligibility(allCards, monthlyIncome, creditScore)
+        const level2Cards = FunnelRecommendationEngine.level2CategoryFiltering(level1Cards, formData.spendingCategories)
+
+        // Apply Level 3 joining fee filtering (without brand preference)
+        const { availableBrands: dynamicBrands } = FunnelRecommendationEngine.level3JoiningFeeAndBrandFiltering(
+          level2Cards,
+          joiningFeePreference,
+          [], // No brand preference for this filtering
+        )
+
+        console.log(`🏦 Dynamic brands available: [${dynamicBrands.join(", ")}]`)
+        setAvailableBrands(dynamicBrands)
+
+        // Clear selected brands that are no longer available
+        const validSelectedBrands = formData.preferredBanks.filter((bank) => dynamicBrands.includes(bank))
+        if (validSelectedBrands.length !== formData.preferredBanks.length) {
+          console.log("🧹 Clearing invalid brand selections...")
+          setFormData((prev) => ({ ...prev, preferredBanks: validSelectedBrands }))
+        }
+      } catch (error) {
+        console.error("❌ Error in dynamic brand filtering:", error)
+        setAvailableBrands([])
+      } finally {
+        setLoadingBrands(false)
       }
-    } catch (error) {
-      console.error("❌ Error submitting form:", error)
-    } finally {
-      setIsLoading(false)
     }
+
+    updateAvailableBrands()
+  }, [
+    formData.monthlyIncome,
+    formData.creditScore,
+    formData.spendingCategories,
+    formData.joiningFeePreference,
+    allCards,
+  ])
+
+  // Create spending category objects with icons and labels
+  const spendingCategories = availableSpendingCategories.map((category) => {
+    const normalizedCategory = category.toLowerCase()
+    return {
+      id: normalizedCategory,
+      label: category.charAt(0).toUpperCase() + category.slice(1), // Capitalize first letter
+      icon: categoryIcons[normalizedCategory] || ShoppingBag, // Default icon if not found
+    }
+  })
+
+  const handleInputChange = (field: string, value: string) => {
+    setFormData((prev) => ({ ...prev, [field]: value }))
+  }
+
+  const handleCategoryToggle = (categoryId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      spendingCategories: prev.spendingCategories.includes(categoryId)
+        ? prev.spendingCategories.filter((id) => id !== categoryId)
+        : [...prev.spendingCategories, categoryId],
+    }))
+  }
+
+  const handleBankToggle = (bank: string) => {
+    setFormData((prev) => {
+      const currentBanks = prev.preferredBanks
+
+      // If bank is already selected, remove it
+      if (currentBanks.includes(bank)) {
+        return {
+          ...prev,
+          preferredBanks: currentBanks.filter((b) => b !== bank),
+        }
+      }
+
+      // If less than 3 banks selected, add it
+      if (currentBanks.length < 3) {
+        return {
+          ...prev,
+          preferredBanks: [...currentBanks, bank],
+        }
+      }
+
+      // If 3 banks already selected, don't add more
+      return prev
+    })
+  }
+
+  const nextStep = () => {
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1)
+    }
+  }
+
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1)
+    }
+  }
+
+  const handleSubmit = () => {
+    setShowRecommendations(true)
+  }
+
+  const isStepValid = (step: number) => {
+    switch (step) {
+      case 1:
+        return formData.monthlyIncome && formData.monthlySpending && formData.creditScore
+      case 2:
+        return formData.spendingCategories.length > 0
+      case 3:
+        return true // Optional step
+      default:
+        return false
+    }
+  }
+
+  if (showRecommendations) {
+    return <EnhancedRecommendations formData={formData} />
   }
 
   return (
-    <div className="max-w-4xl mx-auto space-y-8">
+    <div className="space-y-6">
+      {/* Progress Indicator */}
+      <div className="flex items-center justify-center space-x-4">
+        {[1, 2, 3].map((step) => (
+          <div key={step} className="flex items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                step === currentStep
+                  ? "bg-blue-600 text-white"
+                  : step < currentStep
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-200 text-gray-600"
+              }`}
+            >
+              {step < currentStep ? <CheckCircle2 className="h-4 w-4" /> : step}
+            </div>
+            {step < 3 && <div className={`w-12 h-1 mx-2 ${step < currentStep ? "bg-green-600" : "bg-gray-200"}`} />}
+          </div>
+        ))}
+      </div>
+
+      {/* Step Content */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <Search className="h-5 w-5" />
-            Find Your Perfect Credit Card
+            <CreditCard className="h-5 w-5 text-blue-600" />
+            {currentStep === 1 && "Basic Financial Information"}
+            {currentStep === 2 && "Spending Preferences"}
+            {currentStep === 3 && "Additional Preferences"}
           </CardTitle>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Monthly Income */}
-            <div>
-              <Label htmlFor="monthlyIncome">Monthly Income (₹)</Label>
-              <Input
-                id="monthlyIncome"
-                type="number"
-                placeholder="e.g., 50000"
-                value={formData.monthlyIncome}
-                onChange={(e) => setFormData((prev) => ({ ...prev, monthlyIncome: e.target.value }))}
-                required
-              />
-            </div>
+        <CardContent className="space-y-6">
+          {/* Step 1: Basic Information */}
+          {currentStep === 1 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyIncome">Monthly Income (₹) *</Label>
+                  <Input
+                    id="monthlyIncome"
+                    type="number"
+                    value={formData.monthlyIncome}
+                    onChange={(e) => handleInputChange("monthlyIncome", e.target.value)}
+                    placeholder="50000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="monthlySpending">Monthly Credit Card Spending (₹) *</Label>
+                  <Input
+                    id="monthlySpending"
+                    type="number"
+                    value={formData.monthlySpending}
+                    onChange={(e) => handleInputChange("monthlySpending", e.target.value)}
+                    placeholder="25000"
+                  />
+                </div>
+              </div>
 
-            {/* Spending Categories */}
-            <div>
-              <Label>Primary Spending Categories (Select all that apply)</Label>
-              <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
-                {spendingCategories.map((category) => (
-                  <div key={category} className="flex items-center space-x-2">
-                    <Checkbox
-                      id={category}
-                      checked={formData.spendingCategories.includes(category)}
-                      onCheckedChange={(checked) => handleSpendingCategoryChange(category, checked as boolean)}
-                    />
-                    <Label htmlFor={category} className="text-sm">
-                      {category}
-                    </Label>
-                  </div>
-                ))}
+              <div className="space-y-2">
+                <Label htmlFor="creditScore">Credit Score Range *</Label>
+                <Select value={formData.creditScore} onValueChange={(value) => handleInputChange("creditScore", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your credit score range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="300-549">300-549 (Poor)</SelectItem>
+                    <SelectItem value="550-649">550-649 (Fair)</SelectItem>
+                    <SelectItem value="650-749">650-749 (Good)</SelectItem>
+                    <SelectItem value="750-850">750-850 (Excellent)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="currentCards">How many credit cards do you currently have?</Label>
+                <Select
+                  value={formData.currentCards}
+                  onValueChange={(value) => handleInputChange("currentCards", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select number of cards" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">No credit cards</SelectItem>
+                    <SelectItem value="1">1 credit card</SelectItem>
+                    <SelectItem value="2">2 credit cards</SelectItem>
+                    <SelectItem value="3">3 or more credit cards</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
+          )}
 
-            {/* Joining Fee Preference */}
-            <div>
-              <Label htmlFor="joiningFeePreference">Joining Fee Preference</Label>
-              <Select
-                value={formData.joiningFeePreference}
-                onValueChange={(value) => setFormData((prev) => ({ ...prev, joiningFeePreference: value }))}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select your joining fee preference" />
-                </SelectTrigger>
-                <SelectContent>
-                  {joiningFeeOptions.map((option) => (
-                    <SelectItem key={option} value={option}>
-                      {option}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Preferred Brands - Dynamic based on joining fee */}
-            {availableBrands.length > 0 && (
+          {/* Step 2: Spending Categories */}
+          {currentStep === 2 && (
+            <div className="space-y-4">
               <div>
-                <Label>Preferred Brands (Optional - Select up to 3)</Label>
-                <p className="text-sm text-gray-600 mb-2">
-                  Showing {availableBrands.length} brands available for your joining fee preference
+                <Label className="text-base font-medium">
+                  What are your primary spending categories? (Select all that apply)
+                </Label>
+                <p className="text-sm text-gray-600 mt-1">
+                  This helps us recommend cards with the best rewards for your spending patterns.
                 </p>
-                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
-                  {availableBrands.map((brand) => (
-                    <div key={brand} className="flex items-center space-x-2">
-                      <Checkbox
-                        id={brand}
-                        checked={formData.preferredBrands.includes(brand)}
-                        onCheckedChange={(checked) => handleBrandChange(brand, checked as boolean)}
-                        disabled={!formData.preferredBrands.includes(brand) && formData.preferredBrands.length >= 3}
-                      />
-                      <Label htmlFor={brand} className="text-sm">
-                        {brand}
-                      </Label>
-                    </div>
-                  ))}
-                </div>
-                {formData.preferredBrands.length > 0 && (
-                  <div className="flex flex-wrap gap-2 mt-2">
-                    {formData.preferredBrands.map((brand) => (
-                      <Badge key={brand} variant="secondary">
-                        {brand}
-                      </Badge>
-                    ))}
-                  </div>
+                {loadingCategories && (
+                  <p className="text-sm text-blue-600 mt-2">Loading spending categories from your data...</p>
                 )}
               </div>
-            )}
 
-            <Button type="submit" className="w-full" disabled={isLoading}>
-              {isLoading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Finding Your Perfect Cards...
-                </>
-              ) : (
-                <>
-                  <Search className="mr-2 h-4 w-4" />
-                  Get TOP 7 Recommendations
-                </>
+              {!loadingCategories && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {spendingCategories.map((category) => {
+                    const IconComponent = category.icon
+                    const isSelected = formData.spendingCategories.includes(category.id)
+                    return (
+                      <div
+                        key={category.id}
+                        className={`flex items-center space-x-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        }`}
+                        onClick={() => handleCategoryToggle(category.id)}
+                      >
+                        <Checkbox checked={isSelected} onChange={() => handleCategoryToggle(category.id)} />
+                        <IconComponent className="h-5 w-5 text-gray-600" />
+                        <span className="font-medium">{category.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
               )}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
 
-      {/* Brand Mismatch Notice */}
-      {brandMismatchNotice && (
-        <Alert>
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>{brandMismatchNotice}</AlertDescription>
-        </Alert>
-      )}
+              {formData.spendingCategories.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm text-gray-600 mb-2">Selected categories:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.spendingCategories.map((categoryId) => {
+                      const category = spendingCategories.find((cat) => cat.id === categoryId)
+                      return (
+                        <Badge key={categoryId} variant="secondary">
+                          {category?.label || categoryId}
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
 
-      {/* Funnel Visualization */}
-      {funnelStats && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Filter className="h-5 w-5" />
-              Recommendation Funnel Analysis
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 md:grid-cols-5 gap-4 text-center">
-                <div className="p-4 bg-blue-50 rounded-lg">
-                  <div className="text-2xl font-bold text-blue-600">{funnelStats.totalCards}</div>
-                  <div className="text-sm text-gray-600">Total Cards</div>
-                </div>
-                <div className="p-4 bg-green-50 rounded-lg">
-                  <div className="text-2xl font-bold text-green-600">{funnelStats.level1Count}</div>
-                  <div className="text-sm text-gray-600">Income Eligible</div>
-                </div>
-                <div className="p-4 bg-yellow-50 rounded-lg">
-                  <div className="text-2xl font-bold text-yellow-600">{funnelStats.level2Count}</div>
-                  <div className="text-sm text-gray-600">Category Match</div>
-                </div>
-                <div className="p-4 bg-purple-50 rounded-lg">
-                  <div className="text-2xl font-bold text-purple-600">{funnelStats.level3Count}</div>
-                  <div className="text-sm text-gray-600">Fee Preference</div>
-                </div>
-                <div className="p-4 bg-red-50 rounded-lg">
-                  <div className="text-2xl font-bold text-red-600">{funnelStats.finalCount}</div>
-                  <div className="text-sm text-gray-600">TOP 7 Selected</div>
-                </div>
+          {/* Step 3: Additional Preferences */}
+          {currentStep === 3 && (
+            <div className="space-y-6">
+              <div>
+                <Label className="text-base font-medium">Additional Preferences (Optional)</Label>
+                <p className="text-sm text-gray-600 mt-1">These preferences help us fine-tune your recommendations.</p>
               </div>
 
-              <div className="text-center">
-                <Badge variant="outline" className="text-sm">
-                  <BarChart3 className="h-3 w-3 mr-1" />
-                  Funnel Efficiency: {((funnelStats.finalCount / funnelStats.totalCards) * 100).toFixed(1)}% | MAX 7
-                  ENFORCED
-                </Badge>
+              <div className="space-y-2">
+                <Label htmlFor="joiningFee">Joining Fee Preference</Label>
+                <Select
+                  value={formData.joiningFeePreference}
+                  onValueChange={(value) => handleInputChange("joiningFeePreference", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your preference" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no_fee">I prefer cards with no joining fee</SelectItem>
+                    <SelectItem value="low_fee">I'm okay with low joining fees (₹0-1000)</SelectItem>
+                    <SelectItem value="any_amount">Joining fee is not a concern</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* DYNAMIC PREFERRED BRANDS SECTION */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Label>Preferred Brands (Optional)</Label>
+                  <Badge variant="outline" className="text-xs">
+                    Max 3 selections
+                  </Badge>
+                  {loadingBrands && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+                </div>
+                <p className="text-sm text-gray-600">
+                  Select up to 3 brands you prefer. Options are filtered based on your eligibility and preferences.
+                </p>
+
+                {/* Show message when no joining fee preference is selected */}
+                {!formData.joiningFeePreference && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Please select your joining fee preference first to see available brands.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Show loading state */}
+                {loadingBrands && formData.joiningFeePreference && (
+                  <Alert>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertDescription>Loading available brands based on your preferences...</AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Show available brands */}
+                {!loadingBrands && formData.joiningFeePreference && availableBrands.length > 0 && (
+                  <>
+                    {/* Selection limit warning */}
+                    {formData.preferredBanks.length >= 3 && (
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          You've reached the maximum of 3 brand selections. Unselect a brand to choose a different one.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                      {availableBrands.map((bank) => {
+                        const isSelected = formData.preferredBanks.includes(bank)
+                        const isDisabled = !isSelected && formData.preferredBanks.length >= 3
+
+                        return (
+                          <div
+                            key={bank}
+                            className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                              isSelected
+                                ? "border-blue-500 bg-blue-50"
+                                : isDisabled
+                                  ? "border-gray-200 bg-gray-100 cursor-not-allowed opacity-50"
+                                  : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                            }`}
+                            onClick={() => !isDisabled && handleBankToggle(bank)}
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              disabled={isDisabled}
+                              onChange={() => !isDisabled && handleBankToggle(bank)}
+                            />
+                            <span className={`text-sm font-medium ${isDisabled ? "text-gray-400" : ""}`}>{bank}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {formData.preferredBanks.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-sm text-gray-600 mb-2">
+                          Selected brands ({formData.preferredBanks.length}/3):
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {formData.preferredBanks.map((bank) => (
+                            <Badge key={bank} variant="secondary" className="flex items-center gap-1">
+                              {bank}
+                              <button
+                                onClick={() => handleBankToggle(bank)}
+                                className="ml-1 text-gray-500 hover:text-gray-700"
+                                aria-label={`Remove ${bank}`}
+                              >
+                                ×
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+
+                {/* Show message when no brands are available */}
+                {!loadingBrands && formData.joiningFeePreference && availableBrands.length === 0 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      No brands are available based on your current preferences. You may still get recommendations from
+                      the best available options.
+                    </AlertDescription>
+                  </Alert>
+                )}
               </div>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          )}
 
-      {/* Recommendations */}
-      {recommendations.length > 0 && (
-        <div>
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="text-2xl font-bold">Your TOP 7 Personalized Recommendations</h2>
-            <Badge variant="secondary">
-              <CheckCircle2 className="h-3 w-3 mr-1" />
-              {recommendations.length} cards found
-            </Badge>
+          {/* Navigation Buttons */}
+          <div className="flex justify-between pt-6">
+            <Button variant="outline" onClick={prevStep} disabled={currentStep === 1}>
+              Previous
+            </Button>
+
+            {currentStep < 3 ? (
+              <Button onClick={nextStep} disabled={!isStepValid(currentStep)}>
+                Next
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleSubmit}
+                disabled={!isStepValid(1) || !isStepValid(2)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Get My Recommendations
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            )}
           </div>
-          <EnhancedRecommendations recommendations={recommendations} />
-        </div>
-      )}
+        </CardContent>
+      </Card>
     </div>
   )
+}
+
+// Helper function to get credit score value from range
+function getCreditScoreValue(range: string): number {
+  switch (range) {
+    case "300-549":
+      return 425
+    case "550-649":
+      return 600
+    case "650-749":
+      return 700
+    case "750-850":
+      return 800
+    default:
+      return 700
+  }
 }
