@@ -27,8 +27,9 @@ import {
   Loader2,
   Zap,
 } from "lucide-react"
-import { processFinancialDocument, getColabStatus } from "@/app/actions/colab-integration"
+import { parsePortfolioFile } from "@/app/actions/portfolio-parsing"
 import PortfolioCharts from "./portfolio-charts"
+import type { PortfolioParseResult } from "@/lib/portfolio-parser"
 
 interface UploadedFile {
   id: string
@@ -38,46 +39,11 @@ interface UploadedFile {
   category: "income" | "investments" | "expenses" | "other"
 }
 
-interface ProcessedData {
-  summary: {
-    total_investments: number
-    total_current_value: number
-    total_gain_loss: number
-    gain_loss_percentage: number
-    top_performers: Array<{
-      name: string
-      gain_loss_percentage: number
-    }>
-    worst_performers: Array<{
-      name: string
-      gain_loss_percentage: number
-    }>
-  }
-  holdings: Array<{
-    name: string
-    quantity: number
-    avg_price: number
-    current_price: number
-    invested_amount: number
-    current_value: number
-    gain_loss: number
-    gain_loss_percentage: number
-    allocation_percentage: number
-  }>
-  sector_allocation: Record<string, number>
-  monthly_performance: Array<{
-    month: string
-    value: number
-  }>
-}
-
 export default function DeepDiveSection() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [dragActive, setDragActive] = useState(false)
-  const [processedData, setProcessedData] = useState<ProcessedData | null>(null)
-  const [processingTime, setProcessingTime] = useState<number | undefined>()
+  const [parsedData, setParsedData] = useState<PortfolioParseResult | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [colabStatus, setColabStatus] = useState<{ status: string; message: string } | null>(null)
   const [isPending, startTransition] = useTransition()
 
   const handleFileUpload = (files: FileList | null, category = "other") => {
@@ -94,37 +60,27 @@ export default function DeepDiveSection() {
     setUploadedFiles((prev) => [...prev, ...newFiles])
   }
 
-  const handleColabProcessing = async (file: File) => {
+  const handlePortfolioProcessing = async (file: File) => {
     setError(null)
-    setProcessedData(null)
+    setParsedData(null)
 
     const formData = new FormData()
     formData.append("file", file)
 
     startTransition(async () => {
       try {
-        const result = await processFinancialDocument(formData)
+        const result = await parsePortfolioFile(formData)
 
-        if (result.success && result.data) {
-          setProcessedData(result.data)
-          setProcessingTime(result.processing_time)
+        if (result.success) {
+          setParsedData(result)
         } else {
-          setError(result.error || "Failed to process document")
+          setError(result.errors.join(", ") || "Failed to process portfolio file")
         }
       } catch (err) {
         setError("An unexpected error occurred during processing")
         console.error("Processing error:", err)
       }
     })
-  }
-
-  const checkColabStatus = async () => {
-    try {
-      const status = await getColabStatus()
-      setColabStatus(status)
-    } catch (err) {
-      setColabStatus({ status: "error", message: "Failed to check status" })
-    }
   }
 
   const removeFile = (id: string) => {
@@ -169,9 +125,13 @@ export default function DeepDiveSection() {
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
       const file = e.dataTransfer.files[0]
       handleFileUpload(e.dataTransfer.files)
-      // Auto-process the first file if it's a financial document
-      if (file.type.includes("spreadsheet") || file.type.includes("csv") || file.type.includes("excel")) {
-        handleColabProcessing(file)
+      // Auto-process if it's a portfolio file
+      if (
+        file.type.includes("spreadsheet") ||
+        file.type.includes("csv") ||
+        file.name.toLowerCase().includes("portfolio")
+      ) {
+        handlePortfolioProcessing(file)
       }
     }
   }
@@ -181,7 +141,7 @@ export default function DeepDiveSection() {
       const file = e.target.files[0]
       handleFileUpload(e.target.files)
       // Auto-process the file
-      handleColabProcessing(file)
+      handlePortfolioProcessing(file)
     }
   }
 
@@ -204,37 +164,19 @@ export default function DeepDiveSection() {
         </TabsList>
 
         <TabsContent value="portfolio" className="space-y-6">
-          {/* Colab Status Check */}
+          {/* AI-Powered Analysis Header */}
           <Card>
             <CardHeader>
-              <CardTitle className="flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <Zap className="h-5 w-5" />
-                  AI-Powered Portfolio Analysis
-                </span>
-                <Button variant="outline" size="sm" onClick={checkColabStatus}>
-                  Check Status
-                </Button>
+              <CardTitle className="flex items-center gap-2">
+                <Zap className="h-5 w-5" />
+                AI-Powered Portfolio Analysis
               </CardTitle>
             </CardHeader>
             <CardContent>
-              {colabStatus && (
-                <div className="flex items-center gap-2 mb-4">
-                  {colabStatus.status === "online" ? (
-                    <CheckCircle className="h-4 w-4 text-green-600" />
-                  ) : (
-                    <AlertCircle className="h-4 w-4 text-red-600" />
-                  )}
-                  <span className={`text-sm ${colabStatus.status === "online" ? "text-green-600" : "text-red-600"}`}>
-                    {colabStatus.message}
-                  </span>
-                </div>
-              )}
-
               <Alert>
                 <AlertDescription>
-                  Upload your portfolio statements (Excel, CSV, PDF) to get AI-powered insights including performance
-                  analysis, sector allocation, and personalized recommendations powered by Google Colab.
+                  Upload your portfolio statements (CSV format recommended) to get instant analysis including
+                  performance metrics, category allocation, AMC distribution, and detailed insights.
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -264,18 +206,18 @@ export default function DeepDiveSection() {
                   {isPending ? (
                     <div className="space-y-4">
                       <Loader2 className="h-12 w-12 mx-auto text-blue-500 animate-spin" />
-                      <p className="text-lg font-medium text-blue-700">Processing with AI...</p>
-                      <p className="text-sm text-gray-500">This may take up to 60 seconds</p>
+                      <p className="text-lg font-medium text-blue-700">Processing Portfolio...</p>
+                      <p className="text-sm text-gray-500">Analyzing your investment data</p>
                     </div>
                   ) : (
                     <>
                       <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                       <p className="text-lg font-medium text-gray-700 mb-2">Drop files here or click to upload</p>
-                      <p className="text-sm text-gray-500 mb-4">Support for PDF, CSV, Excel files (Max 10MB each)</p>
+                      <p className="text-sm text-gray-500 mb-4">Support for CSV files (Max 10MB each)</p>
                       <Input
                         type="file"
                         multiple
-                        accept=".pdf,.csv,.xlsx,.xls"
+                        accept=".csv"
                         onChange={handleFileInputChange}
                         className="hidden"
                         id="file-upload"
@@ -298,10 +240,10 @@ export default function DeepDiveSection() {
                       <Input
                         type="file"
                         multiple
-                        accept=".pdf,.csv,.xlsx,.xls"
+                        accept=".csv"
                         onChange={(e) => {
                           handleFileUpload(e.target.files, "income")
-                          if (e.target.files?.[0]) handleColabProcessing(e.target.files[0])
+                          if (e.target.files?.[0]) handlePortfolioProcessing(e.target.files[0])
                         }}
                         className="hidden"
                         id="income-upload"
@@ -317,10 +259,10 @@ export default function DeepDiveSection() {
                       <Input
                         type="file"
                         multiple
-                        accept=".pdf,.csv,.xlsx,.xls"
+                        accept=".csv"
                         onChange={(e) => {
                           handleFileUpload(e.target.files, "investments")
-                          if (e.target.files?.[0]) handleColabProcessing(e.target.files[0])
+                          if (e.target.files?.[0]) handlePortfolioProcessing(e.target.files[0])
                         }}
                         className="hidden"
                         id="investments-upload"
@@ -336,10 +278,10 @@ export default function DeepDiveSection() {
                       <Input
                         type="file"
                         multiple
-                        accept=".pdf,.csv,.xlsx,.xls"
+                        accept=".csv"
                         onChange={(e) => {
                           handleFileUpload(e.target.files, "expenses")
-                          if (e.target.files?.[0]) handleColabProcessing(e.target.files[0])
+                          if (e.target.files?.[0]) handlePortfolioProcessing(e.target.files[0])
                         }}
                         className="hidden"
                         id="expenses-upload"
@@ -412,6 +354,17 @@ export default function DeepDiveSection() {
             </Alert>
           )}
 
+          {/* Success Message */}
+          {parsedData && parsedData.success && (
+            <Alert>
+              <CheckCircle className="h-4 w-4" />
+              <AlertDescription>
+                Successfully processed {parsedData.fileName} with {parsedData.data.length} investments in{" "}
+                {parsedData.processingTime}ms
+              </AlertDescription>
+            </Alert>
+          )}
+
           {/* Uploaded Files List */}
           {uploadedFiles.length > 0 && (
             <Card>
@@ -447,8 +400,9 @@ export default function DeepDiveSection() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            const fileObj = new File([], file.name, { type: file.type })
-                            handleColabProcessing(fileObj)
+                            // Create a mock file for reprocessing
+                            const mockFile = new File([], file.name, { type: file.type })
+                            handlePortfolioProcessing(mockFile)
                           }}
                           disabled={isPending}
                         >
@@ -467,22 +421,22 @@ export default function DeepDiveSection() {
           )}
 
           {/* AI-Processed Results */}
-          {processedData && (
+          {parsedData && parsedData.success && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <BarChart3 className="h-5 w-5" />
-                  AI-Generated Portfolio Analysis
+                  Portfolio Analysis Results
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <PortfolioCharts data={processedData} processingTime={processingTime} />
+                <PortfolioCharts data={parsedData} />
               </CardContent>
             </Card>
           )}
 
           {/* Placeholder when no data */}
-          {!processedData && !isPending && (
+          {!parsedData && !isPending && (
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
@@ -495,26 +449,27 @@ export default function DeepDiveSection() {
                   {/* Placeholder for charts */}
                   <div className="bg-gray-50 rounded-lg p-8 text-center">
                     <PieChart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="font-medium text-gray-700 mb-2">Expense Distribution</h3>
-                    <p className="text-sm text-gray-500">Dynamic chart will appear here based on uploaded data</p>
+                    <h3 className="font-medium text-gray-700 mb-2">Category Distribution</h3>
+                    <p className="text-sm text-gray-500">Upload your portfolio to see category-wise allocation</p>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-8 text-center">
                     <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="font-medium text-gray-700 mb-2">Income vs Expenses</h3>
-                    <p className="text-sm text-gray-500">Monthly comparison chart will be generated automatically</p>
+                    <h3 className="font-medium text-gray-700 mb-2">Performance Analysis</h3>
+                    <p className="text-sm text-gray-500">View returns, XIRR, and performance metrics</p>
                   </div>
 
                   <div className="bg-gray-50 rounded-lg p-8 text-center">
                     <TrendingUp className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="font-medium text-gray-700 mb-2">Investment Growth</h3>
-                    <p className="text-sm text-gray-500">Portfolio performance tracking and projections</p>
+                    <h3 className="font-medium text-gray-700 mb-2">Investment Insights</h3>
+                    <p className="text-sm text-gray-500">Get detailed analysis of your investment portfolio</p>
                   </div>
                 </div>
 
                 <Alert className="mt-6">
                   <AlertDescription>
-                    Upload your financial documents to get AI-powered insights and analytics powered by Google Colab.
+                    Upload your portfolio CSV file to get instant AI-powered analysis with detailed insights and
+                    visualizations.
                   </AlertDescription>
                 </Alert>
               </CardContent>

@@ -1,47 +1,15 @@
 "use client"
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { PieChart, BarChart3, TrendingUp, TrendingDown, DollarSign, Target, Activity } from "lucide-react"
-
-interface PortfolioData {
-  summary: {
-    total_investments: number
-    total_current_value: number
-    total_gain_loss: number
-    gain_loss_percentage: number
-    top_performers: Array<{
-      name: string
-      gain_loss_percentage: number
-    }>
-    worst_performers: Array<{
-      name: string
-      gain_loss_percentage: number
-    }>
-  }
-  holdings: Array<{
-    name: string
-    quantity: number
-    avg_price: number
-    current_price: number
-    invested_amount: number
-    current_value: number
-    gain_loss: number
-    gain_loss_percentage: number
-    allocation_percentage: number
-  }>
-  sector_allocation: Record<string, number>
-  monthly_performance: Array<{
-    month: string
-    value: number
-  }>
-}
+import { TrendingUp, TrendingDown, DollarSign, PieChart, BarChart3, Clock, Target } from "lucide-react"
+import type { PortfolioParseResult } from "@/lib/portfolio-parser"
 
 interface PortfolioChartsProps {
-  data: PortfolioData
-  processingTime?: number
+  data: PortfolioParseResult
 }
 
-export default function PortfolioCharts({ data, processingTime }: PortfolioChartsProps) {
+export default function PortfolioCharts({ data }: PortfolioChartsProps) {
   const formatCurrency = (amount: number) => {
     return new Intl.NumberFormat("en-IN", {
       style: "currency",
@@ -51,220 +19,222 @@ export default function PortfolioCharts({ data, processingTime }: PortfolioChart
     }).format(amount)
   }
 
-  const formatPercentage = (percentage: number) => {
-    return `${percentage >= 0 ? "+" : ""}${percentage.toFixed(2)}%`
+  const formatPercentage = (value: number) => {
+    return `${value.toFixed(2)}%`
+  }
+
+  const getReturnColor = (returns: number) => {
+    if (returns > 0) return "text-green-600"
+    if (returns < 0) return "text-red-600"
+    return "text-gray-600"
+  }
+
+  const getReturnIcon = (returns: number) => {
+    if (returns > 0) return <TrendingUp className="h-4 w-4" />
+    if (returns < 0) return <TrendingDown className="h-4 w-4" />
+    return <DollarSign className="h-4 w-4" />
   }
 
   return (
     <div className="space-y-6">
-      {/* Processing Time Badge */}
-      {processingTime && (
-        <div className="flex justify-end">
-          <Badge variant="secondary" className="text-xs">
-            Processed in {processingTime.toFixed(2)}s
-          </Badge>
-        </div>
-      )}
+      {/* Processing Info */}
+      <div className="flex items-center justify-between text-sm text-gray-600">
+        <span className="flex items-center gap-2">
+          <Clock className="h-4 w-4" />
+          Processed in {data.processingTime}ms
+        </span>
+        <span>{data.data.length} investments found</span>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <DollarSign className="h-4 w-4 text-blue-600" />
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Total Invested</p>
-                <p className="text-xl font-bold">{formatCurrency(data.summary.total_investments)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(data.summary.totalInvested)}</p>
               </div>
+              <DollarSign className="h-8 w-8 text-blue-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Target className="h-4 w-4 text-green-600" />
+            <div className="flex items-center justify-between">
               <div>
                 <p className="text-sm font-medium text-gray-600">Current Value</p>
-                <p className="text-xl font-bold">{formatCurrency(data.summary.total_current_value)}</p>
+                <p className="text-2xl font-bold">{formatCurrency(data.summary.totalCurrent)}</p>
               </div>
+              <Target className="h-8 w-8 text-purple-600" />
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              {data.summary.total_gain_loss >= 0 ? (
-                <TrendingUp className="h-4 w-4 text-green-600" />
-              ) : (
-                <TrendingDown className="h-4 w-4 text-red-600" />
-              )}
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Total P&L</p>
-                <p
-                  className={`text-xl font-bold ${data.summary.total_gain_loss >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  {formatCurrency(data.summary.total_gain_loss)}
+                <p className="text-sm font-medium text-gray-600">Total Returns</p>
+                <p className={`text-2xl font-bold ${getReturnColor(data.summary.totalReturns)}`}>
+                  {formatCurrency(data.summary.totalReturns)}
                 </p>
               </div>
+              {getReturnIcon(data.summary.totalReturns)}
             </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardContent className="p-4">
-            <div className="flex items-center space-x-2">
-              <Activity className="h-4 w-4 text-purple-600" />
+            <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium text-gray-600">Returns</p>
-                <p
-                  className={`text-xl font-bold ${data.summary.gain_loss_percentage >= 0 ? "text-green-600" : "text-red-600"}`}
-                >
-                  {formatPercentage(data.summary.gain_loss_percentage)}
+                <p className="text-sm font-medium text-gray-600">Average XIRR</p>
+                <p className={`text-2xl font-bold ${getReturnColor(data.summary.averageXIRR)}`}>
+                  {formatPercentage(data.summary.averageXIRR)}
                 </p>
               </div>
+              <BarChart3 className="h-8 w-8 text-green-600" />
             </div>
           </CardContent>
         </Card>
       </div>
 
-      {/* Holdings Table */}
+      {/* Category Breakdown */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PieChart className="h-5 w-5" />
+            Category Allocation
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {Object.entries(data.categoryBreakdown)
+              .sort(([, a], [, b]) => b.current - a.current)
+              .map(([category, breakdown]) => {
+                const percentage = (breakdown.current / data.summary.totalCurrent) * 100
+                return (
+                  <div key={category} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium">{category}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">{formatCurrency(breakdown.current)}</span>
+                        <Badge variant="secondary">{percentage.toFixed(1)}%</Badge>
+                      </div>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-blue-600 h-2 rounded-full transition-all duration-300"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                    <div className="flex justify-between text-xs text-gray-500">
+                      <span>Invested: {formatCurrency(breakdown.invested)}</span>
+                      <span className={getReturnColor(breakdown.returns)}>
+                        Returns: {formatCurrency(breakdown.returns)}
+                      </span>
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* AMC Breakdown */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <BarChart3 className="h-5 w-5" />
-            Portfolio Holdings
+            AMC Distribution
           </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {Object.entries(data.amcBreakdown)
+              .sort(([, a], [, b]) => b.current - a.current)
+              .slice(0, 10) // Show top 10 AMCs
+              .map(([amc, breakdown]) => {
+                const percentage = (breakdown.current / data.summary.totalCurrent) * 100
+                return (
+                  <div key={amc} className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="font-medium text-sm">{amc}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-sm text-gray-600">{formatCurrency(breakdown.current)}</span>
+                        <Badge variant="outline" className="text-xs">
+                          {breakdown.count} funds
+                        </Badge>
+                      </div>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-1.5">
+                      <div
+                        className="bg-purple-600 h-1.5 rounded-full transition-all duration-300"
+                        style={{ width: `${percentage}%` }}
+                      />
+                    </div>
+                  </div>
+                )
+              })}
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Detailed Holdings Table */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Investment Details</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b">
-                  <th className="text-left p-2">Security</th>
-                  <th className="text-right p-2">Qty</th>
-                  <th className="text-right p-2">Avg Price</th>
-                  <th className="text-right p-2">Current Price</th>
+                  <th className="text-left p-2">Scheme Name</th>
+                  <th className="text-left p-2">Category</th>
                   <th className="text-right p-2">Invested</th>
-                  <th className="text-right p-2">Current Value</th>
-                  <th className="text-right p-2">P&L</th>
+                  <th className="text-right p-2">Current</th>
                   <th className="text-right p-2">Returns</th>
-                  <th className="text-right p-2">Allocation</th>
+                  <th className="text-right p-2">XIRR</th>
                 </tr>
               </thead>
               <tbody>
-                {data.holdings.map((holding, index) => (
-                  <tr key={index} className="border-b hover:bg-gray-50">
-                    <td className="p-2 font-medium">{holding.name}</td>
-                    <td className="p-2 text-right">{holding.quantity.toLocaleString()}</td>
-                    <td className="p-2 text-right">₹{holding.avg_price.toFixed(2)}</td>
-                    <td className="p-2 text-right">₹{holding.current_price.toFixed(2)}</td>
-                    <td className="p-2 text-right">{formatCurrency(holding.invested_amount)}</td>
-                    <td className="p-2 text-right">{formatCurrency(holding.current_value)}</td>
-                    <td
-                      className={`p-2 text-right font-medium ${holding.gain_loss >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {formatCurrency(holding.gain_loss)}
-                    </td>
-                    <td
-                      className={`p-2 text-right font-medium ${holding.gain_loss_percentage >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {formatPercentage(holding.gain_loss_percentage)}
-                    </td>
-                    <td className="p-2 text-right">{holding.allocation_percentage.toFixed(1)}%</td>
-                  </tr>
-                ))}
+                {data.data
+                  .sort((a, b) => b.currentValue - a.currentValue)
+                  .slice(0, 20) // Show top 20 investments
+                  .map((investment, index) => (
+                    <tr key={index} className="border-b hover:bg-gray-50">
+                      <td className="p-2">
+                        <div>
+                          <div className="font-medium">{investment.schemeName}</div>
+                          <div className="text-xs text-gray-500">{investment.amc}</div>
+                        </div>
+                      </td>
+                      <td className="p-2">
+                        <Badge variant="outline" className="text-xs">
+                          {investment.category}
+                        </Badge>
+                      </td>
+                      <td className="text-right p-2">{formatCurrency(investment.investedValue)}</td>
+                      <td className="text-right p-2">{formatCurrency(investment.currentValue)}</td>
+                      <td className={`text-right p-2 ${getReturnColor(investment.returns)}`}>
+                        {formatCurrency(investment.returns)}
+                      </td>
+                      <td className={`text-right p-2 ${getReturnColor(investment.xirr)}`}>
+                        {formatPercentage(investment.xirr)}
+                      </td>
+                    </tr>
+                  ))}
               </tbody>
             </table>
           </div>
-        </CardContent>
-      </Card>
-
-      {/* Performance Insights */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Top Performers */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-green-600">
-              <TrendingUp className="h-5 w-5" />
-              Top Performers
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {data.summary.top_performers.map((performer, index) => (
-                <div key={index} className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-                  <span className="font-medium text-sm">{performer.name}</span>
-                  <Badge variant="secondary" className="bg-green-100 text-green-800">
-                    {formatPercentage(performer.gain_loss_percentage)}
-                  </Badge>
-                </div>
-              ))}
+          {data.data.length > 20 && (
+            <div className="text-center text-sm text-gray-500 mt-4">
+              Showing top 20 of {data.data.length} investments
             </div>
-          </CardContent>
-        </Card>
-
-        {/* Worst Performers */}
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2 text-red-600">
-              <TrendingDown className="h-5 w-5" />
-              Underperformers
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-3">
-              {data.summary.worst_performers.map((performer, index) => (
-                <div key={index} className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-                  <span className="font-medium text-sm">{performer.name}</span>
-                  <Badge variant="secondary" className="bg-red-100 text-red-800">
-                    {formatPercentage(performer.gain_loss_percentage)}
-                  </Badge>
-                </div>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Sector Allocation */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <PieChart className="h-5 w-5" />
-            Sector Allocation
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-            {Object.entries(data.sector_allocation).map(([sector, percentage]) => (
-              <div key={sector} className="text-center p-3 bg-gray-50 rounded-lg">
-                <p className="text-sm font-medium text-gray-700">{sector}</p>
-                <p className="text-lg font-bold text-blue-600">{percentage.toFixed(1)}%</p>
-              </div>
-            ))}
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Monthly Performance Trend */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Activity className="h-5 w-5" />
-            Performance Trend
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="space-y-2">
-            {data.monthly_performance.map((month, index) => (
-              <div key={index} className="flex justify-between items-center p-2 hover:bg-gray-50 rounded">
-                <span className="text-sm font-medium">{month.month}</span>
-                <span className="text-sm font-bold">{formatCurrency(month.value)}</span>
-              </div>
-            ))}
-          </div>
+          )}
         </CardContent>
       </Card>
     </div>
