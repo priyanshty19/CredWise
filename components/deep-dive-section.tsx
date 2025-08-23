@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useTransition } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,7 +22,13 @@ import {
   Settings,
   Construction,
   Clock,
+  CheckCircle,
+  AlertCircle,
+  Loader2,
+  Zap,
 } from "lucide-react"
+import { processFinancialDocument, getColabStatus } from "@/app/actions/colab-integration"
+import PortfolioCharts from "./portfolio-charts"
 
 interface UploadedFile {
   id: string
@@ -32,9 +38,47 @@ interface UploadedFile {
   category: "income" | "investments" | "expenses" | "other"
 }
 
+interface ProcessedData {
+  summary: {
+    total_investments: number
+    total_current_value: number
+    total_gain_loss: number
+    gain_loss_percentage: number
+    top_performers: Array<{
+      name: string
+      gain_loss_percentage: number
+    }>
+    worst_performers: Array<{
+      name: string
+      gain_loss_percentage: number
+    }>
+  }
+  holdings: Array<{
+    name: string
+    quantity: number
+    avg_price: number
+    current_price: number
+    invested_amount: number
+    current_value: number
+    gain_loss: number
+    gain_loss_percentage: number
+    allocation_percentage: number
+  }>
+  sector_allocation: Record<string, number>
+  monthly_performance: Array<{
+    month: string
+    value: number
+  }>
+}
+
 export default function DeepDiveSection() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [dragActive, setDragActive] = useState(false)
+  const [processedData, setProcessedData] = useState<ProcessedData | null>(null)
+  const [processingTime, setProcessingTime] = useState<number | undefined>()
+  const [error, setError] = useState<string | null>(null)
+  const [colabStatus, setColabStatus] = useState<{ status: string; message: string } | null>(null)
+  const [isPending, startTransition] = useTransition()
 
   const handleFileUpload = (files: FileList | null, category = "other") => {
     if (!files) return
@@ -48,6 +92,39 @@ export default function DeepDiveSection() {
     }))
 
     setUploadedFiles((prev) => [...prev, ...newFiles])
+  }
+
+  const handleColabProcessing = async (file: File) => {
+    setError(null)
+    setProcessedData(null)
+
+    const formData = new FormData()
+    formData.append("file", file)
+
+    startTransition(async () => {
+      try {
+        const result = await processFinancialDocument(formData)
+
+        if (result.success && result.data) {
+          setProcessedData(result.data)
+          setProcessingTime(result.processing_time)
+        } else {
+          setError(result.error || "Failed to process document")
+        }
+      } catch (err) {
+        setError("An unexpected error occurred during processing")
+        console.error("Processing error:", err)
+      }
+    })
+  }
+
+  const checkColabStatus = async () => {
+    try {
+      const status = await getColabStatus()
+      setColabStatus(status)
+    } catch (err) {
+      setColabStatus({ status: "error", message: "Failed to check status" })
+    }
   }
 
   const removeFile = (id: string) => {
@@ -90,13 +167,26 @@ export default function DeepDiveSection() {
     e.stopPropagation()
     setDragActive(false)
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+      const file = e.dataTransfer.files[0]
       handleFileUpload(e.dataTransfer.files)
+      // Auto-process the first file if it's a financial document
+      if (file.type.includes("spreadsheet") || file.type.includes("csv") || file.type.includes("excel")) {
+        handleColabProcessing(file)
+      }
+    }
+  }
+
+  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      const file = e.target.files[0]
+      handleFileUpload(e.target.files)
+      // Auto-process the file
+      handleColabProcessing(file)
     }
   }
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
-
       <Tabs defaultValue="portfolio" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="portfolio" className="flex items-center gap-2">
@@ -114,6 +204,42 @@ export default function DeepDiveSection() {
         </TabsList>
 
         <TabsContent value="portfolio" className="space-y-6">
+          {/* Colab Status Check */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <Zap className="h-5 w-5" />
+                  AI-Powered Portfolio Analysis
+                </span>
+                <Button variant="outline" size="sm" onClick={checkColabStatus}>
+                  Check Status
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {colabStatus && (
+                <div className="flex items-center gap-2 mb-4">
+                  {colabStatus.status === "online" ? (
+                    <CheckCircle className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <AlertCircle className="h-4 w-4 text-red-600" />
+                  )}
+                  <span className={`text-sm ${colabStatus.status === "online" ? "text-green-600" : "text-red-600"}`}>
+                    {colabStatus.message}
+                  </span>
+                </div>
+              )}
+
+              <Alert>
+                <AlertDescription>
+                  Upload your portfolio statements (Excel, CSV, PDF) to get AI-powered insights including performance
+                  analysis, sector allocation, and personalized recommendations powered by Google Colab.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* File Upload Section */}
             <Card>
@@ -121,6 +247,7 @@ export default function DeepDiveSection() {
                 <CardTitle className="flex items-center gap-2">
                   <Upload className="h-5 w-5" />
                   Upload Financial Documents
+                  {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
@@ -128,82 +255,104 @@ export default function DeepDiveSection() {
                 <div
                   className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                     dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"
-                  }`}
+                  } ${isPending ? "opacity-50 pointer-events-none" : ""}`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
                 >
-                  <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <p className="text-lg font-medium text-gray-700 mb-2">Drop files here or click to upload</p>
-                  <p className="text-sm text-gray-500 mb-4">Support for PDF, CSV, Excel files (Max 10MB each)</p>
-                  <Input
-                    type="file"
-                    multiple
-                    accept=".pdf,.csv,.xlsx,.xls"
-                    onChange={(e) => handleFileUpload(e.target.files)}
-                    className="hidden"
-                    id="file-upload"
-                  />
-                  <Label htmlFor="file-upload">
-                    <Button variant="outline" className="cursor-pointer bg-transparent">
-                      <Plus className="h-4 w-4 mr-2" />
-                      Choose Files
-                    </Button>
-                  </Label>
+                  {isPending ? (
+                    <div className="space-y-4">
+                      <Loader2 className="h-12 w-12 mx-auto text-blue-500 animate-spin" />
+                      <p className="text-lg font-medium text-blue-700">Processing with AI...</p>
+                      <p className="text-sm text-gray-500">This may take up to 60 seconds</p>
+                    </div>
+                  ) : (
+                    <>
+                      <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                      <p className="text-lg font-medium text-gray-700 mb-2">Drop files here or click to upload</p>
+                      <p className="text-sm text-gray-500 mb-4">Support for PDF, CSV, Excel files (Max 10MB each)</p>
+                      <Input
+                        type="file"
+                        multiple
+                        accept=".pdf,.csv,.xlsx,.xls"
+                        onChange={handleFileInputChange}
+                        className="hidden"
+                        id="file-upload"
+                        disabled={isPending}
+                      />
+                      <Label htmlFor="file-upload">
+                        <Button variant="outline" className="cursor-pointer bg-transparent" disabled={isPending}>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Choose Files
+                        </Button>
+                      </Label>
+                    </>
+                  )}
                 </div>
 
                 {/* Category-specific Upload Buttons */}
-                <div className="grid grid-cols-3 gap-2">
-                  <div>
-                    <Input
-                      type="file"
-                      multiple
-                      accept=".pdf,.csv,.xlsx,.xls"
-                      onChange={(e) => handleFileUpload(e.target.files, "income")}
-                      className="hidden"
-                      id="income-upload"
-                    />
-                    <Label htmlFor="income-upload">
-                      <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
-                        <DollarSign className="h-4 w-4 mr-1" />
-                        Income
-                      </Button>
-                    </Label>
+                {!isPending && (
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <Input
+                        type="file"
+                        multiple
+                        accept=".pdf,.csv,.xlsx,.xls"
+                        onChange={(e) => {
+                          handleFileUpload(e.target.files, "income")
+                          if (e.target.files?.[0]) handleColabProcessing(e.target.files[0])
+                        }}
+                        className="hidden"
+                        id="income-upload"
+                      />
+                      <Label htmlFor="income-upload">
+                        <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
+                          <DollarSign className="h-4 w-4 mr-1" />
+                          Income
+                        </Button>
+                      </Label>
+                    </div>
+                    <div>
+                      <Input
+                        type="file"
+                        multiple
+                        accept=".pdf,.csv,.xlsx,.xls"
+                        onChange={(e) => {
+                          handleFileUpload(e.target.files, "investments")
+                          if (e.target.files?.[0]) handleColabProcessing(e.target.files[0])
+                        }}
+                        className="hidden"
+                        id="investments-upload"
+                      />
+                      <Label htmlFor="investments-upload">
+                        <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
+                          <TrendingUp className="h-4 w-4 mr-1" />
+                          Investments
+                        </Button>
+                      </Label>
+                    </div>
+                    <div>
+                      <Input
+                        type="file"
+                        multiple
+                        accept=".pdf,.csv,.xlsx,.xls"
+                        onChange={(e) => {
+                          handleFileUpload(e.target.files, "expenses")
+                          if (e.target.files?.[0]) handleColabProcessing(e.target.files[0])
+                        }}
+                        className="hidden"
+                        id="expenses-upload"
+                      />
+                      <Label htmlFor="expenses-upload">
+                        <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
+                          <FileText className="h-4 w-4 mr-1" />
+                          Expenses
+                        </Button>
+                      </Label>
+                    </div>
                   </div>
-                  <div>
-                    <Input
-                      type="file"
-                      multiple
-                      accept=".pdf,.csv,.xlsx,.xls"
-                      onChange={(e) => handleFileUpload(e.target.files, "investments")}
-                      className="hidden"
-                      id="investments-upload"
-                    />
-                    <Label htmlFor="investments-upload">
-                      <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
-                        <TrendingUp className="h-4 w-4 mr-1" />
-                        Investments
-                      </Button>
-                    </Label>
-                  </div>
-                  <div>
-                    <Input
-                      type="file"
-                      multiple
-                      accept=".pdf,.csv,.xlsx,.xls"
-                      onChange={(e) => handleFileUpload(e.target.files, "expenses")}
-                      className="hidden"
-                      id="expenses-upload"
-                    />
-                    <Label htmlFor="expenses-upload">
-                      <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
-                        <FileText className="h-4 w-4 mr-1" />
-                        Expenses
-                      </Button>
-                    </Label>
-                  </div>
-                </div>
+                )}
               </CardContent>
             </Card>
 
@@ -255,6 +404,14 @@ export default function DeepDiveSection() {
             </Card>
           </div>
 
+          {/* Error Display */}
+          {error && (
+            <Alert variant="destructive">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{error}</AlertDescription>
+            </Alert>
+          )}
+
           {/* Uploaded Files List */}
           {uploadedFiles.length > 0 && (
             <Card>
@@ -285,9 +442,23 @@ export default function DeepDiveSection() {
                           {file.category}
                         </span>
                       </div>
-                      <Button variant="ghost" size="sm" onClick={() => removeFile(file.id)}>
-                        <X className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={() => {
+                            const fileObj = new File([], file.name, { type: file.type })
+                            handleColabProcessing(fileObj)
+                          }}
+                          disabled={isPending}
+                        >
+                          <Zap className="h-4 w-4 mr-1" />
+                          Process
+                        </Button>
+                        <Button variant="ghost" size="sm" onClick={() => removeFile(file.id)}>
+                          <X className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </div>
                   ))}
                 </div>
@@ -295,45 +466,60 @@ export default function DeepDiveSection() {
             </Card>
           )}
 
-          {/* Graphical Insights Placeholder */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <BarChart3 className="h-5 w-5" />
-                Portfolio Insights & Analytics
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                {/* Placeholder for charts */}
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <PieChart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="font-medium text-gray-700 mb-2">Expense Distribution</h3>
-                  <p className="text-sm text-gray-500">Dynamic chart will appear here based on uploaded data</p>
+          {/* AI-Processed Results */}
+          {processedData && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  AI-Generated Portfolio Analysis
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <PortfolioCharts data={processedData} processingTime={processingTime} />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Placeholder when no data */}
+          {!processedData && !isPending && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Portfolio Insights & Analytics
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  {/* Placeholder for charts */}
+                  <div className="bg-gray-50 rounded-lg p-8 text-center">
+                    <PieChart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <h3 className="font-medium text-gray-700 mb-2">Expense Distribution</h3>
+                    <p className="text-sm text-gray-500">Dynamic chart will appear here based on uploaded data</p>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-8 text-center">
+                    <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <h3 className="font-medium text-gray-700 mb-2">Income vs Expenses</h3>
+                    <p className="text-sm text-gray-500">Monthly comparison chart will be generated automatically</p>
+                  </div>
+
+                  <div className="bg-gray-50 rounded-lg p-8 text-center">
+                    <TrendingUp className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                    <h3 className="font-medium text-gray-700 mb-2">Investment Growth</h3>
+                    <p className="text-sm text-gray-500">Portfolio performance tracking and projections</p>
+                  </div>
                 </div>
 
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="font-medium text-gray-700 mb-2">Income vs Expenses</h3>
-                  <p className="text-sm text-gray-500">Monthly comparison chart will be generated automatically</p>
-                </div>
-
-                <div className="bg-gray-50 rounded-lg p-8 text-center">
-                  <TrendingUp className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                  <h3 className="font-medium text-gray-700 mb-2">Investment Growth</h3>
-                  <p className="text-sm text-gray-500">Portfolio performance tracking and projections</p>
-                </div>
-              </div>
-
-              {uploadedFiles.length === 0 && (
                 <Alert className="mt-6">
                   <AlertDescription>
-                    Upload your financial documents or enter manual data to see personalized insights and analytics.
+                    Upload your financial documents to get AI-powered insights and analytics powered by Google Colab.
                   </AlertDescription>
                 </Alert>
-              )}
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          )}
         </TabsContent>
 
         <TabsContent value="insights" className="space-y-6">
