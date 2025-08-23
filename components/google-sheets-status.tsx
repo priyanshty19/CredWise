@@ -16,6 +16,7 @@ import {
   Wifi,
   WifiOff,
 } from "lucide-react"
+import { checkGoogleSheetsStatus } from "@/app/actions/google-sheets-actions"
 
 interface ConnectionStatus {
   sheetsApi: {
@@ -45,88 +46,28 @@ export default function GoogleSheetsStatus() {
       appsScript: { status: "checking" },
     })
 
-    // Check Google Sheets API
-    const sheetsStartTime = Date.now()
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
-      if (!apiKey) {
-        throw new Error("API key not configured")
-      }
+      const result = await checkGoogleSheetsStatus()
 
-      const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Sheet1!A1:A1?key=${apiKey}`,
-      )
-
-      const sheetsResponseTime = Date.now() - sheetsStartTime
-
-      if (response.ok) {
-        setStatus((prev) => ({
-          ...prev,
-          sheetsApi: {
-            status: "connected",
-            message: "Google Sheets API is accessible",
-            responseTime: sheetsResponseTime,
-          },
-        }))
-      } else {
-        throw new Error(`HTTP ${response.status}`)
-      }
+      setStatus({
+        sheetsApi: result.sheetsApi,
+        appsScript: result.appsScript,
+        lastChecked: new Date(),
+      })
     } catch (error) {
-      setStatus((prev) => ({
-        ...prev,
+      setStatus({
         sheetsApi: {
           status: "error",
-          message: error instanceof Error ? error.message : "Connection failed",
-          responseTime: Date.now() - sheetsStartTime,
+          message: "Failed to check connection",
         },
-      }))
-    }
-
-    // Check Apps Script
-    const appsScriptStartTime = Date.now()
-    try {
-      const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL
-      if (!appsScriptUrl) {
-        throw new Error("Apps Script URL not configured")
-      }
-
-      const response = await fetch(appsScriptUrl, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ test: true }),
-      })
-
-      const appsScriptResponseTime = Date.now() - appsScriptStartTime
-
-      if (response.ok) {
-        setStatus((prev) => ({
-          ...prev,
-          appsScript: {
-            status: "connected",
-            message: "Apps Script webhook is responding",
-            responseTime: appsScriptResponseTime,
-          },
-        }))
-      } else {
-        throw new Error(`HTTP ${response.status}`)
-      }
-    } catch (error) {
-      setStatus((prev) => ({
-        ...prev,
         appsScript: {
           status: "error",
-          message: error instanceof Error ? error.message : "Connection failed",
-          responseTime: Date.now() - appsScriptStartTime,
+          message: "Failed to check connection",
         },
-      }))
+        lastChecked: new Date(),
+      })
     }
 
-    setStatus((prev) => ({
-      ...prev,
-      lastChecked: new Date(),
-    }))
     setIsRefreshing(false)
   }
 
@@ -256,11 +197,8 @@ export default function GoogleSheetsStatus() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-xs">
               <div className="flex items-center justify-between">
                 <span>API Key:</span>
-                <Badge
-                  variant={process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY ? "default" : "destructive"}
-                  className="text-xs"
-                >
-                  {process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY ? "Set" : "Missing"}
+                <Badge variant="default" className="text-xs">
+                  Server-side
                 </Badge>
               </div>
               <div className="flex items-center justify-between">

@@ -1,11 +1,12 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, AlertCircle, Loader2, Database, ExternalLink } from "lucide-react"
+import { testGoogleSheetsConnection } from "@/app/actions/google-sheets-actions"
 
 interface SheetData {
   range: string
@@ -27,26 +28,8 @@ export default function TestGoogleSheets() {
     setResult(null)
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
-      if (!apiKey) {
-        throw new Error("Google Sheets API key not found in environment variables")
-      }
-
-      const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Class Data!A1:F10?key=${apiKey}`,
-      )
-
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`)
-      }
-
-      const data: SheetData = await response.json()
-
-      setResult({
-        success: true,
-        data,
-        totalCards: data.values ? data.values.length - 1 : 0, // Subtract header row
-      })
+      const testResult = await testGoogleSheetsConnection()
+      setResult(testResult)
     } catch (error) {
       setResult({
         success: false,
@@ -129,7 +112,7 @@ export default function TestGoogleSheets() {
                 <Badge variant="outline" className="text-xs">
                   ENV
                 </Badge>
-                <span>NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY is set</span>
+                <span>GOOGLE_SHEETS_API_KEY is set (server-side)</span>
               </div>
               <div className="flex items-center gap-2">
                 <Badge variant="outline" className="text-xs">
