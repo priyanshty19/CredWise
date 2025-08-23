@@ -169,7 +169,7 @@ export async function submitToGoogleSheets(data: any): Promise<boolean> {
   }
 }
 
-export function filterAndRankCardsWithSpendingCategories(
+export async function filterAndRankCardsWithSpendingCategories(
   cards: CreditCard[],
   userProfile: {
     creditScore: number
@@ -179,7 +179,7 @@ export function filterAndRankCardsWithSpendingCategories(
     preferredBanks?: string[]
   },
   topN = 3,
-): CreditCard[] {
+): Promise<CreditCard[]> {
   const { creditScore, monthlyIncome, cardType, spendingCategories = [], preferredBanks = [] } = userProfile
 
   const basicEligibleCards = cards.filter((card) => {
@@ -249,11 +249,11 @@ export function filterAndRankCardsWithSpendingCategories(
   return sortedCards
 }
 
-export function filterAndRankCards(
+export async function filterAndRankCards(
   cards: CreditCard[],
   userProfile: { creditScore: number; monthlyIncome: number; cardType: string },
   topN = 3,
-): CreditCard[] {
+): Promise<CreditCard[]> {
   const { creditScore, monthlyIncome, cardType } = userProfile
 
   const requestedTypeCards = cards.filter((card) => card.cardType === cardType)
@@ -313,7 +313,7 @@ export function filterAndRankCards(
   return sortedCards
 }
 
-export function filterAndRankCardsByRewards(
+export async function filterAndRankCardsByRewards(
   cards: CreditCard[],
   userProfile: {
     creditScore: number
@@ -323,7 +323,7 @@ export function filterAndRankCardsByRewards(
     maxJoiningFee?: number
   },
   topN = 3,
-): CreditCard[] {
+): Promise<CreditCard[]> {
   const { creditScore, monthlyIncome, cardType, preferredBrand, maxJoiningFee } = userProfile
 
   const basicEligibleCards = cards.filter((card) => {
@@ -394,7 +394,7 @@ export function filterAndRankCardsByRewards(
   return cardsWithRewardScore
 }
 
-export function filterAndRankCardsEnhanced(
+export async function filterAndRankCardsEnhanced(
   cards: CreditCard[],
   userProfile: {
     creditScore: number
@@ -404,7 +404,7 @@ export function filterAndRankCardsEnhanced(
     maxJoiningFee?: number
   },
   topN = 3,
-): CreditCard[] {
+): Promise<CreditCard[]> {
   const { creditScore, monthlyIncome, cardType, preferredBrand, maxJoiningFee } = userProfile
 
   const basicEligibleCards = cards.filter((card) => {
@@ -475,7 +475,7 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
     }
 
     const topN = data.topN || 3
-    const recommendations = filterAndRankCards(
+    const recommendations = await filterAndRankCards(
       allCards,
       {
         creditScore: data.creditScore,
@@ -596,7 +596,7 @@ export async function getEnhancedCardRecommendations(
     const processedPreferredBrand =
       data.preferredBrand === undefined || data.preferredBrand === "Any" ? undefined : data.preferredBrand
 
-    const recommendations = filterAndRankCardsByRewards(
+    const recommendations = await filterAndRankCardsByRewards(
       allCards,
       {
         creditScore: data.creditScore,
@@ -696,7 +696,7 @@ export async function getCardRecommendationsForForm(formData: {
       }
     }
 
-    let recommendations = filterAndRankCardsWithSpendingCategories(
+    let recommendations = await filterAndRankCardsWithSpendingCategories(
       allCards,
       {
         creditScore,
@@ -716,7 +716,7 @@ export async function getCardRecommendationsForForm(formData: {
       const preferredBankCardsToScore = preferredBankCards.filter(
         (card) => !recommendations.find((rec) => rec.id === card.id),
       )
-      const scoredPreferredBankCards = filterAndRankCardsWithSpendingCategories(
+      const scoredPreferredBankCards = await filterAndRankCardsWithSpendingCategories(
         preferredBankCardsToScore,
         {
           creditScore,
