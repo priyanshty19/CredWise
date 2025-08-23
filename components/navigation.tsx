@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Car as Card, BarChart3, Menu, X, Home } from "lucide-react"
+import { CandlestickChartIcon,Car as Card, BarChart3, Menu, X, Home } from "lucide-react"
 import { useState } from "react"
 
 interface NavigationProps {
@@ -41,7 +41,7 @@ export default function Navigation({ currentPage }: NavigationProps) {
           {/* Logo */}
           <div className="flex items-center">
             <Link href="/" className="flex items-center space-x-2">
-              <Card className="h-8 w-8 text-blue-600" />
+              <CandlestickChartIcon className="h-8 w-8 text-blue-600" />
               <span className="text-xl font-bold text-gray-900">CredWise</span>
             </Link>
           </div>
