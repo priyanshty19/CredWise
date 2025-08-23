@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { CheckCircle2, AlertCircle, Loader2, Database, ExternalLink } from "lucide-react"
@@ -28,14 +28,12 @@ export default function TestGoogleSheets() {
 
     try {
       const apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
-      const sheetId = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms" // Example sheet ID
-
       if (!apiKey) {
         throw new Error("Google Sheets API key not found in environment variables")
       }
 
       const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Class Data!A1:F10?key=${apiKey}`,
+        `https://sheets.googleapis.com/v4/spreadsheets/1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms/values/Class Data!A1:F10?key=${apiKey}`,
       )
 
       if (!response.ok) {

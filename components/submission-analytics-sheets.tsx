@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useEffect, useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
@@ -20,6 +20,7 @@ import {
 } from "recharts"
 import { TrendingUp, Users, DollarSign, CreditCard, AlertCircle, RefreshCw } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { getAnalytics } from "@/app/actions/google-sheets"
 
 interface SubmissionData {
   timestamp: string
@@ -55,42 +56,14 @@ export default function SubmissionAnalyticsSheets() {
     setError(null)
 
     try {
-      const apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
-      const sheetId = "YOUR_SHEET_ID" // Replace with your actual sheet ID
+      const analyticsResult = await getAnalytics()
 
-      if (!apiKey) {
-        throw new Error("Google Sheets API key not configured")
+      if (!analyticsResult.success) {
+        throw new Error(analyticsResult.error || "Failed to fetch analytics")
       }
 
-      const response = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/Form-Submissions!A1:H1000?key=${apiKey}`,
-      )
+      const analytics = analyticsResult.data
 
-      if (!response.ok) {
-        throw new Error(`Failed to fetch data: ${response.status}`)
-      }
-
-      const result = await response.json()
-      const rows = result.values || []
-
-      if (rows.length < 2) {
-        throw new Error("No submission data found")
-      }
-
-      // Parse submissions data
-      const submissions: SubmissionData[] = rows.slice(1).map((row: string[]) => ({
-        timestamp: row[0] || "",
-        monthlyIncome: row[1] || "",
-        spendingCategories: row[2] || "",
-        monthlySpending: row[3] || "",
-        currentCards: row[4] || "",
-        creditScore: row[5] || "",
-        preferredBanks: row[6] || "",
-        joiningFeePreference: row[7] || "",
-      }))
-
-      // Process analytics
-      const analytics = processAnalytics(submissions)
       setData(analytics)
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to fetch analytics")
