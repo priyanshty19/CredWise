@@ -74,31 +74,10 @@ export class FunnelRecommendationEngine {
    * Filter cards based on income and credit score requirements only
    */
   static level1BasicEligibility(allCards: CreditCard[], userIncome: number, userCreditScore: number): CreditCard[] {
-    console.log("🎯 LEVEL 1: BASIC ELIGIBILITY FILTERING")
-    console.log("=".repeat(50))
-    console.log(`👤 User Income: ₹${userIncome.toLocaleString()}`)
-    console.log(`👤 User Credit Score: ${userCreditScore}`)
-    console.log(`📊 Total cards to filter: ${allCards.length}`)
-
     const level1Cards = allCards.filter((card) => {
-      // Income requirement check (0 means no requirement)
       const meetsIncome = card.monthlyIncomeRequirement === 0 || userIncome >= card.monthlyIncomeRequirement
-
-      // Credit score requirement check (0 means no requirement)
       const meetsCredit = card.creditScoreRequirement === 0 || userCreditScore >= card.creditScoreRequirement
-
-      const isEligible = meetsIncome && meetsCredit
-
-      if (!isEligible) {
-        console.log(`❌ ${card.cardName}: Income(${meetsIncome}) Credit(${meetsCredit})`)
-      }
-
-      return isEligible
-    })
-
-    console.log(`✅ Level 1 Eligible Cards: ${level1Cards.length}`)
-    level1Cards.forEach((card) => {
-      console.log(`   • ${card.cardName} (${card.bank})`)
+      return meetsIncome && meetsCredit
     })
 
     return level1Cards
@@ -109,30 +88,14 @@ export class FunnelRecommendationEngine {
    * Only pass cards with >65% category match
    */
   static level2CategoryFiltering(level1Cards: CreditCard[], userSpendingCategories: string[]): CreditCard[] {
-    console.log("\n🎯 LEVEL 2: CATEGORY PREFERENCE FILTERING")
-    console.log("=".repeat(50))
-    console.log(`👤 User Categories: [${userSpendingCategories.join(", ")}]`)
-    console.log(`📊 Cards from Level 1: ${level1Cards.length}`)
-
     if (userSpendingCategories.length === 0) {
-      console.log("⚠️ No user categories provided - passing all Level 1 cards")
       return level1Cards
     }
 
     const level2Cards = level1Cards.filter((card) => {
       const matchPercentage = this.calculateCategoryMatchPercentage(userSpendingCategories, card.spendingCategories)
-
-      const passesThreshold = matchPercentage > 65
-
-      console.log(
-        `${passesThreshold ? "✅" : "❌"} ${card.cardName}: ${matchPercentage.toFixed(1)}% match ${passesThreshold ? "> 65%" : "≤ 65%"}`,
-      )
-      console.log(`   Card Categories: [${card.spendingCategories.join(", ")}]`)
-
-      return passesThreshold
+      return matchPercentage > 65
     })
-
-    console.log(`✅ Level 2 Eligible Cards (>65% match): ${level2Cards.length}`)
 
     return level2Cards
   }
@@ -146,38 +109,21 @@ export class FunnelRecommendationEngine {
     joiningFeePreference: "no_fee" | "low_fee" | "no_concern",
     preferredBrands: string[] = [],
   ): { level3Cards: CreditCard[]; availableBrands: string[] } {
-    console.log("\n🎯 LEVEL 3: JOINING FEE AND BRAND FILTERING")
-    console.log("=".repeat(50))
-    console.log(`👤 Joining Fee Preference: ${joiningFeePreference}`)
-    console.log(`👤 Preferred Brands: [${preferredBrands.join(", ")}]`)
-    console.log(`📊 Cards from Level 2: ${level2Cards.length}`)
-
-    // Step 3A: Apply joining fee filter
     let feeFilteredCards: CreditCard[] = []
 
     switch (joiningFeePreference) {
       case "no_fee":
         feeFilteredCards = level2Cards.filter((card) => card.joiningFee === 0)
-        console.log(`💳 Filtering for ₹0 joining fee: ${feeFilteredCards.length} cards`)
         break
-
       case "low_fee":
         feeFilteredCards = level2Cards.filter((card) => card.joiningFee <= 1000)
-        console.log(`💳 Filtering for ≤₹1000 joining fee: ${feeFilteredCards.length} cards`)
         break
-
       case "no_concern":
         feeFilteredCards = level2Cards
-        console.log(`💳 No joining fee filter applied: ${feeFilteredCards.length} cards`)
         break
     }
 
-    // Step 3B: Extract available brands from fee-filtered cards
     const availableBrands = [...new Set(feeFilteredCards.map((card) => card.bank))].sort()
-    console.log(`🏦 Available Brands after fee filtering: [${availableBrands.join(", ")}]`)
-
-    // Step 3C: Return fee-filtered cards (no brand filtering at this stage)
-    console.log(`✅ Level 3 Cards (post joining fee filtering): ${feeFilteredCards.length}`)
 
     return { level3Cards: feeFilteredCards, availableBrands }
   }
@@ -189,13 +135,7 @@ export class FunnelRecommendationEngine {
    * ALWAYS LIMITED TO MAXIMUM 7 CARDS TOTAL
    */
   static twoTierRecommendationSystem(level3Cards: CreditCard[], userProfile: UserProfile): TwoTierResult {
-    console.log("\n🎯 TWO-TIER RECOMMENDATION SYSTEM (MAX 7 CARDS)")
-    console.log("=".repeat(50))
-    console.log(`📊 Cards available for two-tier processing: ${level3Cards.length}`)
-    console.log(`👤 Preferred Brands: [${userProfile.preferredBrands.join(", ")}]`)
-
     if (level3Cards.length === 0) {
-      console.log("⚠️ No cards available for two-tier processing")
       return {
         preferredBrandCards: [],
         generalCards: [],
@@ -210,92 +150,35 @@ export class FunnelRecommendationEngine {
 
     // TIER 1: Preferred Brand Recommendations
     if (userProfile.preferredBrands.length > 0) {
-      console.log("\n🏆 TIER 1: PREFERRED BRAND RECOMMENDATIONS")
-      console.log("-".repeat(40))
-
-      // Filter cards matching preferred brands
       const brandMatchedCards = level3Cards.filter((card) => userProfile.preferredBrands.includes(card.bank))
-      console.log(`🏦 Cards matching preferred brands: ${brandMatchedCards.length}`)
 
       if (brandMatchedCards.length > 0) {
-        // Score and sort preferred brand cards
         const allPreferredBrandCards = this.scoreAndSortCards(brandMatchedCards, userProfile, "preferred_brand")
-
-        // LIMIT PREFERRED BRAND CARDS TO MAXIMUM 7
         preferredBrandCards = allPreferredBrandCards.slice(0, 7)
-        console.log(`✅ Preferred brand cards (limited to 7): ${preferredBrandCards.length}`)
-
-        preferredBrandCards.forEach((scored, index) => {
-          console.log(`   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`)
-        })
       }
 
       // TIER 2: General Recommendations (if needed and space available)
       if (preferredBrandCards.length < 7) {
-        console.log("\n🌟 TIER 2: GENERAL RECOMMENDATIONS")
-        console.log("-".repeat(40))
-
         const remainingSlots = 7 - preferredBrandCards.length
-        console.log(`🔄 Need ${remainingSlots} more cards to reach 7 total`)
-
-        // Use all level3Cards for general recommendations, excluding already selected preferred brand cards
         const generalCandidates = level3Cards.filter(
           (card) => !preferredBrandCards.some((pref) => pref.card.id === card.id),
         )
 
-        console.log(`📊 General candidates available: ${generalCandidates.length}`)
-
         if (generalCandidates.length > 0) {
           const allGeneralCards = this.scoreAndSortCards(generalCandidates, userProfile, "general")
-
-          // LIMIT GENERAL CARDS TO REMAINING SLOTS (MAX 7 TOTAL)
           generalCards = allGeneralCards.slice(0, remainingSlots)
           showGeneralMessage = true
-
-          console.log(`✅ General cards (limited to ${remainingSlots} slots): ${generalCards.length}`)
-          generalCards.forEach((scored, index) => {
-            console.log(
-              `   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`,
-            )
-          })
         }
       }
     } else {
       // NO PREFERRED BRANDS: Use general recommendations only (MAX 7)
-      console.log("\n🌟 NO PREFERRED BRANDS: GENERAL RECOMMENDATIONS ONLY (MAX 7)")
-      console.log("-".repeat(40))
-
       const allGeneralCards = this.scoreAndSortCards(level3Cards, userProfile, "general")
-
-      // LIMIT TO MAXIMUM 7 CARDS
       generalCards = allGeneralCards.slice(0, 7)
       showGeneralMessage = false
-
-      console.log(`✅ General cards (limited to 7): ${generalCards.length}`)
-      generalCards.forEach((scored, index) => {
-        console.log(`   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`)
-      })
     }
 
     // Combine tiers for final TOP 7 (should already be limited but double-check)
     const finalTop7 = [...preferredBrandCards, ...generalCards].slice(0, 7)
-
-    console.log(`\n🎯 FINAL TOP 7 RECOMMENDATIONS (ENFORCED LIMIT):`)
-    console.log(`   Preferred Brand Cards: ${preferredBrandCards.length}`)
-    console.log(`   General Cards: ${generalCards.length}`)
-    console.log(`   Total: ${finalTop7.length} (MAX 7 ENFORCED)`)
-    console.log(`   Show General Message: ${showGeneralMessage}`)
-
-    // Ensure we never exceed 7 cards
-    if (finalTop7.length > 7) {
-      console.warn(`⚠️ WARNING: Final recommendations exceeded 7 cards (${finalTop7.length}), trimming to 7`)
-      return {
-        preferredBrandCards: preferredBrandCards.slice(0, Math.min(preferredBrandCards.length, 7)),
-        generalCards: generalCards.slice(0, Math.max(0, 7 - preferredBrandCards.length)),
-        showGeneralMessage,
-        finalTop7: finalTop7.slice(0, 7),
-      }
-    }
 
     return {
       preferredBrandCards,
@@ -387,9 +270,6 @@ export class FunnelRecommendationEngine {
    * Complete funnel processing with two-tier system
    */
   static processFunnel(allCards: CreditCard[], userProfile: UserProfile): FunnelResult {
-    console.log("🚀 STARTING FUNNEL-BASED RECOMMENDATION ENGINE WITH TWO-TIER SYSTEM")
-    console.log("=".repeat(70))
-
     // Level 1: Basic Eligibility
     const level1Cards = this.level1BasicEligibility(allCards, userProfile.monthlyIncome, userProfile.creditScore)
 
@@ -413,13 +293,6 @@ export class FunnelRecommendationEngine {
       level3Count: level3Cards.length,
       finalCount: twoTierResult.finalTop7.length,
     }
-
-    console.log("\n📈 FUNNEL STATISTICS:")
-    console.log(`Total Cards: ${funnelStats.totalCards}`)
-    console.log(`Level 1 (Basic): ${funnelStats.level1Count}`)
-    console.log(`Level 2 (Category): ${funnelStats.level2Count}`)
-    console.log(`Level 3 (Fee): ${funnelStats.level3Count}`)
-    console.log(`Final TOP 7: ${funnelStats.finalCount}`)
 
     return {
       level1Cards,

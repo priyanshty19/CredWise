@@ -25,9 +25,8 @@ export async function getFunnelCardRecommendations(formData: {
   joiningFeePreference: string
 }) {
   try {
-    console.log("🚀 FUNNEL-BASED RECOMMENDATION ENGINE WITH TWO-TIER SYSTEM STARTING")
-    console.log("=".repeat(70))
-    console.log("📝 Form Data Received:", formData)
+    console.log("🎯 CARD RECOMMENDATION SUBMISSION")
+    console.log("=".repeat(50))
 
     // Convert form data to user profile
     const creditScore = getCreditScoreValue(formData.creditScore) || 650
@@ -56,7 +55,13 @@ export async function getFunnelCardRecommendations(formData: {
       preferredBrands: formData.preferredBanks,
     }
 
-    console.log("👤 User Profile:", userProfile)
+    // Log user selections
+    console.log("📝 USER SELECTIONS:")
+    console.log(`   Income: ₹${monthlyIncome.toLocaleString()}/month`)
+    console.log(`   Credit Score: ${formData.creditScore} (${creditScore})`)
+    console.log(`   Spending Categories: [${formData.spendingCategories.join(", ")}]`)
+    console.log(`   Joining Fee Preference: ${formData.joiningFeePreference}`)
+    console.log(`   Preferred Brands: [${formData.preferredBanks.join(", ") || "None"}]`)
 
     // Fetch all cards from Google Sheets
     const allCards = await fetchCreditCards()
@@ -74,10 +79,15 @@ export async function getFunnelCardRecommendations(formData: {
       }
     }
 
-    console.log(`📊 Total cards loaded: ${allCards.length}`)
-
     // Process through the funnel with two-tier system
     const funnelResult = FunnelRecommendationEngine.processFunnel(allCards, userProfile)
+
+    // Log filtering results
+    console.log("\n🔍 FILTERING RESULTS:")
+    console.log(`   Total Cards: ${funnelResult.funnelStats.totalCards}`)
+    console.log(`   Level 1 (Income + Credit): ${funnelResult.funnelStats.level1Count} cards passed`)
+    console.log(`   Level 2 (Category >65%): ${funnelResult.funnelStats.level2Count} cards passed`)
+    console.log(`   Level 3 (Joining Fee): ${funnelResult.funnelStats.level3Count} cards passed`)
 
     // Extract two-tier information
     const twoTierInfo = funnelResult.twoTierResult
@@ -85,11 +95,27 @@ export async function getFunnelCardRecommendations(formData: {
     const preferredBrandCount = twoTierInfo?.preferredBrandCards.length || 0
     const generalCount = Math.min(twoTierInfo?.generalCards.length || 0, 7 - preferredBrandCount)
 
-    console.log(`✅ Two-tier processing complete:`)
-    console.log(`   Preferred Brand Cards: ${preferredBrandCount}`)
-    console.log(`   General Cards: ${generalCount}`)
-    console.log(`   Show General Message: ${showGeneralMessage}`)
-    console.log(`   Final TOP 7: ${funnelResult.finalRecommendations.length}`)
+    // Log two-tier results
+    console.log("\n🎯 TWO-TIER RESULTS:")
+    if (formData.preferredBanks.length > 0) {
+      console.log(`   Preferred Brand Cards: ${preferredBrandCount}`)
+      console.log(`   General Cards Added: ${generalCount}`)
+      if (showGeneralMessage) {
+        console.log(`   ⚠️ General message shown (insufficient preferred brand cards)`)
+      }
+    } else {
+      console.log(`   No preferred brands selected - showing ${generalCount} general cards`)
+    }
+    console.log(`   Final TOP 7 Recommendations: ${funnelResult.finalRecommendations.length}`)
+
+    // Log final recommendations
+    console.log("\n🏆 FINAL RECOMMENDATIONS:")
+    funnelResult.finalRecommendations.forEach((scored, index) => {
+      const tierLabel = scored.tier === "preferred_brand" ? "[PREFERRED]" : "[GENERAL]"
+      console.log(
+        `   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}) ${tierLabel} - Score: ${scored.score.toFixed(1)}`,
+      )
+    })
 
     // Log the funnel-based form submission to Google Sheets
     try {
@@ -113,17 +139,10 @@ export async function getFunnelCardRecommendations(formData: {
         },
       }
 
-      console.log("📝 Submitting two-tier funnel form data to Google Sheets:", submissionData)
       const submissionSuccess = await submitEnhancedFormData(submissionData)
-
-      if (submissionSuccess) {
-        console.log("✅ Two-tier funnel form data submitted successfully to Google Sheets")
-      } else {
-        console.warn("⚠️ Failed to submit two-tier funnel form data to Google Sheets")
-      }
+      console.log(`\n📊 Google Sheets Logging: ${submissionSuccess ? "✅ Success" : "❌ Failed"}`)
     } catch (submissionError) {
-      console.error("❌ Error submitting two-tier funnel form data:", submissionError)
-      // Don't fail the recommendation request if logging fails
+      console.log(`\n📊 Google Sheets Logging: ❌ Error - ${submissionError}`)
     }
 
     // Transform TOP 7 recommendations to match expected format (ENFORCE 7 CARD LIMIT)
@@ -152,21 +171,14 @@ export async function getFunnelCardRecommendations(formData: {
       tier: scored.tier || "general",
     }))
 
-    // VALIDATION: Ensure we never return more than 7 recommendations
-    if (transformedRecommendations.length > 7) {
-      console.warn(
-        `⚠️ WARNING: Transformed recommendations exceeded 7 cards (${transformedRecommendations.length}), enforcing limit`,
-      )
-    }
-
     const finalRecommendations = transformedRecommendations.slice(0, 7)
-    console.log(
-      `🎯 FINAL VALIDATION: Returning exactly ${finalRecommendations.length} recommendations (MAX 7 ENFORCED)`,
-    )
+
+    console.log(`\n✅ SUBMISSION COMPLETE - Returning ${finalRecommendations.length} recommendations`)
+    console.log("=".repeat(50))
 
     return {
       success: true,
-      recommendations: finalRecommendations, // Already limited to 7
+      recommendations: finalRecommendations,
       totalCards: allCards.length,
       userProfile: {
         monthlyIncome,
@@ -175,27 +187,27 @@ export async function getFunnelCardRecommendations(formData: {
         spendingCategories: formData.spendingCategories,
         preferredBanks: formData.preferredBanks,
       },
-      allCards, // Include all cards for testing component
+      allCards,
       funnelStats: funnelResult.funnelStats,
       availableBrands: funnelResult.availableBrands,
       twoTierInfo: {
         showGeneralMessage,
         preferredBrandCount,
         generalCount,
-        totalRecommendations: finalRecommendations.length, // Use final limited count
+        totalRecommendations: finalRecommendations.length,
         preferredBrands: formData.preferredBanks,
       },
       funnelBreakdown: {
         level1Cards: funnelResult.level1Cards.length,
         level2Cards: funnelResult.level2Cards.length,
         level3Cards: funnelResult.level3Cards.length,
-        finalRecommendations: finalRecommendations.length, // Use final limited count
+        finalRecommendations: finalRecommendations.length,
         preferredBrandCards: preferredBrandCount,
         generalCards: generalCount,
       },
     }
   } catch (error) {
-    console.error("Error in getFunnelCardRecommendations:", error)
+    console.error("❌ Error in getFunnelCardRecommendations:", error)
     return {
       success: false,
       error: "Failed to generate recommendations. Please try again.",

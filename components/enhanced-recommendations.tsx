@@ -89,7 +89,6 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
         setLoading(true)
         setError(null)
 
-        console.log("🔄 Fetching two-tier funnel-based recommendations...")
         const result = await getFunnelCardRecommendations(formData)
 
         if (result.success) {
@@ -97,13 +96,11 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
           setFunnelStats(result.funnelStats)
           setAvailableBrands(result.availableBrands || [])
           setTwoTierInfo(result.twoTierInfo)
-          console.log(`✅ Two-tier recommendations loaded: ${result.recommendations?.length || 0}`)
         } else {
           setError(result.error || "Failed to load recommendations")
-          console.error("❌ Failed to load two-tier recommendations:", result.error)
         }
       } catch (err) {
-        console.error("❌ Error fetching two-tier recommendations:", err)
+        console.error("❌ Error fetching recommendations:", err)
         setError("An unexpected error occurred. Please try again.")
       } finally {
         setLoading(false)
