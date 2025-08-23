@@ -2,7 +2,7 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { CreditCardIcon as Card, BarChart3, Menu, X } from "lucide-react"
+import { Car as Card, BarChart3, Menu, X, Home } from "lucide-react"
 import { useState } from "react"
 
 interface NavigationProps {
@@ -15,10 +15,16 @@ export default function Navigation({ currentPage }: NavigationProps) {
 
   const navItems = [
     {
-      name: "CARD RECOMMENDATIONS",
+      name: "HOME",
       href: "/",
+      icon: Home,
+      isActive: pathname === "/" || currentPage === "HOME",
+    },
+    {
+      name: "CARD RECOMMENDATIONS",
+      href: "/cards",
       icon: Card,
-      isActive: pathname === "/" || currentPage === "CARD RECOMMENDATIONS",
+      isActive: pathname === "/cards" || currentPage === "CARD RECOMMENDATIONS",
     },
     {
       name: "DEEP DIVE",

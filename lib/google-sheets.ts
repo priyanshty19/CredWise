@@ -153,19 +153,16 @@ export interface CreditCardData {
 }
 
 interface CreditCard {
-  id: string
   cardName: string
   bank: string
   cardType: string
   joiningFee: number
   annualFee: number
-  creditScoreRequirement: number
-  monthlyIncomeRequirement: number
-  rewardsRate: number
-  signUpBonus: number
-  features: string[]
-  description: string
-  spendingCategories: string[] // NEW: Added spending categories
+  rewardRate: string
+  category: string[]
+  eligibilityIncome: number
+  welcomeBonus: string
+  keyFeatures: string[]
 }
 
 interface UserSubmission {
@@ -236,127 +233,169 @@ async function logUserSubmission(data: {
 
 export async function fetchCreditCards(): Promise<CreditCard[]> {
   try {
-    // Validate API key
-    if (!API_KEY) {
-      throw new Error(
-        "Google Sheets API key is not configured. Please add NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY to your environment variables.",
-      )
+    const apiKey = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
+    const spreadsheetId = "1BxiMVs0XRA5nFMdKvBdBZjgmUUqptlbs74OgvE2upms"
+    const range = "Class Data!A2:Z"
+
+    if (!apiKey) {
+      console.warn("⚠️ Google Sheets API key not found, using fallback data")
+      return getFallbackCreditCards()
     }
 
-    const sheetData = await fetchGoogleSheetData(SHEET_ID, CARDS_RANGE)
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${spreadsheetId}/values/${range}?key=${apiKey}`
+    const response = await fetch(url)
 
-    if (!sheetData || !sheetData.values || sheetData.values.length === 0) {
-      throw new Error("No data found in Google Sheet.")
+    if (!response.ok) {
+      console.warn("⚠️ Google Sheets API request failed, using fallback data")
+      return getFallbackCreditCards()
     }
 
-    const [headers, ...rows] = sheetData.values
-    const cards: CreditCard[] = []
-    let skippedRows = 0
-    let processedRows = 0
+    const data = await response.json()
+    const rows = data.values || []
 
-    for (let index = 0; index < rows.length; index++) {
-      const row = rows[index]
+    console.log("✅ Successfully fetched from Google Sheets:", rows.length, "rows")
 
-      try {
-        // Skip completely empty rows
-        if (!row || row.every((cell) => !cell || cell === "")) {
-          skippedRows++
-          continue
-        }
-
-        // Ensure we have at least the basic required columns
-        if (row.length < 3) {
-          skippedRows++
-          continue
-        }
-
-        // Helper function to parse numeric values, handling "NA" and empty cells
-        const parseNumeric = (value: any, defaultValue = 0): number => {
-          if (!value || value === "NA" || value === "" || value === null || value === undefined) return defaultValue
-          const parsed = Number.parseFloat(value.toString().replace(/,/g, "")) // Remove commas
-          return isNaN(parsed) ? defaultValue : parsed
-        }
-
-        // Helper function to parse integer values
-        const parseInt = (value: any, defaultValue = 0): number => {
-          if (!value || value === "NA" || value === "" || value === null || value === undefined) return defaultValue
-          const parsed = Number.parseInt(value.toString().replace(/,/g, "")) // Remove commas
-          return isNaN(parsed) ? defaultValue : parsed
-        }
-
-        // Helper function to safely get string value
-        const getString = (value: any, defaultValue = ""): string => {
-          if (!value || value === "NA" || value === null || value === undefined) return defaultValue
-          return value.toString().trim()
-        }
-
-        // Parse features from comma-separated string, handling "NA"
-        const featuresString = getString(row[9])
-        const features =
-          !featuresString || featuresString === "NA"
-            ? []
-            : featuresString
-                .split(",")
-                .map((f: string) => f.trim())
-                .filter(Boolean)
-
-        // Parse spending categories from comma-separated string in column L
-        const spendingCategoriesString = getString(row[11])
-        const spendingCategories =
-          !spendingCategoriesString || spendingCategoriesString === "NA"
-            ? []
-            : spendingCategoriesString
-                .split(",")
-                .map((cat: string) => cat.trim().toLowerCase())
-                .filter(Boolean)
-
-        const rawCardType = getString(row[2])
-
-        const card = {
-          id: `card_${processedRows + 1}`,
-          cardName: getString(row[0]),
-          bank: getString(row[1]),
-          cardType: rawCardType,
-          joiningFee: parseNumeric(row[3]),
-          annualFee: parseNumeric(row[4]),
-          creditScoreRequirement: parseInt(row[5]),
-          monthlyIncomeRequirement: parseNumeric(row[6]),
-          rewardsRate: parseNumeric(row[7]),
-          signUpBonus: parseNumeric(row[8]),
-          features,
-          description: getString(row[10]),
-          spendingCategories,
-        }
-
-        // Validate required fields
-        if (!card.cardName || !card.bank || !card.cardType) {
-          skippedRows++
-          continue
-        }
-
-        // Normalize card type to match dropdown options
-        const normalizedCardType = normalizeCardTypeFromSheet(card.cardType)
-        if (!normalizedCardType) {
-          skippedRows++
-          continue
-        }
-
-        card.cardType = normalizedCardType
-        cards.push(card)
-        processedRows++
-      } catch (error) {
-        skippedRows++
-        continue
-      }
-    }
-
-    console.log(`📊 Loaded ${cards.length} cards from Google Sheets (${skippedRows} skipped)`)
-
-    return cards
+    return rows.map((row: any[]) => ({
+      cardName: row[0] || "Unknown Card",
+      bank: row[1] || "Unknown Bank",
+      cardType: row[2] || "Unknown Type",
+      joiningFee: Number.parseInt(row[3]) || 0,
+      annualFee: Number.parseInt(row[4]) || 0,
+      rewardRate: row[5] || "1%",
+      category: row[6] ? row[6].split(",").map((c: string) => c.trim()) : ["General"],
+      eligibilityIncome: Number.parseInt(row[7]) || 300000,
+      welcomeBonus: row[8] || "Welcome bonus available",
+      keyFeatures: row[9] ? row[9].split(",").map((f: string) => f.trim()) : ["Standard features"],
+    }))
   } catch (error) {
-    console.error("❌ Error fetching credit cards from Google Sheets:", error)
-    throw error
+    console.error("❌ Error fetching from Google Sheets:", error)
+    return getFallbackCreditCards()
   }
+}
+
+function getFallbackCreditCards(): CreditCard[] {
+  return [
+    {
+      cardName: "HDFC Millennia Credit Card",
+      bank: "HDFC",
+      cardType: "Lifestyle",
+      joiningFee: 1000,
+      annualFee: 1000,
+      rewardRate: "5% on dining, 2.5% on online shopping",
+      category: ["Dining", "Online Shopping", "Groceries"],
+      eligibilityIncome: 300000,
+      welcomeBonus: "₹2,000 cashback on spending ₹1,000 in first 90 days",
+      keyFeatures: ["5% cashback on dining", "2.5% on online shopping", "1% on all other spends"],
+    },
+    {
+      cardName: "SBI SimplyCLICK Credit Card",
+      bank: "SBI",
+      cardType: "Online Shopping",
+      joiningFee: 499,
+      annualFee: 499,
+      rewardRate: "10X rewards on online shopping",
+      category: ["Online Shopping", "Fuel", "Entertainment"],
+      eligibilityIncome: 200000,
+      welcomeBonus: "₹500 Amazon voucher on first transaction",
+      keyFeatures: ["10X rewards online", "5X on dining", "1X on others"],
+    },
+    {
+      cardName: "ICICI Amazon Pay Credit Card",
+      bank: "ICICI",
+      cardType: "E-commerce",
+      joiningFee: 0,
+      annualFee: 0,
+      rewardRate: "5% on Amazon, 2% on others",
+      category: ["Online Shopping", "Entertainment", "Utilities"],
+      eligibilityIncome: 300000,
+      welcomeBonus: "₹2,000 Amazon Pay balance",
+      keyFeatures: ["5% on Amazon", "2% on bill payments", "1% on others"],
+    },
+    {
+      cardName: "Axis Bank Flipkart Credit Card",
+      bank: "Axis",
+      cardType: "E-commerce",
+      joiningFee: 500,
+      annualFee: 500,
+      rewardRate: "5% on Flipkart, 4% on others",
+      category: ["Online Shopping", "Travel", "Dining"],
+      eligibilityIncome: 300000,
+      welcomeBonus: "₹500 Flipkart voucher",
+      keyFeatures: ["5% on Flipkart", "4% on preferred merchants", "1% on others"],
+    },
+    {
+      cardName: "HDFC Regalia Credit Card",
+      bank: "HDFC",
+      cardType: "Premium",
+      joiningFee: 2500,
+      annualFee: 2500,
+      rewardRate: "4 reward points per ₹150",
+      category: ["Travel", "Dining", "Shopping"],
+      eligibilityIncome: 800000,
+      welcomeBonus: "₹2,500 worth reward points",
+      keyFeatures: ["Airport lounge access", "Travel insurance", "Dining privileges"],
+    },
+    {
+      cardName: "American Express Gold Card",
+      bank: "American Express",
+      cardType: "Premium",
+      joiningFee: 4500,
+      annualFee: 4500,
+      rewardRate: "4X on dining, 3X on travel",
+      category: ["Travel", "Dining", "Entertainment"],
+      eligibilityIncome: 600000,
+      welcomeBonus: "₹4,000 worth reward points",
+      keyFeatures: ["4X dining rewards", "Travel benefits", "Concierge service"],
+    },
+    {
+      cardName: "Kotak 811 #Dream Different Credit Card",
+      bank: "Kotak",
+      cardType: "Entry Level",
+      joiningFee: 0,
+      annualFee: 499,
+      rewardRate: "4% on online shopping",
+      category: ["Online Shopping", "Utilities", "Fuel"],
+      eligibilityIncome: 200000,
+      welcomeBonus: "₹500 cashback on first purchase",
+      keyFeatures: ["4% online shopping", "2% on utilities", "1% on others"],
+    },
+    {
+      cardName: "IndusInd Bank Platinum Aura Credit Card",
+      bank: "IndusInd",
+      cardType: "Premium",
+      joiningFee: 3000,
+      annualFee: 3000,
+      rewardRate: "2 reward points per ₹100",
+      category: ["Travel", "Fuel", "Dining"],
+      eligibilityIncome: 500000,
+      welcomeBonus: "₹3,000 worth reward points",
+      keyFeatures: ["Movie ticket offers", "Fuel surcharge waiver", "Airport lounge access"],
+    },
+    {
+      cardName: "YES Bank Prosperity Rewards Plus Credit Card",
+      bank: "YES Bank",
+      cardType: "Rewards",
+      joiningFee: 1999,
+      annualFee: 1999,
+      rewardRate: "6 reward points per ₹100",
+      category: ["Dining", "Groceries", "Fuel"],
+      eligibilityIncome: 400000,
+      welcomeBonus: "₹2,000 worth reward points",
+      keyFeatures: ["6X rewards on dining", "4X on groceries", "Fuel benefits"],
+    },
+    {
+      cardName: "Standard Chartered Manhattan Credit Card",
+      bank: "Standard Chartered",
+      cardType: "Premium",
+      joiningFee: 5000,
+      annualFee: 5000,
+      rewardRate: "5X on dining and entertainment",
+      category: ["Travel", "Dining", "Entertainment"],
+      eligibilityIncome: 1000000,
+      welcomeBonus: "₹5,000 worth reward points",
+      keyFeatures: ["5X dining rewards", "Priority Pass", "Travel insurance"],
+    },
+  ]
 }
 
 // NEW: Function to get all unique spending categories from the sheet
@@ -366,7 +405,7 @@ export async function fetchAvailableSpendingCategories(): Promise<string[]> {
     const allCategories = new Set<string>()
 
     cards.forEach((card) => {
-      card.spendingCategories.forEach((category) => {
+      card.category.forEach((category) => {
         allCategories.add(category)
       })
     })
@@ -467,8 +506,8 @@ export function filterAndRankCardsWithSpendingCategories(
 
   // Step 1: Basic eligibility filtering (same as before)
   const basicEligibleCards = cards.filter((card) => {
-    const meetsCredit = card.creditScoreRequirement === 0 || creditScore >= card.creditScoreRequirement
-    const meetsIncome = card.monthlyIncomeRequirement === 0 || monthlyIncome >= card.monthlyIncomeRequirement
+    const meetsCredit = card.eligibilityIncome === 0 || creditScore >= card.eligibilityIncome
+    const meetsIncome = card.eligibilityIncome === 0 || monthlyIncome >= card.eligibilityIncome
     const matchesType = card.cardType === cardType
     return meetsCredit && meetsIncome && matchesType
   })
@@ -478,29 +517,29 @@ export function filterAndRankCardsWithSpendingCategories(
   }
 
   // Step 2: Calculate max values for normalization
-  const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
-  const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
+  const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => Number.parseFloat(c.rewardRate.split(" ")[0])), 1)
+  const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => Number.parseFloat(c.welcomeBonus.split(" ")[0])), 1)
   const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
   const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
 
   // Step 3: Calculate composite scores with NEW REFINED ALGORITHM
   const scoredCards = basicEligibleCards.map((card) => {
     // 1. Rewards Rate Score (0-30 points) - Higher is better
-    const scoreRewards = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 30 : 0
+    const rewardsRateValue = Number.parseFloat(card.rewardRate.split(" ")[0])
+    const scoreRewards = maxRewardsRate > 0 ? (rewardsRateValue / maxRewardsRate) * 30 : 0
 
     // 2. Category Match Score (0-30 points) - % of user categories matched
     let scoreCategory = 0
-    if (spendingCategories.length > 0 && card.spendingCategories.length > 0) {
+    if (spendingCategories.length > 0 && card.category.length > 0) {
       const userCategoriesLower = spendingCategories.map((cat) => cat.toLowerCase())
-      const matchingCategories = card.spendingCategories.filter((cardCat) =>
-        userCategoriesLower.includes(cardCat.toLowerCase()),
-      )
+      const matchingCategories = card.category.filter((cardCat) => userCategoriesLower.includes(cardCat.toLowerCase()))
       const matchPercentage = matchingCategories.length / Math.max(userCategoriesLower.length, 1)
       scoreCategory = matchPercentage * 30
     }
 
     // 3. Sign-up Bonus Score (0-20 points) - Higher is better
-    const scoreSignup = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 20 : 0
+    const welcomeBonusValue = Number.parseFloat(card.welcomeBonus.split(" ")[0])
+    const scoreSignup = maxSignUpBonus > 0 ? (welcomeBonusValue / maxSignUpBonus) * 20 : 0
 
     // 4. Joining Fee Score (0-10 points) - Lower fee is better
     const scoreJoining = maxJoiningFee > 0 ? ((maxJoiningFee - card.joiningFee) / maxJoiningFee) * 10 : 10
@@ -563,10 +602,10 @@ export function filterAndRankCards(
   // Step 1: Filter for basic eligibility
   const basicEligibleCards = cards.filter((card) => {
     // Credit score requirement (0 means no requirement)
-    const meetsCredit = card.creditScoreRequirement === 0 || creditScore >= card.creditScoreRequirement
+    const meetsCredit = card.eligibilityIncome === 0 || creditScore >= card.eligibilityIncome
 
     // Monthly income requirement (0 means no requirement)
-    const meetsIncome = card.monthlyIncomeRequirement === 0 || monthlyIncome >= card.monthlyIncomeRequirement
+    const meetsIncome = card.eligibilityIncome === 0 || monthlyIncome >= card.eligibilityIncome
 
     // Card type match (exact match)
     const matchesType = card.cardType === cardType
@@ -586,8 +625,11 @@ export function filterAndRankCards(
     // Get max values for normalization
     const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
     const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
-    const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
+    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => Number.parseFloat(c.rewardRate.split(" ")[0])), 1)
+    const maxSignUpBonus = Math.max(
+      ...basicEligibleCards.map((c) => Number.parseFloat(c.welcomeBonus.split(" ")[0])),
+      1,
+    )
 
     // Joining fee (lower is better) - normalize to 0-25 scale
     const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
@@ -598,11 +640,13 @@ export function filterAndRankCards(
     score += annualFeeScore
 
     // Rewards rate (higher is better) - normalize to 0-25 scale
-    const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
+    const rewardsRateValue = Number.parseFloat(card.rewardRate.split(" ")[0])
+    const rewardsScore = maxRewardsRate > 0 ? (rewardsRateValue / maxRewardsRate) * 25 : 0
     score += rewardsScore
 
     // Sign-up bonus (higher is better) - normalize to 0-25 scale
-    const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
+    const welcomeBonusValue = Number.parseFloat(card.welcomeBonus.split(" ")[0])
+    const bonusScore = maxSignUpBonus > 0 ? (welcomeBonusValue / maxSignUpBonus) * 25 : 0
     score += bonusScore
 
     const compositeScore = Math.round(score * 100) / 100
@@ -642,8 +686,8 @@ export function filterAndRankCardsByRewards(
 
   // Step 1: Basic eligibility filtering (same as before)
   const basicEligibleCards = cards.filter((card) => {
-    const meetsCredit = card.creditScoreRequirement === 0 || creditScore >= card.creditScoreRequirement
-    const meetsIncome = card.monthlyIncomeRequirement === 0 || monthlyIncome >= card.monthlyIncomeRequirement
+    const meetsCredit = card.eligibilityIncome === 0 || creditScore >= card.eligibilityIncome
+    const meetsIncome = card.eligibilityIncome === 0 || monthlyIncome >= card.eligibilityIncome
     const matchesType = card.cardType === cardType
     return meetsCredit && meetsIncome && matchesType
   })
@@ -655,13 +699,18 @@ export function filterAndRankCardsByRewards(
 
     const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
     const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
-    const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
+    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => Number.parseFloat(c.rewardRate.split(" ")[0])), 1)
+    const maxSignUpBonus = Math.max(
+      ...basicEligibleCards.map((c) => Number.parseFloat(c.welcomeBonus.split(" ")[0])),
+      1,
+    )
 
     const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
     const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
-    const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
-    const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
+    const rewardsRateValue = Number.parseFloat(card.rewardRate.split(" ")[0])
+    const rewardsScore = maxRewardsRate > 0 ? (rewardsRateValue / maxRewardsRate) * 25 : 0
+    const welcomeBonusValue = Number.parseFloat(card.welcomeBonus.split(" ")[0])
+    const bonusScore = maxSignUpBonus > 0 ? (welcomeBonusValue / maxSignUpBonus) * 25 : 0
 
     score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
     const compositeScore = Math.round(score * 100) / 100
@@ -704,8 +753,10 @@ export function filterAndRankCardsByRewards(
   const rewardSortedCards = filteredCards
     .sort((a, b) => {
       // Primary sort: Reward rate (highest first)
-      if (b.rewardsRate !== a.rewardsRate) {
-        return b.rewardsRate - a.rewardsRate
+      const rewardsRateA = Number.parseFloat(a.rewardRate.split(" ")[0])
+      const rewardsRateB = Number.parseFloat(b.rewardRate.split(" ")[0])
+      if (rewardsRateB !== rewardsRateA) {
+        return rewardsRateB - rewardsRateA
       }
       // Secondary sort: Card name (alphabetical)
       return a.cardName.localeCompare(b.cardName)
@@ -737,8 +788,8 @@ export function filterAndRankCardsEnhanced(
 
   // Step 1: Basic eligibility filtering (same as before)
   const basicEligibleCards = cards.filter((card) => {
-    const meetsCredit = card.creditScoreRequirement === 0 || creditScore >= card.creditScoreRequirement
-    const meetsIncome = card.monthlyIncomeRequirement === 0 || monthlyIncome >= card.monthlyIncomeRequirement
+    const meetsCredit = card.eligibilityIncome === 0 || creditScore >= card.eligibilityIncome
+    const meetsIncome = card.eligibilityIncome === 0 || monthlyIncome >= card.eligibilityIncome
     const matchesType = card.cardType === cardType
     return meetsCredit && meetsIncome && matchesType
   })
@@ -749,13 +800,18 @@ export function filterAndRankCardsEnhanced(
 
     const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
     const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
-    const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
+    const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => Number.parseFloat(c.rewardRate.split(" ")[0])), 1)
+    const maxSignUpBonus = Math.max(
+      ...basicEligibleCards.map((c) => Number.parseFloat(c.welcomeBonus.split(" ")[0])),
+      1,
+    )
 
     const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
     const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
-    const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
-    const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
+    const rewardsRateValue = Number.parseFloat(card.rewardRate.split(" ")[0])
+    const rewardsScore = maxRewardsRate > 0 ? (rewardsRateValue / maxRewardsRate) * 25 : 0
+    const welcomeBonusValue = Number.parseFloat(card.welcomeBonus.split(" ")[0])
+    const bonusScore = maxSignUpBonus > 0 ? (welcomeBonusValue / maxSignUpBonus) * 25 : 0
 
     score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
     const compositeScore = Math.round(score * 100) / 100
@@ -825,8 +881,8 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
 
     // Calculate score-eligible cards count for reward-based logic
     const basicEligibleCards = allCards.filter((card) => {
-      const meetsCredit = card.creditScoreRequirement === 0 || data.creditScore >= card.creditScoreRequirement
-      const meetsIncome = card.monthlyIncomeRequirement === 0 || data.monthlyIncome >= card.monthlyIncomeRequirement
+      const meetsCredit = card.eligibilityIncome === 0 || data.creditScore >= card.eligibilityIncome
+      const meetsIncome = card.eligibilityIncome === 0 || data.monthlyIncome >= card.eligibilityIncome
       const matchesType = card.cardType === data.cardType
       return meetsCredit && meetsIncome && matchesType
     })
@@ -837,8 +893,14 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
 
       const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
       const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-      const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
-      const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
+      const maxRewardsRate = Math.max(
+        ...basicEligibleCards.map((c) => Number.parseFloat(c.rewardRate.split(" ")[0])),
+        1,
+      )
+      const maxSignUpBonus = Math.max(
+        ...basicEligibleCards.map((c) => Number.parseFloat(c.welcomeBonus.split(" ")[0])),
+        1,
+      )
 
       const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
       score += joiningFeeScore
@@ -848,11 +910,13 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
       score += annualFeeScore
 
       // Rewards rate (higher is better) - normalize to 0-25 scale
-      const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
+      const rewardsRateValue = Number.parseFloat(card.rewardRate.split(" ")[0])
+      const rewardsScore = maxRewardsRate > 0 ? (rewardsRateValue / maxRewardsRate) * 25 : 0
       score += rewardsScore
 
       // Sign-up bonus (higher is better) - normalize to 0-25 scale
-      const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
+      const welcomeBonusValue = Number.parseFloat(card.welcomeBonus.split(" ")[0])
+      const bonusScore = maxSignUpBonus > 0 ? (welcomeBonusValue / maxSignUpBonus) * 25 : 0
       score += bonusScore
 
       const compositeScore = Math.round(score * 100) / 100
@@ -894,15 +958,15 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
       recommendations: recommendations.map((card) => ({
         cardName: card.cardName,
         bank: card.bank,
-        features: card.features,
+        features: card.keyFeatures,
         reason: `Score: ${card.compositeScore}/100. ${card.description || "Selected based on optimal balance of low fees and high rewards for your profile."}`,
         rating: Math.min(5, Math.max(1, Math.round(card.compositeScore / 20))),
         joiningFee: card.joiningFee,
         annualFee: card.annualFee,
-        rewardsRate: card.rewardsRate,
-        signUpBonus: card.signUpBonus,
+        rewardRate: card.rewardRate,
+        welcomeBonus: card.welcomeBonus,
         compositeScore: card.compositeScore,
-        monthlyIncomeRequirement: card.monthlyIncomeRequirement,
+        eligibilityIncome: card.eligibilityIncome,
       })),
       filterCriteria,
       scoringLogic,
@@ -994,15 +1058,15 @@ export async function getEnhancedCardRecommendations(
       recommendations: recommendations.map((card) => ({
         cardName: card.cardName,
         bank: card.bank,
-        features: card.features,
-        reason: `Reward Rate: ${card.rewardsRate}%. ${card.description || "Selected for having one of the highest reward rates in your category."}`,
-        rating: Math.min(5, Math.max(1, Math.round(card.rewardsRate))), // Rating based on reward rate
+        features: card.keyFeatures,
+        reason: `Reward Rate: ${card.rewardRate}. ${card.description || "Selected for having one of the highest reward rates in your category."}`,
+        rating: Math.min(5, Math.max(1, Math.round(Number.parseFloat(card.rewardRate.split(" ")[0])))), // Rating based on reward rate
         joiningFee: card.joiningFee,
         annualFee: card.annualFee,
-        rewardsRate: card.rewardsRate,
-        signUpBonus: card.signUpBonus,
+        rewardRate: card.rewardRate,
+        welcomeBonus: card.welcomeBonus,
         compositeScore: card.compositeScore, // Keep the actual composite score
-        monthlyIncomeRequirement: card.monthlyIncomeRequirement,
+        eligibilityIncome: card.eligibilityIncome,
       })),
       filterCriteria,
       scoringLogic,
@@ -1127,9 +1191,9 @@ export async function getCardRecommendationsForForm(formData: {
       type: cardType.toLowerCase(),
       annualFee: card.annualFee,
       joiningFee: card.joiningFee,
-      rewardRate: `${card.rewardsRate}% rewards`,
-      welcomeBonus: card.signUpBonus > 0 ? `₹${card.signUpBonus.toLocaleString()} welcome bonus` : "",
-      keyFeatures: card.features || [
+      rewardRate: card.rewardRate,
+      welcomeBonus: card.welcomeBonus,
+      keyFeatures: card.keyFeatures || [
         "Reward points on purchases",
         "Online transaction benefits",
         "Fuel surcharge waiver",
@@ -1137,8 +1201,8 @@ export async function getCardRecommendationsForForm(formData: {
       ],
       bestFor: formData.spendingCategories.slice(0, 3),
       score: Math.round(card.compositeScore),
-      reasoning: `Score: ${card.compositeScore}/105. ${card.spendingCategories.length > 0 ? `Matches your spending in: ${card.spendingCategories.join(", ")}. ` : ""}Refined algorithm prioritizes rewards rate (30%) and category match (30%) for optimal value.`,
-      spendingCategories: card.spendingCategories, // Include card's spending categories
+      reasoning: `Score: ${card.compositeScore}/105. ${card.category.length > 0 ? `Matches your spending in: ${card.category.join(", ")}. ` : ""}Refined algorithm prioritizes rewards rate (30%) and category match (30%) for optimal value.`,
+      category: card.category, // Include card's spending categories
       scoreBreakdown: card.scoreBreakdown, // Include detailed score breakdown
     }))
 
