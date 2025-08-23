@@ -2,8 +2,9 @@
 
 import Link from "next/link"
 import { usePathname } from "next/navigation"
-import { Car as Card, BarChart3, Menu, X, Home } from "lucide-react"
-import { useState } from "react"
+import { Card, CardContent } from "@/components/ui/card"
+import { Badge } from "@/components/ui/badge"
+import { CreditCard, Home, TrendingUp } from "lucide-react"
 
 interface NavigationProps {
   currentPage?: string
@@ -11,95 +12,79 @@ interface NavigationProps {
 
 export default function Navigation({ currentPage }: NavigationProps) {
   const pathname = usePathname()
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false)
 
   const navItems = [
     {
       name: "HOME",
       href: "/",
       icon: Home,
-      isActive: pathname === "/" || currentPage === "HOME",
+      description: "Welcome & Overview",
     },
     {
       name: "CARD RECOMMENDATIONS",
       href: "/cards",
-      icon: Card,
-      isActive: pathname === "/cards" || currentPage === "CARD RECOMMENDATIONS",
+      icon: CreditCard,
+      description: "AI-Powered Card Matching",
     },
     {
       name: "DEEP DIVE",
       href: "/deep-dive",
-      icon: BarChart3,
-      isActive: pathname === "/deep-dive" || currentPage === "DEEP DIVE",
+      icon: TrendingUp,
+      description: "Portfolio Analysis",
     },
   ]
 
   return (
-    <nav className="bg-white shadow-sm border-b">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-        <div className="flex justify-between h-16">
-          {/* Logo */}
-          <div className="flex items-center">
-            <Link href="/" className="flex items-center space-x-2">
-              <Card className="h-8 w-8 text-blue-600" />
-              <span className="text-xl font-bold text-gray-900">CredWise</span>
-            </Link>
+    <Card className="mb-8">
+      <CardContent className="p-6">
+        <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 bg-blue-600 rounded-lg flex items-center justify-center">
+              <CreditCard className="h-6 w-6 text-white" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">CredWise</h1>
+              <p className="text-sm text-gray-600">Smart Financial Decisions</p>
+            </div>
           </div>
 
-          {/* Desktop Navigation */}
-          <div className="hidden md:flex items-center space-x-8">
+          <nav className="flex flex-wrap gap-2">
             {navItems.map((item) => {
               const Icon = item.icon
+              const isActive = pathname === item.href || currentPage === item.name
+
               return (
                 <Link
                   key={item.name}
                   href={item.href}
-                  className={`flex items-center space-x-2 px-3 py-2 rounded-md text-sm font-medium transition-colors ${
-                    item.isActive ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                  className={`flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                    isActive ? "bg-blue-600 text-white" : "bg-gray-100 text-gray-700 hover:bg-gray-200"
                   }`}
                 >
                   <Icon className="h-4 w-4" />
-                  <span>{item.name}</span>
+                  {item.name}
                 </Link>
               )
             })}
-          </div>
-
-          {/* Mobile menu button */}
-          <div className="md:hidden flex items-center">
-            <button
-              onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="text-gray-600 hover:text-gray-900 focus:outline-none focus:text-gray-900"
-            >
-              {isMobileMenuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-            </button>
-          </div>
+          </nav>
         </div>
 
-        {/* Mobile Navigation */}
-        {isMobileMenuOpen && (
-          <div className="md:hidden">
-            <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3 border-t">
-              {navItems.map((item) => {
-                const Icon = item.icon
-                return (
-                  <Link
-                    key={item.name}
-                    href={item.href}
-                    className={`flex items-center space-x-2 px-3 py-2 rounded-md text-base font-medium transition-colors ${
-                      item.isActive ? "bg-blue-100 text-blue-700" : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
-                    }`}
-                    onClick={() => setIsMobileMenuOpen(false)}
-                  >
-                    <Icon className="h-5 w-5" />
-                    <span>{item.name}</span>
-                  </Link>
-                )
-              })}
+        {currentPage && (
+          <div className="mt-4 pt-4 border-t border-gray-200">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="text-lg font-semibold text-gray-900">{currentPage}</h2>
+                <p className="text-sm text-gray-600">
+                  {navItems.find((item) => item.name === currentPage)?.description}
+                </p>
+              </div>
+              <Badge variant="outline" className="text-xs">
+                Active Section
+              </Badge>
             </div>
           </div>
         )}
-      </div>
-    </nav>
+      </CardContent>
+    </Card>
   )
 }
