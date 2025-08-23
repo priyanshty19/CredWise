@@ -8,7 +8,7 @@ const inter = Inter({ subsets: ["latin"] })
 export const metadata: Metadata = {
   title: "CredWise - Smart Credit Card Recommendations",
   description: "Get personalized credit card recommendations based on your spending patterns and financial goals.",
-    generator: 'v0.app'
+  generator: "v0.app",
 }
 
 export default function RootLayout({
