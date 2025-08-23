@@ -188,3 +188,6 @@ export async function submitCardRecommendation(formData: FormData): Promise<Reco
     }
   }
 }
+
+// Export alias for backward compatibility
+export { submitCardRecommendation as getFunnelCardRecommendations }
