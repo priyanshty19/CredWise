@@ -1,93 +1,87 @@
 "use client"
 
 import { useState } from "react"
-import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Loader2, TestTube, AlertTriangle, CheckCircle, XCircle, Copy, ExternalLink, Info } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Badge } from "@/components/ui/badge"
+import { Textarea } from "@/components/ui/textarea"
+import { CheckCircle2, AlertCircle, Loader2, Code, Send, Clock, ExternalLink, Copy, RefreshCw } from "lucide-react"
 
 export default function AppsScriptDebugger() {
-  const [testUrl, setTestUrl] = useState(process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "")
-  const [testing, setTesting] = useState(false)
-  const [testResult, setTestResult] = useState<any>(null)
+  const [isLoading, setIsLoading] = useState(false)
+  const [testResult, setTestResult] = useState<{
+    success: boolean
+    error?: string
+    responseTime?: number
+    response?: any
+  } | null>(null)
+  const [customUrl, setCustomUrl] = useState("")
+  const [customPayload, setCustomPayload] = useState(`{
+  "monthlyIncome": 75000,
+  "monthlySpending": 35000,
+  "creditScoreRange": "750-850",
+  "currentCards": "2",
+  "spendingCategories": "dining, travel, shopping",
+  "preferredBanks": "HDFC Bank, ICICI Bank",
+  "joiningFeePreference": "low_fee",
+  "submissionType": "enhanced_form",
+  "userAgent": "Test User Agent"
+}`)
 
-  const testAppsScriptUrl = async () => {
-    if (!testUrl) {
-      setTestResult({
-        success: false,
-        error: "Please enter an Apps Script URL to test",
-      })
-      return
-    }
-
-    setTesting(true)
+  const testEnhancedFormSubmission = async () => {
+    setIsLoading(true)
     setTestResult(null)
 
-    try {
-      console.log("🧪 Testing Apps Script URL:", testUrl)
+    const startTime = Date.now()
 
-      const testPayload = {
-        timestamp: new Date().toISOString(),
-        creditScore: 750,
-        monthlyIncome: 100000,
-        cardType: "Test",
-        preferredBrand: "Test Bank",
-        maxJoiningFee: "1000",
-        topN: 3,
-        submissionType: "test",
-        userAgent: "CredWise Debugger",
+    try {
+      const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || customUrl
+
+      if (!appsScriptUrl) {
+        throw new Error("Apps Script URL not configured")
       }
 
-      const response = await fetch(testUrl, {
+      console.log("🔗 Testing Apps Script URL:", appsScriptUrl)
+      console.log("📦 Test payload:", customPayload)
+
+      const response = await fetch(appsScriptUrl, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
         },
-        body: JSON.stringify(testPayload),
-        redirect: "follow",
+        body: customPayload,
       })
 
-      console.log("📡 Test response status:", response.status)
-      console.log("📡 Test response URL:", response.url)
-
+      const responseTime = Date.now() - startTime
       const responseText = await response.text()
-      console.log("📄 Test response text:", responseText)
 
-      let result
-      let isValidJson = false
+      console.log("📡 Response status:", response.status)
+      console.log("📄 Response text:", responseText)
+
+      let responseData
       try {
-        result = JSON.parse(responseText)
-        isValidJson = true
-      } catch (parseError) {
-        result = { rawResponse: responseText }
-        isValidJson = false
+        responseData = JSON.parse(responseText)
+      } catch {
+        responseData = { rawResponse: responseText }
       }
 
-      // Determine if this is actually working despite errors
-      const isWorking = response.ok || (response.status === 302 && responseText.includes("Moved Temporarily"))
-      const hasRedirect = response.url !== testUrl || responseText.includes("Moved Temporarily")
-
       setTestResult({
-        success: isWorking,
-        status: response.status,
-        url: response.url,
-        redirected: hasRedirect,
-        result,
-        rawResponse: responseText,
-        isValidJson,
-        isWorking,
-        needsJsonFix: isWorking && !isValidJson,
+        success: response.ok && responseData.success !== false,
+        error: response.ok ? undefined : `HTTP ${response.status}: ${response.statusText}`,
+        responseTime,
+        response: responseData,
       })
-    } catch (error: any) {
-      console.error("❌ Apps Script test failed:", error)
+    } catch (error) {
       setTestResult({
         success: false,
-        error: error.message,
+        error: error instanceof Error ? error.message : "Request failed",
+        responseTime: Date.now() - startTime,
       })
     } finally {
-      setTesting(false)
+      setIsLoading(false)
     }
   }
 
@@ -95,318 +89,192 @@ export default function AppsScriptDebugger() {
     navigator.clipboard.writeText(text)
   }
 
-  const copyAppsScriptCode = () => {
-    const appsScriptCode = `function doPost(e) {
-  try {
-    // Parse the incoming JSON data
-    const data = JSON.parse(e.postData.contents);
-    
-    // Open the Google Sheet
-    const sheet = SpreadsheetApp.openById('1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw').getActiveSheet();
-    
-    // Prepare the row data
-    const rowData = [
-      data.timestamp,
-      data.creditScore,
-      data.monthlyIncome,
-      data.cardType,
-      data.preferredBrand || 'Any',
-      data.maxJoiningFee || 'Any',
-      data.topN,
-      data.submissionType,
-      data.userAgent || 'Unknown'
-    ];
-    
-    // Add the row to the sheet
-    sheet.appendRow(rowData);
-    
-    // Return success response as JSON
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        success: true,
-        message: 'Data submitted successfully',
-        row: sheet.getLastRow(),
-        timestamp: new Date().toISOString()
-      }))
-      .setMimeType(ContentService.MimeType.JSON);
-      
-  } catch (error) {
-    // Return error response as JSON
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        success: false,
-        error: error.toString(),
-        timestamp: new Date().toISOString()
-      }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}`
-    copyToClipboard(appsScriptCode)
-  }
+  const currentAppsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "Not configured"
 
   return (
-    <Card className="mb-4 border-orange-200">
-      <CardHeader>
-        <CardTitle className="flex items-center text-orange-700">
-          <TestTube className="h-5 w-5 mr-2" />
-          Apps Script URL Debugger
-        </CardTitle>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <Alert className="bg-blue-50 border-blue-200">
-          <Info className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800">
-            <div className="space-y-2">
-              <p>
-                <strong>🔍 Current Status Analysis</strong>
-              </p>
-              <p className="text-sm">
-                Based on your error message, your Apps Script is actually <strong>working</strong> and submitting data
-                to the Google Sheet successfully. The issue is that it's not returning proper JSON responses, which
-                makes our code think it failed.
-              </p>
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Code className="h-5 w-5" />
+            Enhanced Form Apps Script Debugger
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Current Configuration */}
+          <div className="bg-gray-50 rounded-lg p-4">
+            <h4 className="font-medium text-gray-900 mb-2">Current Configuration</h4>
+            <div className="space-y-2 text-sm">
+              <div className="flex items-center justify-between">
+                <span className="text-gray-600">Apps Script URL:</span>
+                <div className="flex items-center gap-2">
+                  <Badge variant={currentAppsScriptUrl !== "Not configured" ? "default" : "destructive"}>
+                    {currentAppsScriptUrl !== "Not configured" ? "Configured" : "Missing"}
+                  </Badge>
+                  {currentAppsScriptUrl !== "Not configured" && (
+                    <Button variant="ghost" size="sm" onClick={() => copyToClipboard(currentAppsScriptUrl)}>
+                      <Copy className="h-3 w-3" />
+                    </Button>
+                  )}
+                </div>
+              </div>
+              {currentAppsScriptUrl !== "Not configured" && (
+                <div className="text-xs text-gray-500 break-all bg-white p-2 rounded border">
+                  {currentAppsScriptUrl}
+                </div>
+              )}
             </div>
-          </AlertDescription>
-        </Alert>
+          </div>
 
-        <div className="space-y-2">
-          <Label htmlFor="testUrl">Apps Script URL</Label>
-          <div className="flex gap-2">
-            <Input
-              id="testUrl"
-              value={testUrl}
-              onChange={(e) => setTestUrl(e.target.value)}
-              placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
-              className="flex-1"
-            />
-            <Button onClick={() => copyToClipboard(testUrl)} variant="outline" size="sm">
-              <Copy className="h-4 w-4" />
+          {/* Enhanced Form Test */}
+          <div className="space-y-4">
+            <h4 className="font-medium text-gray-900">Enhanced Form Structure Test</h4>
+
+            <div className="space-y-2">
+              <Label htmlFor="custom-url">Apps Script URL (if different from env)</Label>
+              <Input
+                id="custom-url"
+                value={customUrl}
+                onChange={(e) => setCustomUrl(e.target.value)}
+                placeholder="https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="custom-payload">Enhanced Form Test Payload (JSON)</Label>
+              <Textarea
+                id="custom-payload"
+                value={customPayload}
+                onChange={(e) => setCustomPayload(e.target.value)}
+                rows={12}
+                className="font-mono text-sm"
+              />
+            </div>
+
+            <Button onClick={testEnhancedFormSubmission} disabled={isLoading} className="w-full">
+              {isLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Testing Enhanced Form Submission...
+                </>
+              ) : (
+                <>
+                  <Send className="h-4 w-4 mr-2" />
+                  Test Enhanced Form Apps Script
+                </>
+              )}
             </Button>
           </div>
-          <p className="text-xs text-gray-500">
-            Current environment variable: {process.env.NEXT_PUBLIC_APPS_SCRIPT_URL || "Not set"}
-          </p>
-        </div>
 
-        <Button onClick={testAppsScriptUrl} disabled={testing || !testUrl} className="w-full">
-          {testing ? (
-            <>
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              Testing Apps Script URL...
-            </>
-          ) : (
-            <>
-              <TestTube className="mr-2 h-4 w-4" />
-              Test Apps Script URL
-            </>
-          )}
-        </Button>
-
-        {testResult && (
-          <div className="space-y-4">
-            <Alert className={`${testResult.isWorking ? "bg-green-50 border-green-200" : "bg-red-50 border-red-200"}`}>
-              {testResult.isWorking ? (
-                <CheckCircle className="h-4 w-4 text-green-600" />
+          {/* Test Results */}
+          {testResult && (
+            <Alert className={testResult.success ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
+              {testResult.success ? (
+                <CheckCircle2 className="h-4 w-4 text-green-600" />
               ) : (
-                <XCircle className="h-4 w-4 text-red-600" />
+                <AlertCircle className="h-4 w-4 text-red-600" />
               )}
-              <AlertDescription className={testResult.isWorking ? "text-green-800" : "text-red-800"}>
+              <AlertDescription>
                 <div className="space-y-2">
-                  <p>
-                    <strong>{testResult.isWorking ? "✅ Apps Script is Working!" : "❌ Test Failed"}</strong>
-                  </p>
+                  <div className={`font-medium ${testResult.success ? "text-green-800" : "text-red-800"}`}>
+                    {testResult.success ? "✅ Enhanced Form Test Successful!" : "❌ Enhanced Form Test Failed"}
+                  </div>
 
-                  {testResult.status && (
-                    <p className="text-sm">
-                      <strong>Status:</strong> {testResult.status}
-                    </p>
-                  )}
-
-                  {testResult.isWorking && testResult.needsJsonFix && (
-                    <div className="text-sm">
-                      <p>
-                        <strong>⚠️ Issue Found:</strong> Your Apps Script is submitting data successfully, but it's not
-                        returning proper JSON responses.
-                      </p>
-                    </div>
-                  )}
-
-                  {testResult.redirected && (
-                    <div className="text-sm">
-                      <p>
-                        <strong>🔄 Redirect Detected:</strong>
-                      </p>
-                      <p>From: {testUrl}</p>
-                      <p>To: {testResult.url}</p>
+                  {testResult.responseTime && (
+                    <div className="flex items-center gap-2 text-sm">
+                      <Clock className="h-3 w-3" />
+                      <span>Response time: {testResult.responseTime}ms</span>
                     </div>
                   )}
 
                   {testResult.error && (
-                    <p className="text-sm">
+                    <div className="text-red-700 text-sm">
                       <strong>Error:</strong> {testResult.error}
-                    </p>
+                    </div>
                   )}
 
-                  {testResult.result && testResult.isValidJson && (
+                  {testResult.response && (
                     <div className="text-sm">
-                      <p>
-                        <strong>JSON Response:</strong>
-                      </p>
-                      <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto">
-                        {JSON.stringify(testResult.result, null, 2)}
+                      <strong>Response:</strong>
+                      <pre className="mt-1 p-2 bg-white rounded border text-xs overflow-auto">
+                        {JSON.stringify(testResult.response, null, 2)}
                       </pre>
                     </div>
                   )}
 
-                  {testResult.result && !testResult.isValidJson && (
-                    <div className="text-sm">
-                      <p>
-                        <strong>Raw Response (Not JSON):</strong>
-                      </p>
-                      <pre className="bg-gray-100 p-2 rounded text-xs overflow-auto max-h-32">
-                        {testResult.rawResponse.substring(0, 500)}...
-                      </pre>
+                  {testResult.success && (
+                    <div className="text-green-700 text-sm">
+                      Your Apps Script is properly handling the enhanced form structure. Check your Google Sheet for the
+                      new data!
                     </div>
                   )}
                 </div>
               </AlertDescription>
             </Alert>
+          )}
 
-            {testResult.isWorking && testResult.needsJsonFix && (
-              <Alert className="bg-yellow-50 border-yellow-200">
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
-                <AlertDescription className="text-yellow-800">
-                  <div className="space-y-3">
-                    <p>
-                      <strong>🔧 Fix Required: Update Your Apps Script</strong>
-                    </p>
-                    <p className="text-sm">
-                      Your Apps Script is working but needs to return proper JSON responses. Update your Apps Script
-                      code to fix the error messages.
-                    </p>
-
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">📋 Updated Apps Script Code:</p>
-                      <div className="bg-gray-100 p-2 rounded">
-                        <Button
-                          onClick={copyAppsScriptCode}
-                          variant="outline"
-                          size="sm"
-                          className="mb-2 bg-transparent"
-                        >
-                          <Copy className="h-3 w-3 mr-1" />
-                          Copy Fixed Apps Script Code
-                        </Button>
-                        <pre className="text-xs overflow-auto max-h-40">
-                          {`function doPost(e) {
-  try {
-    const data = JSON.parse(e.postData.contents);
-    const sheet = SpreadsheetApp.openById('1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw').getActiveSheet();
-    
-    const rowData = [
-      data.timestamp, data.creditScore, data.monthlyIncome,
-      data.cardType, data.preferredBrand || 'Any',
-      data.maxJoiningFee || 'Any', data.topN,
-      data.submissionType, data.userAgent || 'Unknown'
-    ];
-    
-    sheet.appendRow(rowData);
-    
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        success: true,
-        message: 'Data submitted successfully',
-        row: sheet.getLastRow()
-      }))
-      .setMimeType(ContentService.MimeType.JSON);
-      
-  } catch (error) {
-    return ContentService
-      .createTextOutput(JSON.stringify({
-        success: false,
-        error: error.toString()
-      }))
-      .setMimeType(ContentService.MimeType.JSON);
-  }
-}`}
-                        </pre>
-                      </div>
-                    </div>
-
-                    <div className="space-y-2">
-                      <p className="text-sm font-medium">🔧 How to update:</p>
-                      <ol className="text-sm list-decimal list-inside space-y-1 ml-4">
-                        <li>
-                          Go to{" "}
-                          <a
-                            href="https://script.google.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="text-blue-600 underline"
-                          >
-                            script.google.com
-                          </a>
-                        </li>
-                        <li>Open your CredWise project</li>
-                        <li>Replace your current doPost function with the code above</li>
-                        <li>Click "Save" (Ctrl+S)</li>
-                        <li>Click "Deploy" → "New deployment" (or manage existing deployment)</li>
-                        <li>Test again using this debugger</li>
-                      </ol>
-                    </div>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-
-            {testResult.isWorking && testResult.isValidJson && (
-              <Alert className="bg-green-50 border-green-200">
-                <CheckCircle className="h-4 w-4 text-green-600" />
-                <AlertDescription className="text-green-800">
-                  <div className="space-y-2">
-                    <p>
-                      <strong>🎉 Perfect! Your Apps Script is working correctly!</strong>
-                    </p>
-                    <p className="text-sm">
-                      Your Apps Script is submitting data and returning proper JSON responses. The form submissions
-                      should work without errors now.
-                    </p>
-                  </div>
-                </AlertDescription>
-              </Alert>
-            )}
-          </div>
-        )}
-
-        <Alert className="bg-blue-50 border-blue-200">
-          <ExternalLink className="h-4 w-4 text-blue-600" />
-          <AlertDescription className="text-blue-800">
-            <div className="space-y-2">
-              <p>
-                <strong>📋 Quick Links:</strong>
-              </p>
-              <div className="flex gap-2 flex-wrap">
-                <a
-                  href="https://script.google.com"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 underline text-sm"
-                >
-                  📝 Apps Script Editor
-                </a>
-                <a
-                  href="https://docs.google.com/spreadsheets/d/1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw/edit"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 underline text-sm"
-                >
-                  📊 Your Google Sheet
-                </a>
+          {/* Updated Field Mapping */}
+          <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+            <h4 className="font-medium text-blue-900 mb-2">Enhanced Form Field Mapping</h4>
+            <div className="space-y-1 text-sm text-blue-800">
+              <div>
+                <strong>A:</strong> Timestamp (auto-generated)
+              </div>
+              <div>
+                <strong>B:</strong> Monthly Income (monthlyIncome)
+              </div>
+              <div>
+                <strong>C:</strong> Monthly Credit Card Spending (monthlySpending)
+              </div>
+              <div>
+                <strong>D:</strong> Credit Score Range (creditScoreRange)
+              </div>
+              <div>
+                <strong>E:</strong> Current Cards Count (currentCards)
+              </div>
+              <div>
+                <strong>F:</strong> Spending Categories (spendingCategories)
+              </div>
+              <div>
+                <strong>G:</strong> Preferred Banks (preferredBanks)
+              </div>
+              <div>
+                <strong>H:</strong> Joining Fee Preference (joiningFeePreference)
+              </div>
+              <div>
+                <strong>I:</strong> Submission Type (submissionType)
+              </div>
+              <div>
+                <strong>J:</strong> User Agent (userAgent)
               </div>
             </div>
-          </AlertDescription>
-        </Alert>
-      </CardContent>
-    </Card>
+          </div>
+
+          {/* Quick Links */}
+          <div className="flex gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <a href="https://script.google.com" target="_blank" rel="noopener noreferrer">
+                <ExternalLink className="h-3 w-3 mr-2" />
+                Apps Script Console
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" asChild>
+              <a
+                href="https://docs.google.com/spreadsheets/d/1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw/edit"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <ExternalLink className="h-3 w-3 mr-2" />
+                View Google Sheet
+              </a>
+            </Button>
+            <Button variant="outline" size="sm" onClick={testEnhancedFormSubmission} disabled={isLoading}>
+              <RefreshCw className={`h-3 w-3 mr-2 ${isLoading ? "animate-spin" : ""}`} />
+              Retest
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
   )
 }

@@ -1,818 +1,547 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Card, CardContent } from "@/components/ui/card"
+import { Checkbox } from "@/components/ui/checkbox"
+import { Badge } from "@/components/ui/badge"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import {
-  Loader2,
   CreditCard,
-  TrendingUp,
-  Shield,
-  Star,
-  Info,
-  Database,
-  Settings,
-  Sparkles,
-  CheckCircle,
+  Utensils,
+  Fuel,
+  ShoppingBag,
+  Plane,
+  Smartphone,
+  Zap,
+  Car,
+  ArrowRight,
+  CheckCircle2,
+  AlertCircle,
+  Loader2,
 } from "lucide-react"
-// Import the new component and enhanced action
-import EnhancedPersonalization from "@/components/enhanced-personalization"
-import { getCardRecommendations, getEnhancedCardRecommendations } from "@/app/actions/card-recommendation"
-import { fetchCreditCards } from "@/lib/google-sheets"
+import EnhancedRecommendations from "./enhanced-recommendations"
+import { fetchAvailableSpendingCategories, fetchCreditCards } from "@/lib/google-sheets"
+import { FunnelRecommendationEngine } from "@/lib/funnel-recommendation-engine"
 
-interface FormData {
-  creditScore: string
-  monthlyIncome: string
-  cardType: string
-  topN: string // Number of recommendations to show
-}
-
-interface FormErrors {
-  creditScore?: string
-  monthlyIncome?: string
-  cardType?: string
-  topN?: string
-}
-
-interface Recommendation {
-  cardName: string
-  bank: string
-  features: string[]
-  reason: string
-  rating: number
-  joiningFee: number
-  annualFee: number
-  rewardsRate: number
-  signUpBonus: number
-  compositeScore: number
-  monthlyIncomeRequirement: number
-}
-
-interface RecommendationResponse {
-  success: boolean
-  recommendations?: Recommendation[]
-  filterCriteria?: string
-  scoringLogic?: string
-  error?: string
-  totalCardsConsidered?: number
-  eligibleCardsFound?: number
-  scoreEligibleCardsFound?: number // NEW: Cards that meet ≥25.0 score threshold
-}
-
-interface EligibleCardCount {
-  total: number
-  byType: { [key: string]: number }
+// Icon mapping for spending categories
+const categoryIcons: { [key: string]: any } = {
+  dining: Utensils,
+  fuel: Fuel,
+  groceries: ShoppingBag,
+  travel: Plane,
+  shopping: ShoppingBag,
+  entertainment: Smartphone,
+  utilities: Zap,
+  transport: Car,
 }
 
 export default function CardRecommendationForm() {
-  const [formData, setFormData] = useState<FormData>({
-    creditScore: "",
+  const [currentStep, setCurrentStep] = useState(1)
+  const [availableSpendingCategories, setAvailableSpendingCategories] = useState<string[]>([])
+  const [loadingCategories, setLoadingCategories] = useState(true)
+  const [availableBrands, setAvailableBrands] = useState<string[]>([])
+  const [loadingBrands, setLoadingBrands] = useState(false)
+  const [allCards, setAllCards] = useState<any[]>([])
+  const [formData, setFormData] = useState({
     monthlyIncome: "",
-    cardType: "",
-    topN: "7", // Default to 7 recommendations
+    spendingCategories: [] as string[],
+    monthlySpending: "",
+    currentCards: "",
+    creditScore: "",
+    preferredBanks: [] as string[],
+    joiningFeePreference: "",
   })
+  const [showRecommendations, setShowRecommendations] = useState(false)
 
-  const [errors, setErrors] = useState<FormErrors>({})
-  const [isSubmitting, setIsSubmitting] = useState(false)
-  const [result, setResult] = useState<RecommendationResponse | null>(null)
-  // Add new state for enhanced recommendations
-  const [enhancedResult, setEnhancedResult] = useState<RecommendationResponse | null>(null)
-  const [isGettingEnhanced, setIsGettingEnhanced] = useState(false)
-
-  // New state for dynamic card counts based on eligibility
-  const [eligibleCardCounts, setEligibleCardCounts] = useState<EligibleCardCount>({
-    total: 0,
-    byType: {},
-  })
-  const [loadingEligibleCounts, setLoadingEligibleCounts] = useState(false)
-  const [recommendationOptions, setRecommendationOptions] = useState<Array<{ value: string; label: string }>>([])
-
-  // Add state to track score-eligible cards vs shown cards
-  const [scoreEligibleCards, setScoreEligibleCards] = useState(0)
-  const [hasMoreCardsAvailable, setHasMoreCardsAvailable] = useState(false)
-
-  const cardTypes = [
-    { value: "Cashback", label: "Cashback" },
-    { value: "Travel", label: "Travel" },
-    { value: "Rewards", label: "Rewards" },
-    { value: "Student", label: "Student" },
-    { value: "Business", label: "Business" },
-  ]
-
-  // Calculate eligible cards whenever credit score, income, or card type changes
+  // Fetch available spending categories from Google Sheets on component mount
   useEffect(() => {
-    const calculateEligibleCards = async () => {
-      // Only calculate if we have the required fields
-      if (!formData.creditScore || !formData.monthlyIncome || !formData.cardType) {
-        setEligibleCardCounts({ total: 0, byType: {} })
-        setRecommendationOptions([])
+    const loadSpendingCategories = async () => {
+      try {
+        console.log("🔄 Loading spending categories from Google Sheets...")
+        setLoadingCategories(true)
+        const categories = await fetchAvailableSpendingCategories()
+        console.log("✅ Loaded spending categories:", categories)
+        setAvailableSpendingCategories(categories)
+      } catch (error) {
+        console.error("❌ Error loading spending categories:", error)
+        // Fallback to default categories if loading fails
+        setAvailableSpendingCategories([
+          "dining",
+          "fuel",
+          "groceries",
+          "travel",
+          "shopping",
+          "entertainment",
+          "utilities",
+          "transport",
+        ])
+      } finally {
+        setLoadingCategories(false)
+      }
+    }
+
+    loadSpendingCategories()
+  }, [])
+
+  // Load all cards on component mount for dynamic brand filtering
+  useEffect(() => {
+    const loadAllCards = async () => {
+      try {
+        console.log("🔄 Loading all cards for dynamic brand filtering...")
+        const cards = await fetchCreditCards()
+        setAllCards(cards)
+        console.log("✅ Loaded cards for brand filtering:", cards.length)
+      } catch (error) {
+        console.error("❌ Error loading cards for brand filtering:", error)
+      }
+    }
+
+    loadAllCards()
+  }, [])
+
+  // Dynamic brand filtering based on current form state
+  useEffect(() => {
+    const updateAvailableBrands = async () => {
+      if (
+        !formData.monthlyIncome ||
+        !formData.creditScore ||
+        formData.spendingCategories.length === 0 ||
+        !formData.joiningFeePreference ||
+        allCards.length === 0
+      ) {
+        setAvailableBrands([])
         return
       }
 
+      setLoadingBrands(true)
+      console.log("🔄 DYNAMIC BRAND FILTERING - Updating available brands...")
+
       try {
-        setLoadingEligibleCounts(true)
-        console.log("📊 Calculating eligible cards for dynamic recommendations...")
+        // Convert form data to user profile for filtering
+        const creditScore = getCreditScoreValue(formData.creditScore) || 650
+        const monthlyIncome = Number.parseInt(formData.monthlyIncome) || 50000
 
-        const creditScore = Number.parseInt(formData.creditScore)
-        const monthlyIncome = Number.parseInt(formData.monthlyIncome)
-        const cardType = formData.cardType
-
-        // Skip if invalid values
-        if (isNaN(creditScore) || isNaN(monthlyIncome) || creditScore < 300 || creditScore > 850) {
-          setEligibleCardCounts({ total: 0, byType: {} })
-          setRecommendationOptions([])
-          return
+        let joiningFeePreference: "no_fee" | "low_fee" | "no_concern" = "no_concern"
+        switch (formData.joiningFeePreference) {
+          case "no_fee":
+            joiningFeePreference = "no_fee"
+            break
+          case "low_fee":
+            joiningFeePreference = "low_fee"
+            break
+          case "any_amount":
+          default:
+            joiningFeePreference = "no_concern"
+            break
         }
 
-        const cards = await fetchCreditCards()
+        console.log("👤 Current form state for brand filtering:")
+        console.log(`- Income: ₹${monthlyIncome.toLocaleString()}`)
+        console.log(`- Credit Score: ${creditScore}`)
+        console.log(`- Categories: [${formData.spendingCategories.join(", ")}]`)
+        console.log(`- Joining Fee Preference: ${joiningFeePreference}`)
 
-        // Filter cards based on basic eligibility criteria
-        const basicEligibleCards = cards.filter((card) => {
-          const meetsCredit = card.creditScoreRequirement === 0 || creditScore >= card.creditScoreRequirement
-          const meetsIncome = card.monthlyIncomeRequirement === 0 || monthlyIncome >= card.monthlyIncomeRequirement
-          const matchesType = card.cardType === cardType
-          return meetsCredit && meetsIncome && matchesType
-        })
+        // Run through Level 1 and Level 2 filtering
+        const level1Cards = FunnelRecommendationEngine.level1BasicEligibility(allCards, monthlyIncome, creditScore)
+        const level2Cards = FunnelRecommendationEngine.level2CategoryFiltering(level1Cards, formData.spendingCategories)
 
-        // Calculate composite scores and filter by ≥25.0 threshold
-        const scoredCards = basicEligibleCards.map((card) => {
-          let score = 0
+        // Apply Level 3 joining fee filtering (without brand preference)
+        const { availableBrands: dynamicBrands } = FunnelRecommendationEngine.level3JoiningFeeAndBrandFiltering(
+          level2Cards,
+          joiningFeePreference,
+          [], // No brand preference for this filtering
+        )
 
-          const maxJoiningFee = Math.max(...basicEligibleCards.map((c) => c.joiningFee), 1)
-          const maxAnnualFee = Math.max(...basicEligibleCards.map((c) => c.annualFee), 1)
-          const maxRewardsRate = Math.max(...basicEligibleCards.map((c) => c.rewardsRate), 1)
-          const maxSignUpBonus = Math.max(...basicEligibleCards.map((c) => c.signUpBonus), 1)
+        console.log(`🏦 Dynamic brands available: [${dynamicBrands.join(", ")}]`)
+        setAvailableBrands(dynamicBrands)
 
-          const joiningFeeScore = maxJoiningFee > 0 ? (1 - card.joiningFee / maxJoiningFee) * 25 : 25
-          const annualFeeScore = maxAnnualFee > 0 ? (1 - card.annualFee / maxAnnualFee) * 25 : 25
-          const rewardsScore = maxRewardsRate > 0 ? (card.rewardsRate / maxRewardsRate) * 25 : 0
-          const bonusScore = maxSignUpBonus > 0 ? (card.signUpBonus / maxSignUpBonus) * 25 : 0
-
-          score = joiningFeeScore + annualFeeScore + rewardsScore + bonusScore
-          const compositeScore = Math.round(score * 100) / 100
-
-          return {
-            ...card,
-            compositeScore,
-          }
-        })
-
-        // Filter by score threshold ≥25.0
-        const scoreEligibleCards = scoredCards.filter((card) => card.compositeScore >= 25.0)
-
-        console.log(`🎯 Found ${basicEligibleCards.length} basic eligible cards for ${cardType} type`)
-        console.log(`🎯 Found ${scoreEligibleCards.length} score-eligible cards (≥25.0) for ${cardType} type`)
-        console.log(`📊 Credit Score: ${creditScore}, Monthly Income: ₹${monthlyIncome.toLocaleString()}`)
-
-        // Count by type
-        const byType: { [key: string]: number } = {}
-        scoreEligibleCards.forEach((card) => {
-          byType[card.cardType] = (byType[card.cardType] || 0) + 1
-        })
-
-        const eligibleCount = scoreEligibleCards.length
-        setEligibleCardCounts({
-          total: eligibleCount,
-          byType,
-        })
-
-        // Generate recommendation options based on business logic
-        const options = []
-        // Always show Top 7 recommendations by default
-        options.push({ value: "7", label: "Top 7 Recommendations" })
-        console.log(`📊 ${eligibleCount} score-eligible cards available, showing Top 7 recommendations`)
-
-        setRecommendationOptions(options)
-
-        // Auto-select Top 7
-        const newTopN = "7"
-        if (formData.topN !== newTopN) {
-          setFormData((prev) => ({ ...prev, topN: newTopN }))
+        // Clear selected brands that are no longer available
+        const validSelectedBrands = formData.preferredBanks.filter((bank) => dynamicBrands.includes(bank))
+        if (validSelectedBrands.length !== formData.preferredBanks.length) {
+          console.log("🧹 Clearing invalid brand selections...")
+          setFormData((prev) => ({ ...prev, preferredBanks: validSelectedBrands }))
         }
       } catch (error) {
-        console.error("❌ Error calculating eligible cards:", error)
-        setEligibleCardCounts({ total: 0, byType: {} })
-        setRecommendationOptions([])
+        console.error("❌ Error in dynamic brand filtering:", error)
+        setAvailableBrands([])
       } finally {
-        setLoadingEligibleCounts(false)
+        setLoadingBrands(false)
       }
     }
 
-    calculateEligibleCards()
-  }, [formData.creditScore, formData.monthlyIncome, formData.cardType])
+    updateAvailableBrands()
+  }, [
+    formData.monthlyIncome,
+    formData.creditScore,
+    formData.spendingCategories,
+    formData.joiningFeePreference,
+    allCards,
+  ])
 
-  const validateForm = (): boolean => {
-    const newErrors: FormErrors = {}
-
-    // Credit Score validation
-    const creditScore = Number.parseInt(formData.creditScore)
-    if (!formData.creditScore) {
-      newErrors.creditScore = "Credit score is required"
-    } else if (isNaN(creditScore) || creditScore < 300 || creditScore > 850) {
-      newErrors.creditScore = "Credit score must be between 300 and 850"
+  // Create spending category objects with icons and labels
+  const spendingCategories = availableSpendingCategories.map((category) => {
+    const normalizedCategory = category.toLowerCase()
+    return {
+      id: normalizedCategory,
+      label: category.charAt(0).toUpperCase() + category.slice(1), // Capitalize first letter
+      icon: categoryIcons[normalizedCategory] || ShoppingBag, // Default icon if not found
     }
+  })
 
-    // Monthly Income validation
-    const monthlyIncome = Number.parseInt(formData.monthlyIncome)
-    if (!formData.monthlyIncome) {
-      newErrors.monthlyIncome = "Monthly income is required"
-    } else if (isNaN(monthlyIncome) || monthlyIncome < 0) {
-      newErrors.monthlyIncome = "Please enter a valid monthly income"
-    }
-
-    // Card Type validation
-    if (!formData.cardType) {
-      newErrors.cardType = "Please select a card type"
-    }
-
-    // Top N validation - now automatic, but still validate
-    const topN = Number.parseInt(formData.topN)
-    if (!formData.topN) {
-      newErrors.topN = "Number of recommendations is required"
-    } else if (isNaN(topN) || topN < 1) {
-      newErrors.topN = "Invalid number of recommendations"
-    }
-
-    setErrors(newErrors)
-    return Object.keys(newErrors).length === 0
-  }
-
-  const isFormValid = (): boolean => {
-    const creditScore = Number.parseInt(formData.creditScore)
-    const monthlyIncome = Number.parseInt(formData.monthlyIncome)
-    const topN = Number.parseInt(formData.topN)
-
-    return (
-      formData.creditScore !== "" &&
-      !isNaN(creditScore) &&
-      creditScore >= 300 &&
-      creditScore <= 850 &&
-      formData.monthlyIncome !== "" &&
-      !isNaN(monthlyIncome) &&
-      monthlyIncome >= 0 &&
-      formData.cardType !== "" &&
-      formData.topN !== "" &&
-      !isNaN(topN) &&
-      topN >= 1
-    )
-  }
-
-  const handleInputChange = (field: keyof FormData, value: string) => {
+  const handleInputChange = (field: string, value: string) => {
     setFormData((prev) => ({ ...prev, [field]: value }))
-
-    // Clear error when user starts typing
-    if (errors[field]) {
-      setErrors((prev) => ({ ...prev, [field]: undefined }))
-    }
   }
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
+  const handleCategoryToggle = (categoryId: string) => {
+    setFormData((prev) => ({
+      ...prev,
+      spendingCategories: prev.spendingCategories.includes(categoryId)
+        ? prev.spendingCategories.filter((id) => id !== categoryId)
+        : [...prev.spendingCategories, categoryId],
+    }))
+  }
 
-    if (!validateForm()) {
-      return
-    }
+  const handleBankToggle = (bank: string) => {
+    setFormData((prev) => {
+      const currentBanks = prev.preferredBanks
 
-    setIsSubmitting(true)
-    setResult(null)
-
-    try {
-      const response = await getCardRecommendations({
-        creditScore: Number.parseInt(formData.creditScore),
-        monthlyIncome: Number.parseInt(formData.monthlyIncome),
-        cardType: formData.cardType,
-        timestamp: new Date().toISOString(),
-        topN: Number.parseInt(formData.topN),
-        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
-      })
-
-      setResult(response)
-
-      // Track score-eligible cards vs shown cards
-      if (response.success && response.scoreEligibleCardsFound !== undefined) {
-        setScoreEligibleCards(response.scoreEligibleCardsFound)
-        const shownCards = response.recommendations?.length || 0
-        const hasMore = response.scoreEligibleCardsFound > shownCards
-        setHasMoreCardsAvailable(hasMore)
-
-        console.log(`📊 Score-eligible cards (≥25.0): ${response.scoreEligibleCardsFound}`)
-        console.log(`📊 Cards shown: ${shownCards}`)
-        console.log(`📊 Has more cards available: ${hasMore}`)
+      // If bank is already selected, remove it
+      if (currentBanks.includes(bank)) {
+        return {
+          ...prev,
+          preferredBanks: currentBanks.filter((b) => b !== bank),
+        }
       }
-    } catch (error) {
-      console.error("Error submitting form:", error)
-      setResult({
-        success: false,
-        error: "An unexpected error occurred. Please try again.",
-      })
-    } finally {
-      setIsSubmitting(false)
+
+      // If less than 3 banks selected, add it
+      if (currentBanks.length < 3) {
+        return {
+          ...prev,
+          preferredBanks: [...currentBanks, bank],
+        }
+      }
+
+      // If 3 banks already selected, don't add more
+      return prev
+    })
+  }
+
+  const nextStep = () => {
+    if (currentStep < 3) {
+      setCurrentStep(currentStep + 1)
     }
   }
 
-  // Updated handler for enhanced recommendations - fixed at Top 3
-  const handleEnhancedRecommendations = async (preferences: {
-    preferredBrand: string
-    maxJoiningFee: string
-  }) => {
-    // Check if there are more cards available beyond what was shown
-    if (!hasMoreCardsAvailable) {
-      console.log("🚫 No additional cards available beyond the initial results")
-      setEnhancedResult({
-        success: true,
-        recommendations: [],
-        error: "",
-        totalCardsConsidered: scoreEligibleCards,
-        eligibleCardsFound: 0,
-      })
-
-      // Scroll to enhanced results to show the message
-      setTimeout(() => {
-        const enhancedSection = document.getElementById("enhanced-results")
-        if (enhancedSection) {
-          enhancedSection.scrollIntoView({ behavior: "smooth", block: "start" })
-        }
-      }, 100)
-      return
+  const prevStep = () => {
+    if (currentStep > 1) {
+      setCurrentStep(currentStep - 1)
     }
+  }
 
-    setIsGettingEnhanced(true)
-    setEnhancedResult(null)
+  const handleSubmit = () => {
+    setShowRecommendations(true)
+  }
 
-    try {
-      const response = await getEnhancedCardRecommendations({
-        creditScore: Number.parseInt(formData.creditScore),
-        monthlyIncome: Number.parseInt(formData.monthlyIncome),
-        cardType: formData.cardType,
-        timestamp: new Date().toISOString(),
-        topN: 3, // Fixed at 3 for enhanced recommendations
-        preferredBrand: preferences.preferredBrand || undefined,
-        maxJoiningFee:
-          preferences.maxJoiningFee && preferences.maxJoiningFee !== "any"
-            ? Number.parseInt(preferences.maxJoiningFee)
-            : undefined,
-        userAgent: typeof navigator !== "undefined" ? navigator.userAgent : undefined,
-      })
-
-      setEnhancedResult(response)
-
-      // Scroll to enhanced results
-      setTimeout(() => {
-        const enhancedSection = document.getElementById("enhanced-results")
-        if (enhancedSection) {
-          enhancedSection.scrollIntoView({ behavior: "smooth", block: "start" })
-        }
-      }, 100)
-    } catch (error) {
-      console.error("Error getting enhanced recommendations:", error)
-      setEnhancedResult({
-        success: false,
-        error: "An unexpected error occurred while getting enhanced recommendations.",
-      })
-    } finally {
-      setIsGettingEnhanced(false)
+  const isStepValid = (step: number) => {
+    switch (step) {
+      case 1:
+        return formData.monthlyIncome && formData.monthlySpending && formData.creditScore
+      case 2:
+        return formData.spendingCategories.length > 0
+      case 3:
+        return true // Optional step
+      default:
+        return false
     }
+  }
+
+  if (showRecommendations) {
+    return <EnhancedRecommendations formData={formData} />
   }
 
   return (
-    <div className="space-y-8">
-      {/* Data Source Info - Updated to mention Google Sheets only */}
-      <Alert className="bg-green-50 border-green-200">
-        <Database className="h-4 w-4 text-green-600" />
-        <AlertDescription className="text-green-800">
-          <strong>Live Data & Submissions:</strong> Recommendations are generated from your Google Sheets database with
-          dynamic rule-based filtering and scoring. All form submissions are stored directly in Google Sheets. Income
-          requirements are compared on a <strong>monthly basis</strong>. Only cards with composite score ≥25.0 are
-          considered eligible. Check browser console for detailed filtering analysis.
-        </AlertDescription>
-      </Alert>
-
-      <form onSubmit={handleSubmit} className="space-y-6">
-        <div className="grid md:grid-cols-2 gap-6">
-          {/* Credit Score */}
-          <div className="space-y-2">
-            <Label htmlFor="creditScore" className="text-sm font-medium text-gray-700">
-              Credit Score <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="creditScore"
-              type="number"
-              placeholder="e.g., 784"
-              value={formData.creditScore}
-              onChange={(e) => handleInputChange("creditScore", e.target.value)}
-              className={errors.creditScore ? "border-red-500 focus:border-red-500" : ""}
-              min="300"
-              max="850"
-            />
-            {errors.creditScore && <p className="text-sm text-red-600">{errors.creditScore}</p>}
-            <p className="text-xs text-gray-500">Range: 300-850</p>
+    <div className="space-y-6">
+      {/* Progress Indicator */}
+      <div className="flex items-center justify-center space-x-4">
+        {[1, 2, 3].map((step) => (
+          <div key={step} className="flex items-center">
+            <div
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
+                step === currentStep
+                  ? "bg-blue-600 text-white"
+                  : step < currentStep
+                    ? "bg-green-600 text-white"
+                    : "bg-gray-200 text-gray-600"
+              }`}
+            >
+              {step < currentStep ? <CheckCircle2 className="h-4 w-4" /> : step}
+            </div>
+            {step < 3 && <div className={`w-12 h-1 mx-2 ${step < currentStep ? "bg-green-600" : "bg-gray-200"}`} />}
           </div>
+        ))}
+      </div>
 
-          {/* Monthly Income */}
-          <div className="space-y-2">
-            <Label htmlFor="monthlyIncome" className="text-sm font-medium text-gray-700">
-              Monthly Income (INR) <span className="text-red-500">*</span>
-            </Label>
-            <Input
-              id="monthlyIncome"
-              type="number"
-              placeholder="e.g., 100000"
-              value={formData.monthlyIncome}
-              onChange={(e) => handleInputChange("monthlyIncome", e.target.value)}
-              className={errors.monthlyIncome ? "border-red-500 focus:border-red-500" : ""}
-              min="0"
-            />
-            {errors.monthlyIncome && <p className="text-sm text-red-600">{errors.monthlyIncome}</p>}
-            <p className="text-xs text-gray-500">Your monthly salary/income</p>
-          </div>
-        </div>
-
-        <div className="grid md:grid-cols-1 gap-6">
-          {/* Card Type - Now takes full width since we removed the dropdown */}
-          <div className="space-y-2">
-            <Label htmlFor="cardType" className="text-sm font-medium text-gray-700">
-              Preferred Card Type <span className="text-red-500">*</span>
-            </Label>
-            <Select value={formData.cardType} onValueChange={(value) => handleInputChange("cardType", value)}>
-              <SelectTrigger className={errors.cardType ? "border-red-500 focus:border-red-500" : ""}>
-                <SelectValue placeholder="Select your preferred card type" />
-              </SelectTrigger>
-              <SelectContent>
-                {cardTypes.map((type) => (
-                  <SelectItem key={type.value} value={type.value}>
-                    {type.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {errors.cardType && <p className="text-sm text-red-600">{errors.cardType}</p>}
-          </div>
-        </div>
-
-        {/* Submit Button with Loader and Success Indicator */}
-        <div className="relative">
-          <Button
-            type="submit"
-            disabled={!isFormValid() || isSubmitting || loadingEligibleCounts}
-            className="w-full bg-blue-600 hover:bg-blue-700 disabled:bg-gray-300 disabled:cursor-not-allowed"
-          >
-            <div className="flex items-center justify-center">
-              {/* Left side loader/success indicator */}
-              <div className="absolute left-4 flex items-center">
-                {isSubmitting ? (
-                  <Loader2 className="h-4 w-4 animate-spin text-white" />
-                ) : result && result.success ? (
-                  <div className="h-4 w-4 bg-green-500 rounded-full flex items-center justify-center">
-                    <CheckCircle className="h-3 w-3 text-white" />
-                  </div>
-                ) : null}
+      {/* Step Content */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5 text-blue-600" />
+            {currentStep === 1 && "Basic Financial Information"}
+            {currentStep === 2 && "Spending Preferences"}
+            {currentStep === 3 && "Additional Preferences"}
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {/* Step 1: Basic Information */}
+          {currentStep === 1 && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="monthlyIncome">Monthly Income (₹) *</Label>
+                  <Input
+                    id="monthlyIncome"
+                    type="number"
+                    value={formData.monthlyIncome}
+                    onChange={(e) => handleInputChange("monthlyIncome", e.target.value)}
+                    placeholder="50000"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="monthlySpending">Monthly Credit Card Spending (₹) *</Label>
+                  <Input
+                    id="monthlySpending"
+                    type="number"
+                    value={formData.monthlySpending}
+                    onChange={(e) => handleInputChange("monthlySpending", e.target.value)}
+                    placeholder="25000"
+                  />
+                </div>
               </div>
 
-              {/* Button text */}
-              {isSubmitting ? (
-                <>Analyzing & Fetching Recommendations...</>
-              ) : loadingEligibleCounts ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Calculating Eligible Cards...
-                </>
-              ) : (
-                <>
-                  <Settings className="mr-2 h-4 w-4" />
-                  Get My Recommendations with Detailed Analysis
-                </>
-              )}
+              <div className="space-y-2">
+                <Label htmlFor="creditScore">Credit Score Range *</Label>
+                <Select value={formData.creditScore} onValueChange={(value) => handleInputChange("creditScore", value)}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your credit score range" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="300-549">300-549 (Poor)</SelectItem>
+                    <SelectItem value="550-649">550-649 (Fair)</SelectItem>
+                    <SelectItem value="650-749">650-749 (Good)</SelectItem>
+                    <SelectItem value="750-850">750-850 (Excellent)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="currentCards">How many credit cards do you currently have?</Label>
+                <Select
+                  value={formData.currentCards}
+                  onValueChange={(value) => handleInputChange("currentCards", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select number of cards" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="0">No credit cards</SelectItem>
+                    <SelectItem value="1">1 credit card</SelectItem>
+                    <SelectItem value="2">2 credit cards</SelectItem>
+                    <SelectItem value="3">3 or more credit cards</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
-          </Button>
-        </div>
-      </form>
+          )}
 
-      {/* Results Section */}
-      {result && (
-        <div className="space-y-6">
-          {result.success ? (
-            <>
-              {/* Recommendations */}
-              {result.recommendations && result.recommendations.length > 0 ? (
-                <div className="space-y-4">
-                  <h2 className="text-2xl font-bold text-gray-900 flex items-center">
-                    <CreditCard className="mr-2 h-6 w-6 text-blue-600" />
-                    Top {result.recommendations.length} Recommendations
-                  </h2>
+          {/* Step 2: Spending Categories */}
+          {currentStep === 2 && (
+            <div className="space-y-4">
+              <div>
+                <Label className="text-base font-medium">
+                  What are your primary spending categories? (Select all that apply)
+                </Label>
+                <p className="text-sm text-gray-600 mt-1">
+                  This helps us recommend cards with the best rewards for your spending patterns.
+                </p>
+                {loadingCategories && (
+                  <p className="text-sm text-blue-600 mt-2">Loading spending categories from your data...</p>
+                )}
+              </div>
 
-                  <div className="grid gap-4">
-                    {result.recommendations.map((rec, index) => (
-                      <Card key={index} className="border-l-4 border-l-blue-500">
-                        <CardContent className="p-6">
-                          <div className="flex items-start justify-between mb-4">
-                            <div>
-                              <div className="flex items-center gap-2 mb-1">
-                                <h3 className="text-xl font-semibold text-gray-900">{rec.cardName}</h3>
-                                {index === 0 && (
-                                  <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full font-medium">
-                                    BEST MATCH
-                                  </span>
-                                )}
-                                <span className="bg-blue-100 text-blue-800 text-xs px-2 py-1 rounded-full font-medium">
-                                  #{index + 1}
-                                </span>
-                              </div>
-                              <p className="text-gray-600 font-medium">{rec.bank}</p>
-                              {rec.monthlyIncomeRequirement > 0 && (
-                                <p className="text-xs text-gray-500 mt-1">
-                                  Min Monthly Income: ₹{rec.monthlyIncomeRequirement.toLocaleString()}
-                                </p>
-                              )}
-                            </div>
-                            <div className="text-right">
-                              <div className="flex items-center mb-1">
-                                {[...Array(5)].map((_, i) => (
-                                  <Star
-                                    key={i}
-                                    className={`h-4 w-4 ${
-                                      i < rec.rating ? "text-yellow-400 fill-current" : "text-gray-300"
-                                    }`}
-                                  />
-                                ))}
-                                <span className="ml-2 text-sm text-gray-600">{rec.rating}/5</span>
-                              </div>
-                              <p className="text-xs text-blue-600 font-medium">Score: {rec.compositeScore}/100</p>
-                            </div>
-                          </div>
+              {!loadingCategories && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                  {spendingCategories.map((category) => {
+                    const IconComponent = category.icon
+                    const isSelected = formData.spendingCategories.includes(category.id)
+                    return (
+                      <div
+                        key={category.id}
+                        className={`flex items-center space-x-3 p-4 rounded-lg border cursor-pointer transition-colors ${
+                          isSelected
+                            ? "border-blue-500 bg-blue-50"
+                            : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                        }`}
+                        onClick={() => handleCategoryToggle(category.id)}
+                      >
+                        <Checkbox checked={isSelected} onChange={() => handleCategoryToggle(category.id)} />
+                        <IconComponent className="h-5 w-5 text-gray-600" />
+                        <span className="font-medium">{category.label}</span>
+                      </div>
+                    )
+                  })}
+                </div>
+              )}
 
-                          {/* Card Details */}
-                          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
-                            <div className="text-center">
-                              <p className="text-xs text-gray-500">Joining Fee</p>
-                              <p className="font-semibold text-gray-900">
-                                {rec.joiningFee === 0 ? "FREE" : `₹${rec.joiningFee.toLocaleString()}`}
-                              </p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-xs text-gray-500">Annual Fee</p>
-                              <p className="font-semibold text-gray-900">
-                                {rec.annualFee === 0 ? "FREE" : `₹${rec.annualFee.toLocaleString()}`}
-                              </p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-xs text-gray-500">Rewards Rate</p>
-                              <p className="font-semibold text-gray-900">{rec.rewardsRate}%</p>
-                            </div>
-                            <div className="text-center">
-                              <p className="text-xs text-gray-500">Sign-up Bonus</p>
-                              <p className="font-semibold text-gray-900">
-                                {rec.signUpBonus === 0 ? "None" : `₹${rec.signUpBonus.toLocaleString()}`}
-                              </p>
-                            </div>
-                          </div>
-
-                          {/* Features */}
-                          {rec.features && rec.features.length > 0 && (
-                            <div className="mb-4">
-                              <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                                <TrendingUp className="mr-1 h-4 w-4" />
-                                Key Features:
-                              </h4>
-                              <ul className="list-disc list-inside space-y-1 text-gray-600">
-                                {rec.features.map((feature, idx) => (
-                                  <li key={idx}>{feature}</li>
-                                ))}
-                              </ul>
-                            </div>
-                          )}
-
-                          <Alert className="bg-blue-50 border-blue-200">
-                            <Shield className="h-4 w-4 text-blue-600" />
-                            <AlertDescription className="text-blue-800">
-                              <strong>Why this card?</strong> {rec.reason}
-                            </AlertDescription>
-                          </Alert>
-                        </CardContent>
-                      </Card>
-                    ))}
+              {formData.spendingCategories.length > 0 && (
+                <div className="mt-4">
+                  <p className="text-sm text-gray-600 mb-2">Selected categories:</p>
+                  <div className="flex flex-wrap gap-2">
+                    {formData.spendingCategories.map((categoryId) => {
+                      const category = spendingCategories.find((cat) => cat.id === categoryId)
+                      return (
+                        <Badge key={categoryId} variant="secondary">
+                          {category?.label || categoryId}
+                        </Badge>
+                      )
+                    })}
                   </div>
                 </div>
-              ) : (
-                <Alert className="bg-yellow-50 border-yellow-200">
-                  <Info className="h-4 w-4 text-yellow-600" />
-                  <AlertDescription className="text-yellow-800">
-                    <strong>No matching cards found.</strong> Try adjusting your criteria or check back later for new
-                    card options. Make sure your credit score and monthly income meet the requirements for cards in your
-                    preferred category. Check the browser console for detailed analysis.
-                  </AlertDescription>
-                </Alert>
               )}
-            </>
-          ) : (
-            <Alert variant="destructive">
-              <AlertDescription>
-                <strong>Error:</strong> {result.error}
-              </AlertDescription>
-            </Alert>
+            </div>
           )}
-        </div>
-      )}
-      {/* Add enhanced personalization section after initial results */}
-      {result && result.success && result.recommendations && result.recommendations.length > 0 && (
-        <div className="space-y-8">
-          <EnhancedPersonalization
-            onGetEnhancedRecommendations={handleEnhancedRecommendations}
-            isLoading={isGettingEnhanced}
-            enhancedResult={enhancedResult}
-            hasMoreCardsAvailable={hasMoreCardsAvailable}
-            totalEligibleCards={scoreEligibleCards}
-            // Pass the current form data to help with dynamic bank filtering
-            currentFormData={{
-              creditScore: Number.parseInt(formData.creditScore),
-              monthlyIncome: Number.parseInt(formData.monthlyIncome),
-              cardType: formData.cardType,
-            }}
-          />
 
-          {/* Enhanced Results Section */}
-          {enhancedResult && (
-            <div id="enhanced-results" className="space-y-6">
-              <div className="border-t-4 border-t-green-500 bg-gradient-to-r from-green-50 to-emerald-50 rounded-lg p-6">
-                {enhancedResult.success ? (
+          {/* Step 3: Additional Preferences */}
+          {currentStep === 3 && (
+            <div className="space-y-6">
+              <div>
+                <Label className="text-base font-medium">Additional Preferences (Optional)</Label>
+                <p className="text-sm text-gray-600 mt-1">These preferences help us fine-tune your recommendations.</p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="joiningFee">Joining Fee Preference</Label>
+                <Select
+                  value={formData.joiningFeePreference}
+                  onValueChange={(value) => handleInputChange("joiningFeePreference", value)}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select your preference" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="no_fee">I prefer cards with no joining fee</SelectItem>
+                    <SelectItem value="low_fee">I'm okay with low joining fees (₹0-1000)</SelectItem>
+                    <SelectItem value="any_amount">Joining fee is not a concern</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* DYNAMIC PREFERRED BRANDS SECTION */}
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <Label>Preferred Brands (Optional)</Label>
+                  <Badge variant="outline" className="text-xs">
+                    Max 3 selections
+                  </Badge>
+                  {loadingBrands && <Loader2 className="h-4 w-4 animate-spin text-blue-600" />}
+                </div>
+                <p className="text-sm text-gray-600">
+                  Select up to 3 brands you prefer. Options are filtered based on your eligibility and preferences.
+                </p>
+
+                {/* Show message when no joining fee preference is selected */}
+                {!formData.joiningFeePreference && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
+                    <AlertDescription>
+                      Please select your joining fee preference first to see available brands.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Show loading state */}
+                {loadingBrands && formData.joiningFeePreference && (
+                  <Alert>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    <AlertDescription>Loading available brands based on your preferences...</AlertDescription>
+                  </Alert>
+                )}
+
+                {/* Show available brands */}
+                {!loadingBrands && formData.joiningFeePreference && availableBrands.length > 0 && (
                   <>
-                    {/* Check if no additional cards were available */}
-                    {!hasMoreCardsAvailable ? (
-                      <div className="text-center py-8">
-                        <h2 className="text-2xl font-bold text-green-900 flex items-center justify-center mb-4">
-                          <Sparkles className="mr-2 h-6 w-6 text-green-600" />
-                          Reward-Based Analysis Complete
-                        </h2>
-                        <Alert className="bg-blue-50 border-blue-200">
-                          <Info className="h-4 w-4 text-blue-600" />
-                          <AlertDescription className="text-blue-800">
-                            <strong>No new reward-based recommendations for your inputs.</strong> You have already
-                            received all {scoreEligibleCards} cards that match your profile criteria (composite score
-                            ≥25.0). There are no additional cards available that could be surfaced through bank or
-                            joining fee preferences.
-                          </AlertDescription>
-                        </Alert>
+                    {/* Selection limit warning */}
+                    {formData.preferredBanks.length >= 3 && (
+                      <Alert>
+                        <AlertCircle className="h-4 w-4" />
+                        <AlertDescription>
+                          You've reached the maximum of 3 brand selections. Unselect a brand to choose a different one.
+                        </AlertDescription>
+                      </Alert>
+                    )}
+
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-2 max-h-64 overflow-y-auto">
+                      {availableBrands.map((bank) => {
+                        const isSelected = formData.preferredBanks.includes(bank)
+                        const isDisabled = !isSelected && formData.preferredBanks.length >= 3
+
+                        return (
+                          <div
+                            key={bank}
+                            className={`flex items-center space-x-2 p-3 rounded-lg border cursor-pointer transition-colors ${
+                              isSelected
+                                ? "border-blue-500 bg-blue-50"
+                                : isDisabled
+                                  ? "border-gray-200 bg-gray-100 cursor-not-allowed opacity-50"
+                                  : "border-gray-200 hover:border-gray-300 hover:bg-gray-50"
+                            }`}
+                            onClick={() => !isDisabled && handleBankToggle(bank)}
+                          >
+                            <Checkbox
+                              checked={isSelected}
+                              disabled={isDisabled}
+                              onChange={() => !isDisabled && handleBankToggle(bank)}
+                            />
+                            <span className={`text-sm font-medium ${isDisabled ? "text-gray-400" : ""}`}>{bank}</span>
+                          </div>
+                        )
+                      })}
+                    </div>
+
+                    {formData.preferredBanks.length > 0 && (
+                      <div className="mt-3">
+                        <p className="text-sm text-gray-600 mb-2">
+                          Selected brands ({formData.preferredBanks.length}/3):
+                        </p>
+                        <div className="flex flex-wrap gap-2">
+                          {formData.preferredBanks.map((bank) => (
+                            <Badge key={bank} variant="secondary" className="flex items-center gap-1">
+                              {bank}
+                              <button
+                                onClick={() => handleBankToggle(bank)}
+                                className="ml-1 text-gray-500 hover:text-gray-700"
+                                aria-label={`Remove ${bank}`}
+                              >
+                                ×
+                              </button>
+                            </Badge>
+                          ))}
+                        </div>
                       </div>
-                    ) : (
-                      <>
-                        {/* Check if enhanced results are different from original results */}
-                        {(() => {
-                          // Compare card names from both results
-                          const originalCardNames = result?.recommendations?.map((rec) => rec.cardName).sort() || []
-                          const enhancedCardNames =
-                            enhancedResult?.recommendations?.map((rec) => rec.cardName).sort() || []
-
-                          // Check if arrays are identical
-                          const areIdentical =
-                            originalCardNames.length === enhancedCardNames.length &&
-                            originalCardNames.every((name, index) => name === enhancedCardNames[index])
-
-                          if (
-                            areIdentical &&
-                            enhancedResult.recommendations &&
-                            enhancedResult.recommendations.length > 0
-                          ) {
-                            return (
-                              <div className="text-center py-8">
-                                <h2 className="text-2xl font-bold text-green-900 flex items-center justify-center mb-4">
-                                  <Sparkles className="mr-2 h-6 w-6 text-green-600" />
-                                  Reward-Based Analysis Complete
-                                </h2>
-                                <Alert className="bg-blue-50 border-blue-200">
-                                  <Info className="h-4 w-4 text-blue-600" />
-                                  <AlertDescription className="text-blue-800">
-                                    <strong>No new reward-based recommendations for your inputs.</strong> The cards that
-                                    best match your preferences are already shown in the original recommendations above.
-                                    Your current filters (bank and joining fee preferences) result in the same optimal
-                                    cards from the available {scoreEligibleCards} eligible cards (composite score
-                                    ≥25.0).
-                                  </AlertDescription>
-                                </Alert>
-                              </div>
-                            )
-                          }
-
-                          // Show enhanced results if they're different
-                          return (
-                            <>
-                              <h2 className="text-2xl font-bold text-green-900 flex items-center mb-4">
-                                <Sparkles className="mr-2 h-6 w-6 text-green-600" />🎁 Top{" "}
-                                {enhancedResult.recommendations?.length || 0} Reward-Based Recommendations
-                              </h2>
-
-                              {/* Enhanced Recommendations */}
-                              {enhancedResult.recommendations && enhancedResult.recommendations.length > 0 ? (
-                                <div className="grid gap-4">
-                                  {enhancedResult.recommendations.map((rec, index) => (
-                                    <Card key={index} className="border-l-4 border-l-green-500 bg-white">
-                                      <CardContent className="p-6">
-                                        <div className="flex items-start justify-between mb-4">
-                                          <div>
-                                            <div className="flex items-center gap-2 mb-1">
-                                              <h3 className="text-xl font-semibold text-gray-900">{rec.cardName}</h3>
-                                              <span className="bg-green-100 text-green-800 text-xs px-2 py-1 rounded-full font-medium">
-                                                REWARD #{index + 1}
-                                              </span>
-                                              {index === 0 && (
-                                                <span className="bg-yellow-100 text-yellow-800 text-xs px-2 py-1 rounded-full font-medium">
-                                                  HIGHEST REWARD
-                                                </span>
-                                              )}
-                                            </div>
-                                            <p className="text-gray-600 font-medium">{rec.bank}</p>
-                                          </div>
-                                          <div className="text-right">
-                                            <div className="flex items-center mb-1">
-                                              {[...Array(5)].map((_, i) => (
-                                                <Star
-                                                  key={i}
-                                                  className={`h-4 w-4 ${
-                                                    i < rec.rating ? "text-yellow-400 fill-current" : "text-gray-300"
-                                                  }`}
-                                                />
-                                              ))}
-                                              <span className="ml-2 text-sm text-gray-600">{rec.rating}/5</span>
-                                            </div>
-                                            <p className="text-xs text-green-600 font-medium">
-                                              Reward Rate: {rec.rewardsRate}%
-                                            </p>
-                                          </div>
-                                        </div>
-
-                                        {/* Same card details structure as original recommendations */}
-                                        <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 p-3 bg-gray-50 rounded-lg">
-                                          <div className="text-center">
-                                            <p className="text-xs text-gray-500">Joining Fee</p>
-                                            <p className="font-semibold text-gray-900">
-                                              {rec.joiningFee === 0 ? "FREE" : `₹${rec.joiningFee.toLocaleString()}`}
-                                            </p>
-                                          </div>
-                                          <div className="text-center">
-                                            <p className="text-xs text-gray-500">Annual Fee</p>
-                                            <p className="font-semibold text-gray-900">
-                                              {rec.annualFee === 0 ? "FREE" : `₹${rec.annualFee.toLocaleString()}`}
-                                            </p>
-                                          </div>
-                                          <div className="text-center">
-                                            <p className="text-xs text-gray-500">Rewards Rate</p>
-                                            <p className="font-semibold text-green-600 text-lg">{rec.rewardsRate}%</p>
-                                          </div>
-                                          <div className="text-center">
-                                            <p className="text-xs text-gray-500">Sign-up Bonus</p>
-                                            <p className="font-semibold text-gray-900">
-                                              {rec.signUpBonus === 0 ? "None" : `₹${rec.signUpBonus.toLocaleString()}`}
-                                            </p>
-                                          </div>
-                                        </div>
-
-                                        {rec.features && rec.features.length > 0 && (
-                                          <div className="mb-4">
-                                            <h4 className="font-medium text-gray-900 mb-2 flex items-center">
-                                              <TrendingUp className="mr-1 h-4 w-4" />
-                                              Key Features:
-                                            </h4>
-                                            <ul className="list-disc list-inside space-y-1 text-gray-600">
-                                              {rec.features.map((feature, idx) => (
-                                                <li key={idx}>{feature}</li>
-                                              ))}
-                                            </ul>
-                                          </div>
-                                        )}
-
-                                        <Alert className="bg-green-50 border-green-200">
-                                          <Shield className="h-4 w-4 text-green-600" />
-                                          <AlertDescription className="text-green-800">
-                                            <strong>Reward Focus:</strong> {rec.reason}
-                                          </AlertDescription>
-                                        </Alert>
-                                      </CardContent>
-                                    </Card>
-                                  ))}
-                                </div>
-                              ) : (
-                                <Alert className="bg-yellow-50 border-yellow-200">
-                                  <Info className="h-4 w-4 text-yellow-600" />
-                                  <AlertDescription className="text-yellow-800">
-                                    <strong>No cards match your reward-based preferences.</strong> Try adjusting your
-                                    brand or joining fee preferences, or check the original recommendations below.
-                                  </AlertDescription>
-                                </Alert>
-                              )}
-                            </>
-                          )
-                        })()}
-                      </>
                     )}
                   </>
-                ) : (
-                  <Alert variant="destructive">
+                )}
+
+                {/* Show message when no brands are available */}
+                {!loadingBrands && formData.joiningFeePreference && availableBrands.length === 0 && (
+                  <Alert>
+                    <AlertCircle className="h-4 w-4" />
                     <AlertDescription>
-                      <strong>Error:</strong> {enhancedResult.error}
+                      No brands are available based on your current preferences. You may still get recommendations from
+                      the best available options.
                     </AlertDescription>
                   </Alert>
                 )}
@@ -820,26 +549,46 @@ export default function CardRecommendationForm() {
             </div>
           )}
 
-          {/* Separator - only show if we have different enhanced results */}
-          {enhancedResult &&
-            enhancedResult.success &&
-            (() => {
-              const originalCardNames = result?.recommendations?.map((rec) => rec.cardName).sort() || []
-              const enhancedCardNames = enhancedResult?.recommendations?.map((rec) => rec.cardName).sort() || []
-              const areIdentical =
-                originalCardNames.length === enhancedCardNames.length &&
-                originalCardNames.every((name, index) => name === enhancedCardNames[index])
-              return !areIdentical
-            })() && (
-              <div className="border-t border-gray-200 pt-8">
-                <h2 className="text-xl font-semibold text-gray-700 mb-4 flex items-center">
-                  <CreditCard className="mr-2 h-5 w-5" />
-                  Original Balanced Recommendations
-                </h2>
-              </div>
+          {/* Navigation Buttons */}
+          <div className="flex justify-between pt-6">
+            <Button variant="outline" onClick={prevStep} disabled={currentStep === 1}>
+              Previous
+            </Button>
+
+            {currentStep < 3 ? (
+              <Button onClick={nextStep} disabled={!isStepValid(currentStep)}>
+                Next
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
+            ) : (
+              <Button
+                onClick={handleSubmit}
+                disabled={!isStepValid(1) || !isStepValid(2)}
+                className="bg-green-600 hover:bg-green-700"
+              >
+                Get My Recommendations
+                <ArrowRight className="h-4 w-4 ml-2" />
+              </Button>
             )}
-        </div>
-      )}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
+}
+
+// Helper function to get credit score value from range
+function getCreditScoreValue(range: string): number {
+  switch (range) {
+    case "300-549":
+      return 425
+    case "550-649":
+      return 600
+    case "650-749":
+      return 700
+    case "750-850":
+      return 800
+    default:
+      return 700
+  }
 }

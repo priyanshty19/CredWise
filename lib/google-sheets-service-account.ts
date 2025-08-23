@@ -1,4 +1,6 @@
-// Service Account approach for Google Sheets write operations
+// Service Account based Google Sheets integration
+// Use this for private sheets that require authentication
+
 interface ServiceAccountCredentials {
   type: string
   project_id: string
@@ -12,55 +14,106 @@ interface ServiceAccountCredentials {
   client_x509_cert_url: string
 }
 
-interface UserSubmission {
-  creditScore: number
-  monthlyIncome: number
-  cardType: string
-  preferredBrand?: string
-  maxJoiningFee?: number
-  topN: number
-  timestamp: string
-  userAgent?: string
-  submissionType: "basic" | "enhanced"
-}
+class GoogleSheetsServiceAccount {
+  private credentials: ServiceAccountCredentials
+  private accessToken: string | null = null
+  private tokenExpiry = 0
 
-const SUBMISSIONS_SHEET_ID = "1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw"
-const SUBMISSIONS_TAB_NAME = "Sheet1"
-
-// JWT token generation for service account
-function createJWT(serviceAccount: ServiceAccountCredentials): string {
-  const header = {
-    alg: "RS256",
-    typ: "JWT",
+  constructor(credentials: ServiceAccountCredentials) {
+    this.credentials = credentials
   }
 
-  const now = Math.floor(Date.now() / 1000)
-  const payload = {
-    iss: serviceAccount.client_email,
-    scope: "https://www.googleapis.com/auth/spreadsheets",
-    aud: "https://oauth2.googleapis.com/token",
-    exp: now + 3600, // 1 hour
-    iat: now,
+  private async getAccessToken(): Promise<string> {
+    if (this.accessToken && Date.now() < this.tokenExpiry) {
+      return this.accessToken
+    }
+
+    const jwt = await this.createJWT()
+    const response = await fetch("https://oauth2.googleapis.com/token", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+      body: new URLSearchParams({
+        grant_type: "urn:ietf:params:oauth:grant-type:jwt-bearer",
+        assertion: jwt,
+      }),
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to get access token: ${response.status}`)
+    }
+
+    const data = await response.json()
+    this.accessToken = data.access_token
+    this.tokenExpiry = Date.now() + (data.expires_in - 60) * 1000 // Refresh 1 minute early
+
+    return this.accessToken
   }
 
-  // This is a simplified version - in production, use a proper JWT library
-  const encodedHeader = btoa(JSON.stringify(header))
-  const encodedPayload = btoa(JSON.stringify(payload))
+  private async createJWT(): Promise<string> {
+    const header = {
+      alg: "RS256",
+      typ: "JWT",
+    }
 
-  // Note: This requires crypto.subtle for signing, which is complex
-  // Better to use a server-side solution or Google Apps Script
+    const now = Math.floor(Date.now() / 1000)
+    const payload = {
+      iss: this.credentials.client_email,
+      scope: "https://www.googleapis.com/auth/spreadsheets",
+      aud: "https://oauth2.googleapis.com/token",
+      exp: now + 3600,
+      iat: now,
+    }
 
-  return `${encodedHeader}.${encodedPayload}.signature`
-}
+    // Note: In a real implementation, you'd need to properly sign this JWT
+    // This is a simplified version for demonstration
+    const encodedHeader = btoa(JSON.stringify(header))
+    const encodedPayload = btoa(JSON.stringify(payload))
 
-export async function submitWithServiceAccount(submission: UserSubmission): Promise<boolean> {
-  try {
-    // This would require server-side implementation
-    // Service account credentials should never be exposed client-side
-    console.log("Service account submission would happen server-side")
-    return false
-  } catch (error) {
-    console.error("Service account submission failed:", error)
-    return false
+    // In production, use a proper JWT library to sign with the private key
+    return `${encodedHeader}.${encodedPayload}.signature`
+  }
+
+  async readSheet(sheetId: string, range: string): Promise<any> {
+    const token = await this.getAccessToken()
+
+    const response = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    })
+
+    if (!response.ok) {
+      throw new Error(`Failed to read sheet: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
+  async writeSheet(sheetId: string, range: string, values: any[][]): Promise<any> {
+    const token = await this.getAccessToken()
+
+    const response = await fetch(
+      `https://sheets.googleapis.com/v4/spreadsheets/${sheetId}/values/${range}?valueInputOption=RAW`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: `Bearer ${token}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          values,
+        }),
+      },
+    )
+
+    if (!response.ok) {
+      throw new Error(`Failed to write sheet: ${response.status}`)
+    }
+
+    return response.json()
   }
 }
+
+export default GoogleSheetsServiceAccount

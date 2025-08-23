@@ -1,13 +1,13 @@
-import type { Metadata } from 'next'
-import { Inter } from 'next/font/google'
-import './globals.css'
+import type React from "react"
+import type { Metadata } from "next"
+import { Inter } from "next/font/google"
+import "./globals.css"
 
-const inter = Inter({ subsets: ['latin'] })
+const inter = Inter({ subsets: ["latin"] })
 
 export const metadata: Metadata = {
-  title: 'CredWise - Smart Credit Card Recommendations',
-  description: 'Get personalized credit card recommendations based on your financial profile',
-  keywords: 'credit cards, recommendations, financial planning, credit score',
+  title: "CredWise - Smart Credit Card Recommendations",
+  description: "Get personalized credit card recommendations based on your spending patterns and financial goals.",
     generator: 'v0.app'
 }
 

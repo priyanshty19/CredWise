@@ -1,43 +1,46 @@
-# Sample Google Sheets Data
+# Sample Google Sheets Data Structure
 
-## Sheet Structure
-Create a Google Sheet with the following columns (A-K):
+This document outlines the expected data structure for the Google Sheets integration.
 
-| A | B | C | D | E | F | G | H | I | J | K |
-|---|---|---|---|---|---|---|---|---|---|---|
-| Card Name | Bank | Card Type | Joining Fee | Annual Fee | Credit Score Requirement | Income Requirement | Rewards Rate | Sign Up Bonus | Features | Description |
+## Sheet: "Card-Database"
 
-## Sample Data Rows
+### Headers (Row 1):
+| A | B | C | D | E | F | G | H | I | J | K | L |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Card Name | Bank | Type | Annual Fee | Joining Fee | Reward Rate | Welcome Bonus | Key Features | Best For | Min Income | Credit Score | Status |
 
+### Sample Data:
 \`\`\`
-HDFC Millennia Credit Card,HDFC Bank,Cashback,0,1000,650,300000,2.5,2000,"5% cashback on online shopping,2.5% on online food delivery,Airport lounge access,Zero forex markup","Great for online spenders with excellent cashback rates and international usage benefits"
-
-SBI Simply Click Credit Card,SBI Card,Cashback,499,499,600,200000,5,500,"10X reward points on online shopping,5X on dining and movies,Fuel surcharge waiver,Welcome gift voucher","Perfect starter card with excellent online rewards and dining benefits"
-
-ICICI Amazon Pay Credit Card,ICICI Bank,Cashback,0,0,650,0,5,2000,"5% unlimited cashback on Amazon,2% on bill payments,1% on other spends,No annual fee","Best for Amazon shoppers with unlimited cashback and no fees"
-
-HDFC Diners Club Black,HDFC Bank,Travel,10000,10000,750,2500000,3.33,10000,"Unlimited airport lounge access,Golf privileges,Concierge services,Travel insurance,Priority customer service","Premium travel card for high-income individuals with luxury benefits"
-
-SBI Card PRIME,SBI Card,Rewards,2999,2999,700,500000,2,5000,"5X reward points on dining and movies,2X on all other spends,Airport lounge access,Milestone benefits","Excellent rewards card for dining and entertainment enthusiasts"
-
-ICICI Bank Student Travel Card,ICICI Bank,Student,0,0,0,0,1,1000,"No annual fee,Student-friendly features,Travel benefits,Easy approval,Cashback on education expenses","Designed specifically for students with easy approval and education benefits"
-
-American Express Business Gold,American Express,Business,4500,4500,700,1000000,2,15000,"Business expense tracking,Airport lounge access,Flexible payment terms,Business insurance,Dedicated support","Premium business card with comprehensive expense management tools"
+HDFC Regalia Gold,HDFC Bank,Premium,2500,2500,2-4% on dining & travel,10000 reward points,Airport lounge access; Dining offers; Travel insurance,Dining;Travel,500000,750,Active
+SBI Cashback,SBI,Cashback,999,999,5% on online shopping,2000 cashback,High cashback rates; No reward point hassle; Online shopping benefits,Shopping;Online,300000,700,Active
+ICICI Amazon Pay,ICICI Bank,Co-branded,500,500,2-5% on Amazon,2000 Amazon Pay balance,Amazon Prime membership; High Amazon rewards; Fuel surcharge waiver,Shopping;Amazon,250000,650,Active
 \`\`\`
 
-## Setup Instructions
+## Sheet: "User-Submissions" (Optional)
 
-1. **Create a new Google Sheet**
-2. **Add the header row** (Row 1) with column names
-3. **Add the sample data** starting from Row 2
-4. **Make the sheet public**: Share → Anyone with the link can view
-5. **Copy the sheet ID** from the URL
-6. **Test the connection** using the test component
+### Headers (Row 1):
+| A | B | C | D | E | F | G | H |
+|---|---|---|---|---|---|---|---|
+| Timestamp | Monthly Income | Spending Categories | Monthly Spending | Current Cards | Credit Score | Preferred Banks | Joining Fee Preference |
 
-## Important Notes
+## Data Types:
 
-- Ensure all numeric fields contain valid numbers (use 0 for "not applicable")
-- Features should be comma-separated
-- Card types must match exactly: Cashback, Travel, Rewards, Student, Business
-- Income requirement of 0 means no minimum income required
-- Credit score requirement of 0 means no minimum credit score required
+- **Card Name**: Text
+- **Bank**: Text
+- **Type**: Text (Premium, Cashback, Travel, Co-branded, etc.)
+- **Annual Fee**: Number
+- **Joining Fee**: Number
+- **Reward Rate**: Text
+- **Welcome Bonus**: Text
+- **Key Features**: Text (semicolon separated)
+- **Best For**: Text (semicolon separated)
+- **Min Income**: Number
+- **Credit Score**: Number
+- **Status**: Text (Active, Inactive)
+
+## Notes:
+
+1. Use semicolons (;) to separate multiple values in Key Features and Best For columns
+2. All fee amounts should be in INR
+3. Reward rates can be text descriptions (e.g., "2-4% on dining")
+4. Status should be "Active" for cards currently available

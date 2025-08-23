@@ -1,162 +1,133 @@
-# Google Sheets Submissions Setup Guide
+# Google Sheets Form Submissions Setup
 
-## 🎯 Objective
-Configure Google Sheets to store all user form submissions from the CredWise recommendation system.
+This guide explains how to set up Google Sheets to capture form submissions from the CredWise application.
 
-## 📋 Sheet Setup
+## Step 1: Create Form Submissions Sheet
 
-### 1. Create/Access Your Submissions Sheet
-- **Sheet URL**: https://docs.google.com/spreadsheets/d/1iBfu1LFBEo4BpAdnrOEKa5_LcsQMfJ0csX7uXbT-ZCw/edit?usp=sharing
-- **Tab Name**: "Form-Submissions" (will be created automatically if it doesn't exist)
+1. **Create a new Google Sheet** or add a new tab to your existing sheet
+2. **Name the tab** "Form-Submissions"
+3. **Add headers** in row 1:
 
-### 2. Expected Column Structure
-The system will automatically create these headers if they don't exist:
+| A | B | C | D | E | F | G | H |
+|---|---|---|---|---|---|---|---|
+| Timestamp | Monthly Income | Spending Categories | Monthly Spending | Current Cards | Credit Score | Preferred Banks | Joining Fee Preference |
 
-| Column | Header | Description |
-|--------|--------|-------------|
-| A | Timestamp | When the form was submitted |
-| B | Credit Score | User's credit score (300-850) |
-| C | Monthly Income | User's monthly income in INR |
-| D | Card Type | Preferred card type (Cashback, Travel, etc.) |
-| E | Preferred Brand | Selected bank (optional) |
-| F | Max Joining Fee | Maximum joining fee preference (optional) |
-| G | Number of Recommendations | How many recommendations requested |
-| H | Submission Type | "basic" or "enhanced" |
-| I | User Agent | Browser/device information |
+## Step 2: Set Up Google Apps Script
 
-### 3. Permissions Setup
+1. **Open Google Apps Script**: https://script.google.com/
+2. **Create a new project**
+3. **Replace the default code** with the webhook handler:
 
-#### Option A: Public Sheet (Recommended for Testing)
-1. Open your Google Sheet
-2. Click "Share" button (top right)
-3. Click "Change to anyone with the link"
-4. Set permission to "Editor" (required for writing data)
-5. Click "Done"
+\`\`\`javascript
+function doPost(e) {
+  try {
+    // Get the active spreadsheet
+    const sheet = Sprea 
 
-#### Option B: Service Account (Recommended for Production)
-1. Create a service account in Google Cloud Console
-2. Download the service account JSON key
-3. Share the sheet with the service account email
-4. Grant "Editor" permissions
-
-### 4. Environment Variables
-
-For public sheet access:
-\`\`\`
-NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY=your_api_key_here
-\`\`\`
-
-For service account access (add these server-side):
-\`\`\`
-GOOGLE_SERVICE_ACCOUNT_EMAIL=your-service-account@project.iam.gserviceaccount.com
-GOOGLE_PRIVATE_KEY=your_private_key_here
-\`\`\`
-
-## 🔧 Features Implemented
-
-### ✅ Data Storage
-- All form submissions automatically saved to Google Sheets
-- Automatic header creation if sheet is empty
-- Handles both basic and enhanced recommendation submissions
-- Captures timestamp, user agent, and all form fields
-
-### ✅ Error Handling
-- Graceful handling of API errors
-- User-friendly error messages
-- Submission continues even if logging fails
-- Detailed console logging for debugging
-
-### ✅ Analytics
-- Real-time analytics from Google Sheets data
-- Card type distribution charts
-- Average credit score and income calculations
-- Recent submissions display
-- Admin dashboard with Google Sheets integration
-
-### ✅ Security
-- API key properly configured
-- No sensitive data exposed client-side
-- Minimal sheet permissions required
-- Public access option for testing
-
-## 🧪 Testing Checklist
-
-### Test Scenarios:
-1. **Basic Submission**: Fill out main form and submit
-2. **Enhanced Submission**: Use enhanced personalization options
-3. **Multiple Devices**: Test from different browsers/devices
-4. **Error Handling**: Test with invalid sheet permissions
-5. **Analytics**: Check admin dashboard for data visualization
-
-### Verification Steps:
-1. ✅ New rows appear in Google Sheets after form submission
-2. ✅ All form fields are correctly mapped to columns
-3. ✅ Both basic and enhanced submissions are captured
-4. ✅ Analytics dashboard shows real-time data
-5. ✅ Error messages are user-friendly
-6. ✅ No Supabase dependencies remain
-
-## 📊 Data Flow
-
-\`\`\`
-User Form Submission
-        ↓
-Card Recommendation Logic
-        ↓
-Google Sheets API Call
-        ↓
-New Row Added to Sheet
-        ↓
-Analytics Dashboard Updates
+\`\`\`javascript
+function doPost(e) {
+  try {
+    // Get the active spreadsheet
+    const sheet = SpreadsheetApp.getActiveSpreadsheet().getSheetByName('Form-Submissions');
+    
+    // Parse the incoming data
+    const data = JSON.parse(e.postData.contents);
+    
+    // Create timestamp
+    const timestamp = new Date().toLocaleString('en-IN', {
+      timeZone: 'Asia/Kolkata'
+    });
+    
+    // Prepare row data
+    const rowData = [
+      timestamp,
+      data.monthlyIncome || '',
+      Array.isArray(data.spendingCategories) ? data.spendingCategories.join(', ') : '',
+      data.monthlySpending || '',
+      data.currentCards || '',
+      data.creditScore || '',
+      Array.isArray(data.preferredBanks) ? data.preferredBanks.join(', ') : '',
+      data.joiningFeePreference || ''
+    ];
+    
+    // Append to sheet
+    sheet.appendRow(rowData);
+    
+    // Return success response
+    return ContentService
+      .createTextOutput(JSON.stringify({success: true}))
+      .setMimeType(ContentService.MimeType.JSON);
+      
+  } catch (error) {
+    // Return error response
+    return ContentService
+      .createTextOutput(JSON.stringify({success: false, error: error.toString()}))
+      .setMimeType(ContentService.MimeType.JSON);
+  }
+}
 \`\`\`
 
-## 🔍 Troubleshooting
+4. **Save the project** with a meaningful name like "CredWise Form Handler"
+5. **Deploy as web app**:
+   - Click "Deploy" > "New deployment"
+   - Choose "Web app" as type
+   - Set execute as "Me"
+   - Set access to "Anyone"
+   - Click "Deploy"
+   - Copy the web app URL
+
+## Step 3: Configure Environment Variables
+
+Add the Apps Script URL to your environment variables:
+
+\`\`\`env
+NEXT_PUBLIC_APPS_SCRIPT_URL=https://script.google.com/macros/s/YOUR_SCRIPT_ID/exec
+\`\`\`
+
+## Step 4: Test the Integration
+
+1. **Submit a test form** through your application
+2. **Check the Google Sheet** to verify data is being captured
+3. **Monitor the Apps Script logs** for any errors
+
+## Step 5: Set Up Analytics (Optional)
+
+Create additional sheets for analytics:
+
+- **"Analytics"** - For processed analytics data
+- **"Daily-Stats"** - For daily submission counts
+- **"Category-Stats"** - For spending category analysis
+
+## Troubleshooting
 
 ### Common Issues:
 
-**403 Forbidden Error:**
-- Sheet permissions not set correctly
-- API key restrictions preventing access
-- Sheet not shared with service account (if using)
+1. **"Script not found" error**
+   - Verify the Apps Script URL is correct
+   - Ensure the script is deployed as a web app
 
-**400 Bad Request Error:**
-- Invalid sheet ID or tab name
-- Malformed data being sent
-- Sheet structure doesn't match expected format
+2. **Permission denied**
+   - Check that the script has permission to access the spreadsheet
+   - Verify the execution permissions are set correctly
 
-**Empty Data in Sheet:**
-- Check console logs for submission errors
-- Verify API key is configured correctly
-- Ensure sheet has proper write permissions
+3. **Data not appearing**
+   - Check the sheet name matches exactly ("Form-Submissions")
+   - Verify the column headers are in the correct order
 
-**Analytics Not Loading:**
-- Verify sheet contains data with correct headers
-- Check browser console for API errors
-- Confirm sheet ID matches in both submission and analytics code
+### Testing the Webhook:
 
-### Debug Steps:
-1. Check browser console for detailed error messages
-2. Verify sheet permissions and sharing settings
-3. Test API key with a simple GET request
-4. Confirm sheet structure matches expected columns
-5. Use the test component to verify connectivity
+You can test the webhook directly using curl:
 
-## 🚀 Success Criteria
+\`\`\`bash
+curl -X POST \
+  -H "Content-Type: application/json" \
+  -d '{"monthlyIncome":"50000","spendingCategories":["dining","travel"],"monthlySpending":"20000","currentCards":"1","creditScore":"750","preferredBanks":["HDFC Bank"],"joiningFeePreference":"low_fee"}' \
+  YOUR_APPS_SCRIPT_URL
+\`\`\`
 
-Your implementation is successful when:
-- ✅ All form submissions appear as new rows in Google Sheets
-- ✅ No data is stored in Supabase
-- ✅ Analytics dashboard shows real-time Google Sheets data
-- ✅ Error handling provides clear user feedback
-- ✅ System works across different devices and users
-- ✅ All Supabase code has been removed
-- ✅ Sheet structure is consistent and well-organized
+## Security Considerations
 
-## 📞 Support
-
-If you encounter issues:
-1. Check the browser console for detailed error messages
-2. Verify your Google Sheets API setup
-3. Test sheet permissions from an incognito browser
-4. Review the troubleshooting section above
-5. Ensure all environment variables are properly configured
+- The webhook URL is public but only accepts POST requests
+- Consider adding basic validation in the Apps Script
+- Monitor for spam or malicious submissions
+- Set up alerts for unusual activity patterns
