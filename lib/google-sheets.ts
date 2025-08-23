@@ -108,84 +108,13 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
     const sheetData = await fetchGoogleSheetData(SHEET_ID, CARDS_RANGE)
 
     if (!sheetData || !sheetData.values || sheetData.values.length === 0) {
-      throw new Error(
-        "No data found in Google Sheet. Please ensure:\n" +
-          "1. The 'Card-Data' tab contains data\n" +
-          "2. Data starts from row 1 (headers)\n" +
-          "3. Sheet is not empty",
-      )
+      throw new Error("No data found in Google Sheet.")
     }
 
     const [headers, ...rows] = sheetData.values
-    console.log("📋 Headers found:", headers)
-    console.log("📊 Data rows to process:", rows.length)
-
-    // Updated expected headers to include spending category
-    const expectedHeaders = [
-      "Card Name",
-      "Bank",
-      "Card Type",
-      "Joining Fee",
-      "Annual Fee",
-      "Credit Score Requirement",
-      "Income Requirement",
-      "Rewards Rate",
-      "Sign Up Bonus",
-      "Features",
-      "Description",
-      "Spending Category", // NEW: Added spending category column
-    ]
-
-    console.log("🔍 Header validation:")
-    expectedHeaders.forEach((expected, index) => {
-      const actual = headers[index]
-      const match = actual === expected
-      console.log(
-        `   Column ${String.fromCharCode(65 + index)}: ${match ? "✅" : "⚠️"} Expected: "${expected}", Found: "${actual}"`,
-      )
-    })
-
     const cards: CreditCard[] = []
     let skippedRows = 0
     let processedRows = 0
-
-    // First, let's analyze all card types and spending categories in the sheet
-    console.log("\n🔍 ANALYZING ALL CARD TYPES AND SPENDING CATEGORIES IN SHEET:")
-    const allCardTypes = new Set<string>()
-    const allSpendingCategories = new Set<string>()
-
-    rows.forEach((row, index) => {
-      if (row && row.length > 2 && row[2]) {
-        const cardType = row[2].toString().trim()
-        allCardTypes.add(cardType)
-      }
-
-      // Parse spending categories from column L (index 11)
-      if (row && row.length > 11 && row[11]) {
-        const spendingCategoriesStr = row[11].toString().trim()
-        if (spendingCategoriesStr && spendingCategoriesStr !== "NA") {
-          const categories = spendingCategoriesStr
-            .split(",")
-            .map((cat) => cat.trim().toLowerCase())
-            .filter(Boolean)
-          categories.forEach((cat) => allSpendingCategories.add(cat))
-        }
-      }
-    })
-
-    console.log("📊 Unique card types found in sheet:")
-    Array.from(allCardTypes)
-      .sort()
-      .forEach((type) => {
-        console.log(`   • "${type}"`)
-      })
-
-    console.log("📊 Unique spending categories found in sheet:")
-    Array.from(allSpendingCategories)
-      .sort()
-      .forEach((category) => {
-        console.log(`   • "${category}"`)
-      })
 
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index]
@@ -199,7 +128,6 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
 
         // Ensure we have at least the basic required columns
         if (row.length < 3) {
-          console.warn(`⚠️ Row ${index + 2} has insufficient columns:`, row)
           skippedRows++
           continue
         }
@@ -234,7 +162,7 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
                 .map((f: string) => f.trim())
                 .filter(Boolean)
 
-        // NEW: Parse spending categories from comma-separated string in column L
+        // Parse spending categories from comma-separated string in column L
         const spendingCategoriesString = getString(row[11])
         const spendingCategories =
           !spendingCategoriesString || spendingCategoriesString === "NA"
@@ -245,15 +173,12 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
                 .filter(Boolean)
 
         const rawCardType = getString(row[2])
-        console.log(
-          `\n🔍 Processing row ${index + 2}: Card "${getString(row[0])}" with raw card type: "${rawCardType}" and spending categories: [${spendingCategories.join(", ")}]`,
-        )
 
         const card = {
           id: `card_${processedRows + 1}`,
           cardName: getString(row[0]),
           bank: getString(row[1]),
-          cardType: rawCardType, // Keep raw for now, will normalize below
+          cardType: rawCardType,
           joiningFee: parseNumeric(row[3]),
           annualFee: parseNumeric(row[4]),
           creditScoreRequirement: parseInt(row[5]),
@@ -262,16 +187,11 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
           signUpBonus: parseNumeric(row[8]),
           features,
           description: getString(row[10]),
-          spendingCategories, // NEW: Added spending categories
+          spendingCategories,
         }
 
         // Validate required fields
         if (!card.cardName || !card.bank || !card.cardType) {
-          console.warn(`⚠️ Row ${index + 2} missing required fields:`, {
-            name: card.cardName,
-            bank: card.bank,
-            type: card.cardType,
-          })
           skippedRows++
           continue
         }
@@ -279,78 +199,24 @@ export async function fetchCreditCards(): Promise<CreditCard[]> {
         // Normalize card type to match dropdown options
         const normalizedCardType = normalizeCardType(card.cardType)
         if (!normalizedCardType) {
-          console.warn(`⚠️ Row ${index + 2} has unsupported card type: "${card.cardType}" - SKIPPING`)
           skippedRows++
           continue
         }
 
-        console.log(`✅ Normalized "${card.cardType}" → "${normalizedCardType}"`)
         card.cardType = normalizedCardType
         cards.push(card)
         processedRows++
-
-        // Log progress every 50 cards
-        if (processedRows % 50 === 0) {
-          console.log(`📈 Processed ${processedRows} cards so far...`)
-        }
       } catch (error) {
-        console.error(`❌ Error parsing row ${index + 2}:`, error, row)
         skippedRows++
         continue
       }
     }
 
-    console.log("🎉 PROCESSING COMPLETE!")
-    console.log(`✅ Successfully parsed ${cards.length} cards`)
-    console.log(`⚠️ Skipped ${skippedRows} rows due to missing/invalid data`)
-    console.log(
-      `📊 Processing summary: ${processedRows} processed, ${skippedRows} skipped, ${cards.length} valid cards`,
-    )
-
-    // Log final card type distribution
-    console.log("\n📊 FINAL CARD TYPE DISTRIBUTION:")
-    const finalCardTypes = cards.reduce(
-      (acc, card) => {
-        acc[card.cardType] = (acc[card.cardType] || 0) + 1
-        return acc
-      },
-      {} as Record<string, number>,
-    )
-
-    Object.entries(finalCardTypes).forEach(([type, count]) => {
-      console.log(`   • ${type}: ${count} cards`)
-    })
-
-    // Log sample of successfully parsed cards with spending categories
-    if (cards.length > 0) {
-      console.log("📋 Sample parsed cards with spending categories:")
-      cards.slice(0, 3).forEach((card, index) => {
-        console.log(`   ${index + 1}. ${card.cardName} (${card.bank}) - ${card.cardType}`)
-        console.log(`      Spending Categories: [${card.spendingCategories.join(", ")}]`)
-        console.log(`      Joining Fee: ₹${card.joiningFee}, Annual Fee: ₹${card.annualFee}`)
-        console.log(`      Rewards Rate: ${card.rewardsRate}%, Sign-up Bonus: ₹${card.signUpBonus}`)
-        console.log(
-          `      Credit Score Req: ${card.creditScoreRequirement}, Income Req: ₹${card.monthlyIncomeRequirement}`,
-        )
-        console.log(`      Features: [${card.features.join(", ")}]`)
-        console.log(`      Description: ${card.description}`)
-        console.log("      ---")
-      })
-    }
+    console.log(`📊 Loaded ${cards.length} cards from Google Sheets (${skippedRows} skipped)`)
 
     return cards
   } catch (error) {
     console.error("❌ Error fetching credit cards from Google Sheets:", error)
-
-    // Enhanced error logging for debugging
-    if (error instanceof Error) {
-      console.error("Error details:", {
-        message: error.message,
-        stack: error.stack,
-        name: error.name,
-      })
-    }
-
     throw error
   }
 }
@@ -406,8 +272,6 @@ export async function fetchGoogleSheetData(sheetId: string, range: string): Prom
 // ENHANCED helper function to normalize card types from sheet to match dropdown options
 function normalizeCardType(sheetCardType: string): string | null {
   const normalized = sheetCardType.toLowerCase().trim()
-
-  console.log(`🔄 Normalizing card type: "${sheetCardType}" → "${normalized}"`)
 
   // Map sheet values to dropdown values with COMPREHENSIVE mapping
   const typeMapping: { [key: string]: string } = {
@@ -466,14 +330,14 @@ function normalizeCardType(sheetCardType: string): string | null {
     "corporate card": "Business",
 
     // Additional specific mappings that might be in your sheet
-    "fuel card": "Rewards", // Fuel cards are typically rewards-based
-    "shopping card": "Rewards", // Shopping cards are typically rewards-based
-    "dining card": "Rewards", // Dining cards are typically rewards-based
-    entertainment: "Rewards", // Entertainment cards are typically rewards-based
-    grocery: "Rewards", // Grocery cards are typically rewards-based
+    "fuel card": "Rewards",
+    "shopping card": "Rewards",
+    "dining card": "Rewards",
+    entertainment: "Rewards",
+    grocery: "Rewards",
 
     // Credit builder cards
-    secured: "Student", // Secured cards often for students/beginners
+    secured: "Student",
     "credit builder": "Student",
 
     // Premium/luxury cards
@@ -490,21 +354,14 @@ function normalizeCardType(sheetCardType: string): string | null {
   const mapped = typeMapping[normalized]
 
   if (mapped) {
-    console.log(`✅ Successfully mapped: "${sheetCardType}" → "${mapped}"`)
     return mapped
   } else {
-    console.warn(`⚠️ UNMAPPED card type: "${sheetCardType}" (normalized: "${normalized}")`)
-    console.warn(`   Available mappings: ${Object.keys(typeMapping).join(", ")}`)
-
     // Try partial matching as fallback
     for (const [key, value] of Object.entries(typeMapping)) {
       if (normalized.includes(key) || key.includes(normalized)) {
-        console.log(`🔄 Partial match found: "${normalized}" contains "${key}" → "${value}"`)
         return value
       }
     }
-
-    console.error(`❌ No mapping found for card type: "${sheetCardType}"`)
     return null
   }
 }
