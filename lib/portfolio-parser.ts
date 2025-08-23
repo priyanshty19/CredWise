@@ -45,6 +45,16 @@ interface PortfolioParseResult {
   processingTime: number
 }
 
+interface ManualPortfolioEntry {
+  id: string
+  schemeName: string
+  amc: string
+  category: string
+  investedValue: number
+  currentValue: number
+  date: string
+}
+
 class PortfolioParser {
   private requiredColumns = [
     "Scheme Name",
@@ -61,17 +71,17 @@ class PortfolioParser {
   ]
 
   private columnMappings: Record<string, string[]> = {
-    schemeName: ["Scheme Name", "Scheme", "Fund Name", "Investment Name"],
-    amc: ["AMC", "Asset Management Company", "Fund House", "Company"],
-    category: ["Category", "Asset Class", "Type"],
-    subCategory: ["Sub-category", "Sub Category", "Subcategory", "Sub-Category"],
-    folioNo: ["Folio No.", "Folio Number", "Folio", "Account No"],
-    source: ["Source", "Platform", "Broker"],
-    units: ["Units", "Quantity", "Shares"],
-    investedValue: ["Invested Value", "Investment Amount", "Cost", "Purchase Value"],
-    currentValue: ["Current Value", "Market Value", "Present Value"],
-    returns: ["Returns", "Gain/Loss", "P&L", "Profit/Loss"],
-    xirr: ["XIRR", "IRR", "Return %", "Annualized Return"],
+    schemeName: ["Scheme Name", "Scheme", "Fund Name", "Investment Name", "Security Name"],
+    amc: ["AMC", "Asset Management Company", "Fund House", "Company", "Manager"],
+    category: ["Category", "Asset Class", "Type", "Investment Type"],
+    subCategory: ["Sub-category", "Sub Category", "Subcategory", "Sub-Category", "Sub Type"],
+    folioNo: ["Folio No.", "Folio Number", "Folio", "Account No", "Account Number"],
+    source: ["Source", "Platform", "Broker", "Exchange"],
+    units: ["Units", "Quantity", "Shares", "Qty"],
+    investedValue: ["Invested Value", "Investment Amount", "Cost", "Purchase Value", "Amount Invested"],
+    currentValue: ["Current Value", "Market Value", "Present Value", "Current Amount"],
+    returns: ["Returns", "Gain/Loss", "P&L", "Profit/Loss", "Absolute Return"],
+    xirr: ["XIRR", "IRR", "Return %", "Annualized Return", "CAGR"],
   }
 
   async parseFile(file: File): Promise<PortfolioParseResult> {
@@ -133,29 +143,39 @@ class PortfolioParser {
     }
   }
 
-  private async readFile(file: File): Promise<string> {
+  private async readFile(file: File): Promise<string | ArrayBuffer> {
     return new Promise((resolve, reject) => {
       const reader = new FileReader()
-      reader.onload = (e) => resolve(e.target?.result as string)
-      reader.onerror = () => reject(new Error("Failed to read file"))
-      reader.readAsText(file)
+
+      // For Excel files, read as ArrayBuffer
+      if (file.name.toLowerCase().endsWith(".xlsx") || file.name.toLowerCase().endsWith(".xls")) {
+        reader.onload = (e) => resolve(e.target?.result as ArrayBuffer)
+        reader.onerror = () => reject(new Error("Failed to read Excel file"))
+        reader.readAsArrayBuffer(file)
+      } else {
+        // For CSV files, read as text
+        reader.onload = (e) => resolve(e.target?.result as string)
+        reader.onerror = () => reject(new Error("Failed to read CSV file"))
+        reader.readAsText(file)
+      }
     })
   }
 
-  private parseFileContent(content: string, fileName: string): string[][] {
+  private parseFileContent(content: string | ArrayBuffer, fileName: string): string[][] {
     const isCSV = fileName.toLowerCase().endsWith(".csv")
+    const isExcel = fileName.toLowerCase().endsWith(".xlsx") || fileName.toLowerCase().endsWith(".xls")
 
     if (isCSV) {
-      return this.parseCSV(content)
+      return this.parseCSV(content as string)
+    } else if (isExcel) {
+      return this.parseExcel(content as ArrayBuffer)
     } else {
-      // For Excel files, we'll need to handle them as CSV exports
-      // In a real implementation, you'd use a library like xlsx
-      throw new Error("Excel files not supported in this implementation. Please convert to CSV.")
+      throw new Error("Unsupported file format. Please upload CSV or Excel files.")
     }
   }
 
   private parseCSV(content: string): string[][] {
-    const lines = content.split("\n")
+    const lines = content.split(/\r?\n/)
     const rows: string[][] = []
 
     for (const line of lines) {
@@ -172,29 +192,46 @@ class PortfolioParser {
         if (char === '"') {
           inQuotes = !inQuotes
         } else if (char === "," && !inQuotes) {
-          row.push(current.trim())
+          row.push(current.trim().replace(/^"|"$/g, ""))
           current = ""
         } else {
           current += char
         }
       }
 
-      row.push(current.trim())
+      row.push(current.trim().replace(/^"|"$/g, ""))
       rows.push(row)
     }
 
     return rows
   }
 
+  private parseExcel(buffer: ArrayBuffer): string[][] {
+    try {
+      // Simple Excel parsing using basic binary analysis
+      // This is a simplified approach - in production, you'd use a library like xlsx
+      const view = new Uint8Array(buffer)
+
+      // For now, we'll throw an error asking users to convert to CSV
+      // In a real implementation, you'd use the xlsx library
+      throw new Error(
+        "Excel files are not fully supported yet. Please convert your Excel file to CSV format and try again.",
+      )
+    } catch (error) {
+      throw new Error("Failed to parse Excel file. Please convert to CSV format and try again.")
+    }
+  }
+
   private findHeaderRow(rows: string[][]): number {
-    for (let i = 0; i < Math.min(rows.length, 10); i++) {
+    for (let i = 0; i < Math.min(rows.length, 15); i++) {
       const row = rows[i]
       for (const cell of row) {
         if (
           typeof cell === "string" &&
           (cell.toLowerCase().includes("scheme name") ||
             cell.toLowerCase().includes("fund name") ||
-            cell.toLowerCase().includes("investment name"))
+            cell.toLowerCase().includes("investment name") ||
+            cell.toLowerCase().includes("security name"))
         ) {
           return i
         }
@@ -232,24 +269,30 @@ class PortfolioParser {
       }
 
       try {
+        const schemeName = this.getStringValue(row, columnMapping.schemeName)
+        const investedValue = this.getNumericValue(row, columnMapping.investedValue)
+        const currentValue = this.getNumericValue(row, columnMapping.currentValue)
+
+        // Skip rows without essential data
+        if (!schemeName || schemeName === "Unknown Scheme" || (investedValue === 0 && currentValue === 0)) {
+          continue
+        }
+
         const data: ParsedPortfolioData = {
-          schemeName: this.getStringValue(row, columnMapping.schemeName) || "Unknown Scheme",
+          schemeName: schemeName,
           amc: this.getStringValue(row, columnMapping.amc) || "Unknown AMC",
           category: this.getStringValue(row, columnMapping.category) || "Unknown Category",
           subCategory: this.getStringValue(row, columnMapping.subCategory) || "Unknown Sub-category",
           folioNo: this.getStringValue(row, columnMapping.folioNo) || "N/A",
           source: this.getStringValue(row, columnMapping.source) || "Unknown Source",
           units: this.getNumericValue(row, columnMapping.units) || 0,
-          investedValue: this.getNumericValue(row, columnMapping.investedValue) || 0,
-          currentValue: this.getNumericValue(row, columnMapping.currentValue) || 0,
-          returns: this.getNumericValue(row, columnMapping.returns) || 0,
+          investedValue: investedValue,
+          currentValue: currentValue,
+          returns: this.getNumericValue(row, columnMapping.returns) || currentValue - investedValue,
           xirr: this.getNumericValue(row, columnMapping.xirr) || 0,
         }
 
-        // Only add rows with meaningful data
-        if (data.schemeName !== "Unknown Scheme" && (data.investedValue > 0 || data.currentValue > 0)) {
-          parsedData.push(data)
-        }
+        parsedData.push(data)
       } catch (error) {
         console.warn("Error parsing row:", row, error)
       }
@@ -270,7 +313,7 @@ class PortfolioParser {
     if (!value) return 0
 
     // Remove common currency symbols and formatting
-    const cleanValue = value.replace(/[₹,$,\s]/g, "").replace(/[()]/g, "-")
+    const cleanValue = value.replace(/[₹,$,\s%]/g, "").replace(/[()]/g, "-")
     const numValue = Number.parseFloat(cleanValue)
 
     return isNaN(numValue) ? 0 : numValue
@@ -334,7 +377,27 @@ class PortfolioParser {
 
     return breakdown
   }
+
+  // Method to add manual entries
+  addManualEntry(entry: ManualPortfolioEntry): ParsedPortfolioData {
+    const returns = entry.currentValue - entry.investedValue
+    const returnPercentage = entry.investedValue > 0 ? (returns / entry.investedValue) * 100 : 0
+
+    return {
+      schemeName: entry.schemeName,
+      amc: entry.amc,
+      category: entry.category,
+      subCategory: "Manual Entry",
+      folioNo: entry.id,
+      source: "Manual Entry",
+      units: 1,
+      investedValue: entry.investedValue,
+      currentValue: entry.currentValue,
+      returns: returns,
+      xirr: returnPercentage,
+    }
+  }
 }
 
 export const portfolioParser = new PortfolioParser()
-export type { PortfolioParseResult, ParsedPortfolioData }
+export type { PortfolioParseResult, ParsedPortfolioData, ManualPortfolioEntry }

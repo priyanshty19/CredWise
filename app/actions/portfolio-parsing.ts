@@ -1,6 +1,6 @@
 "use server"
 
-import { portfolioParser, type PortfolioParseResult } from "@/lib/portfolio-parser"
+import { portfolioParser, type PortfolioParseResult, type ManualPortfolioEntry } from "@/lib/portfolio-parser"
 
 export async function parsePortfolioFile(formData: FormData): Promise<PortfolioParseResult> {
   try {
@@ -44,6 +44,47 @@ export async function parsePortfolioFile(formData: FormData): Promise<PortfolioP
       errors: [error instanceof Error ? error.message : "Unknown error occurred"],
       fileName: "unknown",
       processingTime: 0,
+    }
+  }
+}
+
+export async function addManualPortfolioEntry(formData: FormData): Promise<{
+  success: boolean
+  data?: any
+  error?: string
+}> {
+  try {
+    const schemeName = formData.get("schemeName") as string
+    const amc = formData.get("amc") as string
+    const category = formData.get("category") as string
+    const investedValue = Number.parseFloat(formData.get("investedValue") as string)
+    const currentValue = Number.parseFloat(formData.get("currentValue") as string)
+    const date = formData.get("date") as string
+
+    if (!schemeName || !amc || !category || isNaN(investedValue) || isNaN(currentValue)) {
+      throw new Error("Please fill in all required fields with valid values")
+    }
+
+    const entry: ManualPortfolioEntry = {
+      id: Math.random().toString(36).substr(2, 9),
+      schemeName,
+      amc,
+      category,
+      investedValue,
+      currentValue,
+      date,
+    }
+
+    const parsedEntry = portfolioParser.addManualEntry(entry)
+
+    return {
+      success: true,
+      data: parsedEntry,
+    }
+  } catch (error) {
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to add manual entry",
     }
   }
 }

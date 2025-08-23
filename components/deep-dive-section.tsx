@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useTransition } from "react"
+import { useState, useTransition, useRef } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,9 +27,9 @@ import {
   Loader2,
   Zap,
 } from "lucide-react"
-import { parsePortfolioFile } from "@/app/actions/portfolio-parsing"
+import { parsePortfolioFile, addManualPortfolioEntry } from "@/app/actions/portfolio-parsing"
 import PortfolioCharts from "./portfolio-charts"
-import type { PortfolioParseResult } from "@/lib/portfolio-parser"
+import type { PortfolioParseResult, ParsedPortfolioData } from "@/lib/portfolio-parser"
 
 interface UploadedFile {
   id: string
@@ -43,8 +43,16 @@ export default function DeepDiveSection() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [dragActive, setDragActive] = useState(false)
   const [parsedData, setParsedData] = useState<PortfolioParseResult | null>(null)
+  const [manualEntries, setManualEntries] = useState<ParsedPortfolioData[]>([])
   const [error, setError] = useState<string | null>(null)
   const [isPending, startTransition] = useTransition()
+  const [showManualForm, setShowManualForm] = useState(false)
+
+  // File input refs
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const incomeInputRef = useRef<HTMLInputElement>(null)
+  const investmentInputRef = useRef<HTMLInputElement>(null)
+  const expenseInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = (files: FileList | null, category = "other") => {
     if (!files) return
@@ -79,6 +87,28 @@ export default function DeepDiveSection() {
       } catch (err) {
         setError("An unexpected error occurred during processing")
         console.error("Processing error:", err)
+      }
+    })
+  }
+
+  const handleManualEntry = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    startTransition(async () => {
+      try {
+        const result = await addManualPortfolioEntry(formData)
+
+        if (result.success) {
+          setManualEntries((prev) => [...prev, result.data])
+          setShowManualForm(false)
+          event.currentTarget.reset()
+        } else {
+          setError(result.error || "Failed to add manual entry")
+        }
+      } catch (err) {
+        setError("An unexpected error occurred while adding manual entry")
+        console.error("Manual entry error:", err)
       }
     })
   }
@@ -129,7 +159,10 @@ export default function DeepDiveSection() {
       if (
         file.type.includes("spreadsheet") ||
         file.type.includes("csv") ||
-        file.name.toLowerCase().includes("portfolio")
+        file.name.toLowerCase().includes("portfolio") ||
+        file.name.toLowerCase().endsWith(".xlsx") ||
+        file.name.toLowerCase().endsWith(".xls") ||
+        file.name.toLowerCase().endsWith(".csv")
       ) {
         handlePortfolioProcessing(file)
       }
@@ -143,6 +176,10 @@ export default function DeepDiveSection() {
       // Auto-process the file
       handlePortfolioProcessing(file)
     }
+  }
+
+  const handleChooseFiles = () => {
+    fileInputRef.current?.click()
   }
 
   return (
@@ -175,8 +212,8 @@ export default function DeepDiveSection() {
             <CardContent>
               <Alert>
                 <AlertDescription>
-                  Upload your portfolio statements (CSV format recommended) to get instant analysis including
-                  performance metrics, category allocation, AMC distribution, and detailed insights.
+                  Upload your portfolio statements (CSV or Excel format) to get instant analysis including performance
+                  metrics, category allocation, AMC distribution, and detailed insights.
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -195,13 +232,14 @@ export default function DeepDiveSection() {
               <CardContent className="space-y-4">
                 {/* Drag and Drop Area */}
                 <div
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
                     dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"
                   } ${isPending ? "opacity-50 pointer-events-none" : ""}`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
+                  onClick={handleChooseFiles}
                 >
                   {isPending ? (
                     <div className="space-y-4">
@@ -213,85 +251,94 @@ export default function DeepDiveSection() {
                     <>
                       <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                       <p className="text-lg font-medium text-gray-700 mb-2">Drop files here or click to upload</p>
-                      <p className="text-sm text-gray-500 mb-4">Support for CSV files (Max 10MB each)</p>
-                      <Input
-                        type="file"
-                        multiple
-                        accept=".csv"
-                        onChange={handleFileInputChange}
-                        className="hidden"
-                        id="file-upload"
-                        disabled={isPending}
-                      />
-                      <Label htmlFor="file-upload">
-                        <Button variant="outline" className="cursor-pointer bg-transparent" disabled={isPending}>
-                          <Plus className="h-4 w-4 mr-2" />
-                          Choose Files
-                        </Button>
-                      </Label>
+                      <p className="text-sm text-gray-500 mb-4">Support for CSV and Excel files (Max 10MB each)</p>
+                      <Button variant="outline" className="bg-transparent" disabled={isPending}>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Choose Files
+                      </Button>
                     </>
                   )}
                 </div>
+
+                {/* Hidden file inputs */}
+                <Input
+                  ref={fileInputRef}
+                  type="file"
+                  multiple
+                  accept=".csv,.xlsx,.xls"
+                  onChange={handleFileInputChange}
+                  className="hidden"
+                  disabled={isPending}
+                />
 
                 {/* Category-specific Upload Buttons */}
                 {!isPending && (
                   <div className="grid grid-cols-3 gap-2">
                     <div>
                       <Input
+                        ref={incomeInputRef}
                         type="file"
                         multiple
-                        accept=".csv"
+                        accept=".csv,.xlsx,.xls"
                         onChange={(e) => {
                           handleFileUpload(e.target.files, "income")
                           if (e.target.files?.[0]) handlePortfolioProcessing(e.target.files[0])
                         }}
                         className="hidden"
-                        id="income-upload"
                       />
-                      <Label htmlFor="income-upload">
-                        <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
-                          <DollarSign className="h-4 w-4 mr-1" />
-                          Income
-                        </Button>
-                      </Label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full bg-transparent"
+                        onClick={() => incomeInputRef.current?.click()}
+                      >
+                        <DollarSign className="h-4 w-4 mr-1" />
+                        Income
+                      </Button>
                     </div>
                     <div>
                       <Input
+                        ref={investmentInputRef}
                         type="file"
                         multiple
-                        accept=".csv"
+                        accept=".csv,.xlsx,.xls"
                         onChange={(e) => {
                           handleFileUpload(e.target.files, "investments")
                           if (e.target.files?.[0]) handlePortfolioProcessing(e.target.files[0])
                         }}
                         className="hidden"
-                        id="investments-upload"
                       />
-                      <Label htmlFor="investments-upload">
-                        <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
-                          <TrendingUp className="h-4 w-4 mr-1" />
-                          Investments
-                        </Button>
-                      </Label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full bg-transparent"
+                        onClick={() => investmentInputRef.current?.click()}
+                      >
+                        <TrendingUp className="h-4 w-4 mr-1" />
+                        Investments
+                      </Button>
                     </div>
                     <div>
                       <Input
+                        ref={expenseInputRef}
                         type="file"
                         multiple
-                        accept=".csv"
+                        accept=".csv,.xlsx,.xls"
                         onChange={(e) => {
                           handleFileUpload(e.target.files, "expenses")
                           if (e.target.files?.[0]) handlePortfolioProcessing(e.target.files[0])
                         }}
                         className="hidden"
-                        id="expenses-upload"
                       />
-                      <Label htmlFor="expenses-upload">
-                        <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
-                          <FileText className="h-4 w-4 mr-1" />
-                          Expenses
-                        </Button>
-                      </Label>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full bg-transparent"
+                        onClick={() => expenseInputRef.current?.click()}
+                      >
+                        <FileText className="h-4 w-4 mr-1" />
+                        Expenses
+                      </Button>
                     </div>
                   </div>
                 )}
@@ -301,47 +348,136 @@ export default function DeepDiveSection() {
             {/* Manual Data Entry */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <FileText className="h-5 w-5" />
-                  Manual Data Entry
+                <CardTitle className="flex items-center justify-between">
+                  <span className="flex items-center gap-2">
+                    <FileText className="h-5 w-5" />
+                    Manual Data Entry
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setShowManualForm(!showManualForm)}
+                    disabled={isPending}
+                  >
+                    {showManualForm ? "Cancel" : "Add Entry"}
+                  </Button>
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="monthly-income">Monthly Income</Label>
-                    <Input id="monthly-income" type="number" placeholder="₹ 50,000" className="mt-1" />
-                  </div>
-                  <div>
-                    <Label htmlFor="monthly-expenses">Monthly Expenses</Label>
-                    <Input id="monthly-expenses" type="number" placeholder="₹ 30,000" className="mt-1" />
-                  </div>
-                </div>
+                {showManualForm ? (
+                  <form onSubmit={handleManualEntry} className="space-y-4">
+                    <div className="grid grid-cols-1 gap-4">
+                      <div>
+                        <Label htmlFor="schemeName">Scheme Name *</Label>
+                        <Input
+                          id="schemeName"
+                          name="schemeName"
+                          placeholder="e.g., SBI Blue Chip Fund"
+                          required
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="amc">AMC *</Label>
+                        <Input id="amc" name="amc" placeholder="e.g., SBI Mutual Fund" required className="mt-1" />
+                      </div>
+                      <div>
+                        <Label htmlFor="category">Category *</Label>
+                        <Input
+                          id="category"
+                          name="category"
+                          placeholder="e.g., Equity, Debt, Hybrid"
+                          required
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label htmlFor="total-investments">Total Investments</Label>
-                    <Input id="total-investments" type="number" placeholder="₹ 5,00,000" className="mt-1" />
-                  </div>
-                  <div>
-                    <Label htmlFor="emergency-fund">Emergency Fund</Label>
-                    <Input id="emergency-fund" type="number" placeholder="₹ 1,00,000" className="mt-1" />
-                  </div>
-                </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="investedValue">Invested Amount (₹) *</Label>
+                        <Input
+                          id="investedValue"
+                          name="investedValue"
+                          type="number"
+                          step="0.01"
+                          placeholder="50000"
+                          required
+                          className="mt-1"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="currentValue">Current Value (₹) *</Label>
+                        <Input
+                          id="currentValue"
+                          name="currentValue"
+                          type="number"
+                          step="0.01"
+                          placeholder="55000"
+                          required
+                          className="mt-1"
+                        />
+                      </div>
+                    </div>
 
-                <div>
-                  <Label htmlFor="financial-goals">Financial Goals</Label>
-                  <Input
-                    id="financial-goals"
-                    placeholder="House purchase, retirement planning, etc."
-                    className="mt-1"
-                  />
-                </div>
+                    <div>
+                      <Label htmlFor="date">Investment Date</Label>
+                      <Input id="date" name="date" type="date" className="mt-1" />
+                    </div>
 
-                <Button className="w-full">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Manual Data
-                </Button>
+                    <Button type="submit" disabled={isPending} className="w-full">
+                      {isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Adding...
+                        </>
+                      ) : (
+                        <>
+                          <Plus className="h-4 w-4 mr-2" />
+                          Add Manual Entry
+                        </>
+                      )}
+                    </Button>
+                  </form>
+                ) : (
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="monthly-income">Monthly Income</Label>
+                        <Input id="monthly-income" type="number" placeholder="₹ 50,000" className="mt-1" />
+                      </div>
+                      <div>
+                        <Label htmlFor="monthly-expenses">Monthly Expenses</Label>
+                        <Input id="monthly-expenses" type="number" placeholder="₹ 30,000" className="mt-1" />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <Label htmlFor="total-investments">Total Investments</Label>
+                        <Input id="total-investments" type="number" placeholder="₹ 5,00,000" className="mt-1" />
+                      </div>
+                      <div>
+                        <Label htmlFor="emergency-fund">Emergency Fund</Label>
+                        <Input id="emergency-fund" type="number" placeholder="₹ 1,00,000" className="mt-1" />
+                      </div>
+                    </div>
+
+                    <div>
+                      <Label htmlFor="financial-goals">Financial Goals</Label>
+                      <Input
+                        id="financial-goals"
+                        placeholder="House purchase, retirement planning, etc."
+                        className="mt-1"
+                      />
+                    </div>
+
+                    <Button className="w-full" onClick={() => setShowManualForm(true)}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Manual Data
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -363,6 +499,41 @@ export default function DeepDiveSection() {
                 {parsedData.processingTime}ms
               </AlertDescription>
             </Alert>
+          )}
+
+          {/* Manual Entries Display */}
+          {manualEntries.length > 0 && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Plus className="h-5 w-5" />
+                  Manual Entries ({manualEntries.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-3">
+                  {manualEntries.map((entry, index) => (
+                    <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                      <div className="flex items-center gap-3">
+                        <TrendingUp className="h-5 w-5 text-green-600" />
+                        <div>
+                          <p className="font-medium text-sm">{entry.schemeName}</p>
+                          <p className="text-xs text-gray-500">
+                            {entry.amc} • {entry.category}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="font-medium text-sm">₹{entry.currentValue.toLocaleString()}</p>
+                        <p className={`text-xs ${entry.returns >= 0 ? "text-green-600" : "text-red-600"}`}>
+                          {entry.returns >= 0 ? "+" : ""}₹{entry.returns.toLocaleString()}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
           )}
 
           {/* Uploaded Files List */}
@@ -400,9 +571,8 @@ export default function DeepDiveSection() {
                           variant="outline"
                           size="sm"
                           onClick={() => {
-                            // Create a mock file for reprocessing
-                            const mockFile = new File([], file.name, { type: file.type })
-                            handlePortfolioProcessing(mockFile)
+                            // Trigger reprocessing by clicking the file input
+                            fileInputRef.current?.click()
                           }}
                           disabled={isPending}
                         >
@@ -468,8 +638,8 @@ export default function DeepDiveSection() {
 
                 <Alert className="mt-6">
                   <AlertDescription>
-                    Upload your portfolio CSV file to get instant AI-powered analysis with detailed insights and
-                    visualizations.
+                    Upload your portfolio CSV or Excel file to get instant AI-powered analysis with detailed insights
+                    and visualizations.
                   </AlertDescription>
                 </Alert>
               </CardContent>
