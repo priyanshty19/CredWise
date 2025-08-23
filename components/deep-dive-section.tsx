@@ -190,10 +190,7 @@ export default function DeepDiveSection() {
             <Target className="h-4 w-4" />
             Insights
           </TabsTrigger>
-          <TabsTrigger value="recommendations" className="flex items-center gap-2">
-            <CreditCard className="h-4 w-4" />
-            Cards
-          </TabsTrigger>
+          
         </TabsList>
 
         <TabsContent value="upload" className="space-y-6">
