@@ -126,8 +126,9 @@ export async function getFunnelCardRecommendations(formData: {
       // Don't fail the recommendation request if logging fails
     }
 
-    // Transform TOP 7 recommendations to match expected format
-    const transformedRecommendations = funnelResult.finalRecommendations.map((scored, index) => ({
+    // Transform TOP 7 recommendations to match expected format (ENFORCE 7 CARD LIMIT)
+    const limitedRecommendations = funnelResult.finalRecommendations.slice(0, 7)
+    const transformedRecommendations = limitedRecommendations.map((scored, index) => ({
       name: scored.card.cardName,
       bank: scored.card.bank,
       type: scored.card.cardType.toLowerCase(),
@@ -151,9 +152,21 @@ export async function getFunnelCardRecommendations(formData: {
       tier: scored.tier || "general",
     }))
 
+    // VALIDATION: Ensure we never return more than 7 recommendations
+    if (transformedRecommendations.length > 7) {
+      console.warn(
+        `⚠️ WARNING: Transformed recommendations exceeded 7 cards (${transformedRecommendations.length}), enforcing limit`,
+      )
+    }
+
+    const finalRecommendations = transformedRecommendations.slice(0, 7)
+    console.log(
+      `🎯 FINAL VALIDATION: Returning exactly ${finalRecommendations.length} recommendations (MAX 7 ENFORCED)`,
+    )
+
     return {
       success: true,
-      recommendations: transformedRecommendations,
+      recommendations: finalRecommendations, // Already limited to 7
       totalCards: allCards.length,
       userProfile: {
         monthlyIncome,
@@ -169,14 +182,14 @@ export async function getFunnelCardRecommendations(formData: {
         showGeneralMessage,
         preferredBrandCount,
         generalCount,
-        totalRecommendations: funnelResult.finalRecommendations.length,
+        totalRecommendations: finalRecommendations.length, // Use final limited count
         preferredBrands: formData.preferredBanks,
       },
       funnelBreakdown: {
         level1Cards: funnelResult.level1Cards.length,
         level2Cards: funnelResult.level2Cards.length,
         level3Cards: funnelResult.level3Cards.length,
-        finalRecommendations: funnelResult.finalRecommendations.length,
+        finalRecommendations: finalRecommendations.length, // Use final limited count
         preferredBrandCards: preferredBrandCount,
         generalCards: generalCount,
       },

@@ -186,9 +186,10 @@ export class FunnelRecommendationEngine {
    * TWO-TIER RECOMMENDATION SYSTEM
    * Tier 1: Preferred Brand Cards (if selected)
    * Tier 2: General Cards (to fill remaining slots)
+   * ALWAYS LIMITED TO MAXIMUM 7 CARDS TOTAL
    */
   static twoTierRecommendationSystem(level3Cards: CreditCard[], userProfile: UserProfile): TwoTierResult {
-    console.log("\n🎯 TWO-TIER RECOMMENDATION SYSTEM")
+    console.log("\n🎯 TWO-TIER RECOMMENDATION SYSTEM (MAX 7 CARDS)")
     console.log("=".repeat(50))
     console.log(`📊 Cards available for two-tier processing: ${level3Cards.length}`)
     console.log(`👤 Preferred Brands: [${userProfile.preferredBrands.join(", ")}]`)
@@ -218,21 +219,26 @@ export class FunnelRecommendationEngine {
 
       if (brandMatchedCards.length > 0) {
         // Score and sort preferred brand cards
-        preferredBrandCards = this.scoreAndSortCards(brandMatchedCards, userProfile, "preferred_brand")
-        console.log(`✅ Preferred brand cards scored and sorted: ${preferredBrandCards.length}`)
+        const allPreferredBrandCards = this.scoreAndSortCards(brandMatchedCards, userProfile, "preferred_brand")
+
+        // LIMIT PREFERRED BRAND CARDS TO MAXIMUM 7
+        preferredBrandCards = allPreferredBrandCards.slice(0, 7)
+        console.log(`✅ Preferred brand cards (limited to 7): ${preferredBrandCards.length}`)
 
         preferredBrandCards.forEach((scored, index) => {
           console.log(`   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`)
         })
       }
 
-      // TIER 2: General Recommendations (if needed)
+      // TIER 2: General Recommendations (if needed and space available)
       if (preferredBrandCards.length < 7) {
         console.log("\n🌟 TIER 2: GENERAL RECOMMENDATIONS")
         console.log("-".repeat(40))
-        console.log(`🔄 Need ${7 - preferredBrandCards.length} more cards to reach 7 total`)
 
-        // Use all level3Cards for general recommendations
+        const remainingSlots = 7 - preferredBrandCards.length
+        console.log(`🔄 Need ${remainingSlots} more cards to reach 7 total`)
+
+        // Use all level3Cards for general recommendations, excluding already selected preferred brand cards
         const generalCandidates = level3Cards.filter(
           (card) => !preferredBrandCards.some((pref) => pref.card.id === card.id),
         )
@@ -240,11 +246,14 @@ export class FunnelRecommendationEngine {
         console.log(`📊 General candidates available: ${generalCandidates.length}`)
 
         if (generalCandidates.length > 0) {
-          generalCards = this.scoreAndSortCards(generalCandidates, userProfile, "general")
+          const allGeneralCards = this.scoreAndSortCards(generalCandidates, userProfile, "general")
+
+          // LIMIT GENERAL CARDS TO REMAINING SLOTS (MAX 7 TOTAL)
+          generalCards = allGeneralCards.slice(0, remainingSlots)
           showGeneralMessage = true
 
-          console.log(`✅ General cards scored and sorted: ${generalCards.length}`)
-          generalCards.slice(0, 7 - preferredBrandCards.length).forEach((scored, index) => {
+          console.log(`✅ General cards (limited to ${remainingSlots} slots): ${generalCards.length}`)
+          generalCards.forEach((scored, index) => {
             console.log(
               `   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`,
             )
@@ -252,27 +261,41 @@ export class FunnelRecommendationEngine {
         }
       }
     } else {
-      // NO PREFERRED BRANDS: Use general recommendations only
-      console.log("\n🌟 NO PREFERRED BRANDS: GENERAL RECOMMENDATIONS ONLY")
+      // NO PREFERRED BRANDS: Use general recommendations only (MAX 7)
+      console.log("\n🌟 NO PREFERRED BRANDS: GENERAL RECOMMENDATIONS ONLY (MAX 7)")
       console.log("-".repeat(40))
 
-      generalCards = this.scoreAndSortCards(level3Cards, userProfile, "general")
+      const allGeneralCards = this.scoreAndSortCards(level3Cards, userProfile, "general")
+
+      // LIMIT TO MAXIMUM 7 CARDS
+      generalCards = allGeneralCards.slice(0, 7)
       showGeneralMessage = false
 
-      console.log(`✅ General cards scored and sorted: ${generalCards.length}`)
-      generalCards.slice(0, 7).forEach((scored, index) => {
+      console.log(`✅ General cards (limited to 7): ${generalCards.length}`)
+      generalCards.forEach((scored, index) => {
         console.log(`   ${index + 1}. ${scored.card.cardName} (${scored.card.bank}): ${scored.score.toFixed(2)}/100`)
       })
     }
 
-    // Combine tiers for final TOP 7
-    const finalTop7 = [...preferredBrandCards, ...generalCards.slice(0, Math.max(0, 7 - preferredBrandCards.length))]
+    // Combine tiers for final TOP 7 (should already be limited but double-check)
+    const finalTop7 = [...preferredBrandCards, ...generalCards].slice(0, 7)
 
-    console.log(`\n🎯 FINAL TOP 7 RECOMMENDATIONS:`)
+    console.log(`\n🎯 FINAL TOP 7 RECOMMENDATIONS (ENFORCED LIMIT):`)
     console.log(`   Preferred Brand Cards: ${preferredBrandCards.length}`)
-    console.log(`   General Cards: ${Math.min(generalCards.length, 7 - preferredBrandCards.length)}`)
-    console.log(`   Total: ${finalTop7.length}`)
+    console.log(`   General Cards: ${generalCards.length}`)
+    console.log(`   Total: ${finalTop7.length} (MAX 7 ENFORCED)`)
     console.log(`   Show General Message: ${showGeneralMessage}`)
+
+    // Ensure we never exceed 7 cards
+    if (finalTop7.length > 7) {
+      console.warn(`⚠️ WARNING: Final recommendations exceeded 7 cards (${finalTop7.length}), trimming to 7`)
+      return {
+        preferredBrandCards: preferredBrandCards.slice(0, Math.min(preferredBrandCards.length, 7)),
+        generalCards: generalCards.slice(0, Math.max(0, 7 - preferredBrandCards.length)),
+        showGeneralMessage,
+        finalTop7: finalTop7.slice(0, 7),
+      }
+    }
 
     return {
       preferredBrandCards,

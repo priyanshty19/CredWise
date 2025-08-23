@@ -191,10 +191,11 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Target className="h-5 w-5 text-blue-600" />
-            Your Two-Tier Card Recommendations
+            Your TOP 7 Card Recommendations (Maximum)
           </CardTitle>
           <p className="text-sm text-gray-600">
-            Smart recommendations using our two-tier system: preferred brands first, then best alternatives
+            Smart recommendations using our two-tier system: preferred brands first, then best alternatives (limited to
+            7 cards maximum)
           </p>
         </CardHeader>
       </Card>
@@ -239,7 +240,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="recommendations" className="flex items-center gap-2">
             <Award className="h-4 w-4" />
-            Recommendations ({recommendations.length})
+            TOP 7 Cards ({Math.min(recommendations.length, 7)})
           </TabsTrigger>
           <TabsTrigger value="funnel" className="flex items-center gap-2">
             <Filter className="h-4 w-4" />
@@ -272,7 +273,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
                     </h3>
                   </div>
                   <div className="grid gap-4">
-                    {preferredBrandCards.map((card, index) => (
+                    {preferredBrandCards.slice(0, 7).map((card, index) => (
                       <Card
                         key={`preferred-${index}`}
                         className="hover:shadow-lg transition-shadow ring-2 ring-green-200"
@@ -404,7 +405,7 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
                     </h3>
                   </div>
                   <div className="grid gap-4">
-                    {generalCards.map((card, index) => (
+                    {generalCards.slice(0, 7 - preferredBrandCards.length).map((card, index) => (
                       <Card key={`general-${index}`} className="hover:shadow-lg transition-shadow">
                         <CardHeader>
                           <div className="flex justify-between items-start">
@@ -650,12 +651,16 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
 
                     <div className="flex items-center justify-between p-4 bg-indigo-50 rounded-lg border-2 border-indigo-200">
                       <div>
-                        <p className="font-medium">Final TOP 7 Recommendations</p>
-                        <p className="text-sm text-gray-600">Two-tier system ensures optimal user experience</p>
+                        <p className="font-medium">Final TOP 7 Recommendations (Maximum)</p>
+                        <p className="text-sm text-gray-600">
+                          Two-tier system ensures optimal user experience with 7-card limit
+                        </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-2xl font-bold text-indigo-600">{twoTierInfo.totalRecommendations}</p>
-                        <p className="text-xs text-gray-500">total cards</p>
+                        <p className="text-2xl font-bold text-indigo-600">
+                          {Math.min(twoTierInfo.totalRecommendations, 7)}
+                        </p>
+                        <p className="text-xs text-gray-500">cards (max 7 enforced)</p>
                       </div>
                     </div>
                   </div>
@@ -775,11 +780,12 @@ export default function EnhancedRecommendations({ formData }: EnhancedRecommenda
                     )}
                     {twoTierInfo.generalCount > 0 && (
                       <p>
-                        ➕ <strong>{twoTierInfo.generalCount} general cards</strong> added to complete your TOP 7
+                        ➕ <strong>{twoTierInfo.generalCount} general cards</strong> added to complete your selection
                       </p>
                     )}
                     <p className="mt-2 font-medium">
-                      🎯 Total: {twoTierInfo.totalRecommendations} personalized recommendations
+                      🎯 Total: {Math.min(twoTierInfo.totalRecommendations, 7)} personalized recommendations (maximum 7
+                      enforced)
                     </p>
                   </div>
                 </div>
