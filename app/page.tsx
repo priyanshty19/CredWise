@@ -14,19 +14,19 @@ export default function HomePage() {
       <section className="container mx-auto px-4 py-16">
         <div className="text-center max-w-4xl mx-auto">
           <Badge variant="secondary" className="mb-4 px-4 py-2">
-            🚀 India's Smartest Credit Card Recommendation Platform
+            🚀 India's Smartest Wealth Management Platform
           </Badge>
 
           <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight">
             Find Your Perfect
             <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
               {" "}
-              Credit Card
+              Financial Balance
             </span>
           </h1>
 
           <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-            Get personalized credit card recommendations based on your spending patterns, income, and financial goals.
+            Get personalized credit card recommendations and financial goals.
             Make smarter financial decisions with CredWise.
           </p>
 
