@@ -2,7 +2,7 @@ import Navigation from "@/components/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import Link from "next/link"
-import { CreditCard, BarChart3, TrendingUp, Shield, Zap, Target, ArrowRight, CheckCircle2 } from "lucide-react"
+import { CandlestickChartIcon,CreditCard, BarChart3, TrendingUp, Shield, Zap, Target, ArrowRight, CheckCircle2 } from "lucide-react"
 
 export default function HomePage() {
   return (
@@ -240,7 +240,7 @@ export default function HomePage() {
       <footer className="bg-gray-900 text-white py-8">
         <div className="container mx-auto px-4 text-center">
           <div className="flex items-center justify-center gap-2 mb-4">
-            <CreditCard className="h-6 w-6 text-blue-400" />
+            <CandlestickChartIcon className="h-6 w-6 text-blue-400" />
             <span className="text-xl font-bold">CredWise</span>
           </div>
           <p className="text-gray-400">Your intelligent financial companion for smart decisions and optimal growth.</p>
