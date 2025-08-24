@@ -12,47 +12,57 @@ export interface ParsedPortfolioData {
   xirr: number
 }
 
+export interface PortfolioSummary {
+  totalInvestments: number
+  currentPortfolioValue: number
+  profitLoss: number
+  profitLossPercentage: number
+  xirr: number
+  personalDetails?: {
+    name: string
+    mobileNumber: string
+    pan: string
+  }
+}
+
 export interface GraphData {
   barGraph: Array<{ x: string; y: number }>
   lineGraph: {
     investedValue: Array<{ x: string; y: number }>
     currentValue: Array<{ x: string; y: number }>
   }
-  pieChart: Array<{ category: string; units: number }>
+  pieChart: Array<{ category: string; units: number; percentage: number }>
+  categoryBreakdown: Array<{
+    category: string
+    totalInvested: number
+    currentValue: number
+    returns: number
+    count: number
+    percentage: number
+  }>
+  amcBreakdown: Array<{
+    amc: string
+    totalInvested: number
+    currentValue: number
+    returns: number
+    count: number
+    percentage: number
+  }>
 }
 
 export interface PortfolioParseResult {
   success: boolean
   data: ParsedPortfolioData[]
+  summary: PortfolioSummary
   graphData: GraphData
-  summary: {
-    totalInvested: number
-    totalCurrent: number
-    totalReturns: number
-    totalSchemes: number
-  }
   errors: string[]
   fileName: string
   processingTime: number
 }
 
-const REQUIRED_COLUMNS = [
-  "Scheme Name",
-  "AMC",
-  "Category",
-  "Sub-category",
-  "Folio No.",
-  "Source",
-  "Units",
-  "Invested Value",
-  "Current Value",
-  "Returns",
-  "XIRR",
-]
-
 export class PortfolioParser {
   private static parseCSV(content: string): string[][] {
-    const lines = content.split("\n")
+    const lines = content.split(/\r?\n/)
     const result: string[][] = []
 
     for (const line of lines) {
@@ -68,24 +78,94 @@ export class PortfolioParser {
         if (char === '"') {
           inQuotes = !inQuotes
         } else if (char === "," && !inQuotes) {
-          row.push(current.trim())
+          row.push(current.trim().replace(/^"|"$/g, ""))
           current = ""
         } else {
           current += char
         }
       }
 
-      row.push(current.trim())
+      row.push(current.trim().replace(/^"|"$/g, ""))
       result.push(row)
     }
 
     return result
   }
 
-  private static findHeaderRow(data: string[][]): number {
-    for (let i = 0; i < Math.min(data.length, 10); i++) {
+  private static findSummaryData(data: string[][]): PortfolioSummary {
+    const summary: PortfolioSummary = {
+      totalInvestments: 0,
+      currentPortfolioValue: 0,
+      profitLoss: 0,
+      profitLossPercentage: 0,
+      xirr: 0,
+      personalDetails: {
+        name: "",
+        mobileNumber: "",
+        pan: "",
+      },
+    }
+
+    // Look for personal details
+    for (let i = 0; i < Math.min(data.length, 20); i++) {
       const row = data[i]
-      if (row.some((cell) => cell && cell.includes("Scheme Name"))) {
+      if (row[0]?.toLowerCase().includes("name") && row[1]) {
+        summary.personalDetails!.name = row[1]
+      }
+      if (row[0]?.toLowerCase().includes("mobile") && row[1]) {
+        summary.personalDetails!.mobileNumber = row[1]
+      }
+      if (row[0]?.toLowerCase().includes("pan") && row[1]) {
+        summary.personalDetails!.pan = row[1]
+      }
+    }
+
+    // Look for holding summary
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i]
+
+      // Check if this row contains summary data
+      if (row[0]?.toLowerCase().includes("total investments") || row[0]?.toLowerCase().includes("total investment")) {
+        summary.totalInvestments = this.parseNumericValue(row[1] || "0")
+
+        // Look for other summary values in the same row or nearby rows
+        if (row[2]) summary.currentPortfolioValue = this.parseNumericValue(row[2])
+        if (row[3]) summary.profitLoss = this.parseNumericValue(row[3])
+        if (row[4]) summary.profitLossPercentage = this.parseNumericValue(row[4])
+        if (row[5]) summary.xirr = this.parseNumericValue(row[5])
+
+        // Sometimes data might be in the next row
+        if (i + 1 < data.length) {
+          const nextRow = data[i + 1]
+          if (!summary.currentPortfolioValue && nextRow[1]) {
+            summary.currentPortfolioValue = this.parseNumericValue(nextRow[1])
+          }
+          if (!summary.profitLoss && nextRow[2]) {
+            summary.profitLoss = this.parseNumericValue(nextRow[2])
+          }
+          if (!summary.profitLossPercentage && nextRow[3]) {
+            summary.profitLossPercentage = this.parseNumericValue(nextRow[3])
+          }
+          if (!summary.xirr && nextRow[4]) {
+            summary.xirr = this.parseNumericValue(nextRow[4])
+          }
+        }
+        break
+      }
+    }
+
+    return summary
+  }
+
+  private static findHeaderRow(data: string[][]): number {
+    for (let i = 0; i < data.length; i++) {
+      const row = data[i]
+      // Look for the holdings table header
+      if (
+        row.some(
+          (cell) => cell && (cell.toLowerCase().includes("scheme name") || cell.toLowerCase().includes("fund name")),
+        )
+      ) {
         return i
       }
     }
@@ -96,23 +176,23 @@ export class PortfolioParser {
     const columnMap: Record<string, number> = {}
 
     const mappings = {
-      schemeName: ["Scheme Name", "Scheme", "Fund Name", "Fund"],
-      amc: ["AMC", "Asset Management Company", "Fund House"],
-      category: ["Category", "Fund Category", "Type"],
-      subCategory: ["Sub-category", "Sub Category", "Subcategory"],
-      folioNo: ["Folio No.", "Folio No", "Folio Number", "Folio"],
-      source: ["Source", "Platform", "Broker"],
-      units: ["Units", "Quantity", "Shares"],
-      investedValue: ["Invested Value", "Invested Amount", "Cost", "Purchase Value"],
-      currentValue: ["Current Value", "Market Value", "Present Value"],
-      returns: ["Returns", "Gain/Loss", "P&L", "Profit/Loss"],
-      xirr: ["XIRR", "IRR", "Annualized Return"],
+      schemeName: ["scheme name", "fund name", "scheme", "fund"],
+      amc: ["amc", "asset management company", "fund house", "company"],
+      category: ["category", "fund category", "type", "asset class"],
+      subCategory: ["sub-category", "sub category", "subcategory", "sub type"],
+      folioNo: ["folio no.", "folio no", "folio number", "folio", "folio no"],
+      source: ["source", "platform", "broker", "exchange"],
+      units: ["units", "quantity", "shares", "qty"],
+      investedValue: ["invested value", "invested amount", "cost", "purchase value", "amount invested"],
+      currentValue: ["current value", "market value", "present value", "current amount"],
+      returns: ["returns", "gain/loss", "p&l", "profit/loss", "absolute return"],
+      xirr: ["xirr", "irr", "annualized return", "cagr", "return %"],
     }
 
     for (const [key, variations] of Object.entries(mappings)) {
       for (let i = 0; i < headers.length; i++) {
-        const header = headers[i]?.trim() || ""
-        if (variations.some((variation) => header.toLowerCase().includes(variation.toLowerCase()))) {
+        const header = headers[i]?.trim().toLowerCase() || ""
+        if (variations.some((variation) => header.includes(variation))) {
           columnMap[key] = i
           break
         }
@@ -126,6 +206,13 @@ export class PortfolioParser {
     if (typeof value === "number") return value
     if (!value || value === "") return 0
 
+    // Handle percentage values
+    if (typeof value === "string" && value.includes("%")) {
+      const cleaned = value.replace(/[%\s]/g, "")
+      const parsed = Number.parseFloat(cleaned)
+      return isNaN(parsed) ? 0 : parsed
+    }
+
     // Remove currency symbols, commas, and other non-numeric characters
     const cleaned = value
       .toString()
@@ -137,47 +224,108 @@ export class PortfolioParser {
     return isNaN(parsed) ? 0 : parsed
   }
 
-  private static generateGraphData(data: ParsedPortfolioData[]): GraphData {
-    // Bar Graph: Current Value by Scheme Name (top 20)
+  private static generateGraphData(data: ParsedPortfolioData[], summary: PortfolioSummary): GraphData {
+    // Bar Graph: Current Value by Scheme Name (top 15)
     const barData = data
       .filter((item) => item.currentValue > 0)
       .sort((a, b) => b.currentValue - a.currentValue)
-      .slice(0, 20)
+      .slice(0, 15)
       .map((item) => ({
-        x: item.schemeName.length > 30 ? item.schemeName.substring(0, 30) + "..." : item.schemeName,
+        x: item.schemeName.length > 25 ? item.schemeName.substring(0, 25) + "..." : item.schemeName,
         y: item.currentValue,
       }))
 
-    // Line Graph: Invested vs Current Value
+    // Line Graph: Invested vs Current Value (top 12)
     const lineData = data
       .filter((item) => item.investedValue > 0 || item.currentValue > 0)
       .sort((a, b) => b.currentValue - a.currentValue)
-      .slice(0, 15)
+      .slice(0, 12)
 
     const investedValueData = lineData.map((item) => ({
-      x: item.schemeName.length > 25 ? item.schemeName.substring(0, 25) + "..." : item.schemeName,
+      x: item.schemeName.length > 20 ? item.schemeName.substring(0, 20) + "..." : item.schemeName,
       y: item.investedValue,
     }))
 
     const currentValueData = lineData.map((item) => ({
-      x: item.schemeName.length > 25 ? item.schemeName.substring(0, 25) + "..." : item.schemeName,
+      x: item.schemeName.length > 20 ? item.schemeName.substring(0, 20) + "..." : item.schemeName,
       y: item.currentValue,
     }))
 
-    // Pie Chart: Units Distribution by Category
-    const categoryUnits = data.reduce(
+    // Pie Chart: Current Value Distribution by Category
+    const categoryValues = data.reduce(
       (acc, item) => {
-        if (item.category && item.units > 0) {
-          acc[item.category] = (acc[item.category] || 0) + item.units
+        if (item.category && item.currentValue > 0) {
+          acc[item.category] = (acc[item.category] || 0) + item.currentValue
         }
         return acc
       },
       {} as Record<string, number>,
     )
 
-    const pieData = Object.entries(categoryUnits)
-      .map(([category, units]) => ({ category, units }))
+    const totalValue = Object.values(categoryValues).reduce((sum, val) => sum + val, 0)
+    const pieData = Object.entries(categoryValues)
+      .map(([category, value]) => ({
+        category,
+        units: value,
+        percentage: totalValue > 0 ? (value / totalValue) * 100 : 0,
+      }))
       .sort((a, b) => b.units - a.units)
+
+    // Category Breakdown
+    const categoryBreakdown = Object.entries(
+      data.reduce(
+        (acc, item) => {
+          if (!acc[item.category]) {
+            acc[item.category] = {
+              totalInvested: 0,
+              currentValue: 0,
+              returns: 0,
+              count: 0,
+            }
+          }
+          acc[item.category].totalInvested += item.investedValue
+          acc[item.category].currentValue += item.currentValue
+          acc[item.category].returns += item.returns
+          acc[item.category].count += 1
+          return acc
+        },
+        {} as Record<string, any>,
+      ),
+    )
+      .map(([category, data]) => ({
+        category,
+        ...data,
+        percentage: summary.currentPortfolioValue > 0 ? (data.currentValue / summary.currentPortfolioValue) * 100 : 0,
+      }))
+      .sort((a, b) => b.currentValue - a.currentValue)
+
+    // AMC Breakdown
+    const amcBreakdown = Object.entries(
+      data.reduce(
+        (acc, item) => {
+          if (!acc[item.amc]) {
+            acc[item.amc] = {
+              totalInvested: 0,
+              currentValue: 0,
+              returns: 0,
+              count: 0,
+            }
+          }
+          acc[item.amc].totalInvested += item.investedValue
+          acc[item.amc].currentValue += item.currentValue
+          acc[item.amc].returns += item.returns
+          acc[item.amc].count += 1
+          return acc
+        },
+        {} as Record<string, any>,
+      ),
+    )
+      .map(([amc, data]) => ({
+        amc,
+        ...data,
+        percentage: summary.currentPortfolioValue > 0 ? (data.currentValue / summary.currentPortfolioValue) * 100 : 0,
+      }))
+      .sort((a, b) => b.currentValue - a.currentValue)
 
     return {
       barGraph: barData,
@@ -186,6 +334,8 @@ export class PortfolioParser {
         currentValue: currentValueData,
       },
       pieChart: pieData,
+      categoryBreakdown,
+      amcBreakdown,
     }
   }
 
@@ -200,7 +350,6 @@ export class PortfolioParser {
       }
 
       if (file.size > 10 * 1024 * 1024) {
-        // 10MB limit
         throw new Error("File size exceeds 10MB limit")
       }
 
@@ -210,8 +359,20 @@ export class PortfolioParser {
         return {
           success: false,
           data: [],
-          graphData: { barGraph: [], lineGraph: { investedValue: [], currentValue: [] }, pieChart: [] },
-          summary: { totalInvested: 0, totalCurrent: 0, totalReturns: 0, totalSchemes: 0 },
+          summary: {
+            totalInvestments: 0,
+            currentPortfolioValue: 0,
+            profitLoss: 0,
+            profitLossPercentage: 0,
+            xirr: 0,
+          },
+          graphData: {
+            barGraph: [],
+            lineGraph: { investedValue: [], currentValue: [] },
+            pieChart: [],
+            categoryBreakdown: [],
+            amcBreakdown: [],
+          },
           errors,
           fileName: file.name,
           processingTime: Date.now() - startTime,
@@ -226,11 +387,14 @@ export class PortfolioParser {
         throw new Error("File appears to be empty")
       }
 
-      // Find header row
+      // Extract summary data first
+      const summary = this.findSummaryData(rawData)
+
+      // Find header row for holdings table
       const headerRowIndex = this.findHeaderRow(rawData)
       if (headerRowIndex === -1) {
         throw new Error(
-          'Could not find header row containing "Scheme Name". Please ensure your file has the correct format.',
+          'Could not find holdings table with "Scheme Name" column. Please ensure your file has the correct format.',
         )
       }
 
@@ -239,7 +403,7 @@ export class PortfolioParser {
 
       // Validate required columns
       if (!columnMap.schemeName) {
-        throw new Error('Required column "Scheme Name" not found')
+        throw new Error('Required column "Scheme Name" not found in holdings table')
       }
 
       // Parse data rows
@@ -252,26 +416,25 @@ export class PortfolioParser {
         }
 
         try {
+          const investedValue = this.parseNumericValue(row[columnMap.investedValue] || "0")
+          const currentValue = this.parseNumericValue(row[columnMap.currentValue] || "0")
+          const returns = this.parseNumericValue(row[columnMap.returns] || "0") || currentValue - investedValue
+
           const item: ParsedPortfolioData = {
             schemeName: row[columnMap.schemeName]?.trim() || "",
-            amc: row[columnMap.amc]?.trim() || "",
-            category: row[columnMap.category]?.trim() || "",
-            subCategory: row[columnMap.subCategory]?.trim() || "",
-            folioNo: row[columnMap.folioNo]?.trim() || "",
-            source: row[columnMap.source]?.trim() || "",
+            amc: row[columnMap.amc]?.trim() || "Unknown AMC",
+            category: row[columnMap.category]?.trim() || "Unknown Category",
+            subCategory: row[columnMap.subCategory]?.trim() || "Unknown Sub-category",
+            folioNo: row[columnMap.folioNo]?.trim() || "N/A",
+            source: row[columnMap.source]?.trim() || "Unknown Source",
             units: this.parseNumericValue(row[columnMap.units] || "0"),
-            investedValue: this.parseNumericValue(row[columnMap.investedValue] || "0"),
-            currentValue: this.parseNumericValue(row[columnMap.currentValue] || "0"),
-            returns: this.parseNumericValue(row[columnMap.returns] || "0"),
+            investedValue,
+            currentValue,
+            returns,
             xirr: this.parseNumericValue(row[columnMap.xirr] || "0"),
           }
 
-          // Calculate returns if not provided
-          if (item.returns === 0 && item.investedValue > 0 && item.currentValue > 0) {
-            item.returns = item.currentValue - item.investedValue
-          }
-
-          if (item.schemeName) {
+          if (item.schemeName && (item.investedValue > 0 || item.currentValue > 0)) {
             parsedData.push(item)
           }
         } catch (rowError) {
@@ -280,25 +443,26 @@ export class PortfolioParser {
       }
 
       if (parsedData.length === 0) {
-        throw new Error("No valid data rows found in the file")
+        throw new Error("No valid holdings data found in the file")
       }
 
-      // Generate summary
-      const summary = {
-        totalInvested: parsedData.reduce((sum, item) => sum + item.investedValue, 0),
-        totalCurrent: parsedData.reduce((sum, item) => sum + item.currentValue, 0),
-        totalReturns: parsedData.reduce((sum, item) => sum + item.returns, 0),
-        totalSchemes: parsedData.length,
+      // If summary wasn't found in file, calculate from parsed data
+      if (summary.totalInvestments === 0) {
+        summary.totalInvestments = parsedData.reduce((sum, item) => sum + item.investedValue, 0)
+        summary.currentPortfolioValue = parsedData.reduce((sum, item) => sum + item.currentValue, 0)
+        summary.profitLoss = summary.currentPortfolioValue - summary.totalInvestments
+        summary.profitLossPercentage =
+          summary.totalInvestments > 0 ? (summary.profitLoss / summary.totalInvestments) * 100 : 0
       }
 
       // Generate graph data
-      const graphData = this.generateGraphData(parsedData)
+      const graphData = this.generateGraphData(parsedData, summary)
 
       return {
         success: true,
         data: parsedData,
-        graphData,
         summary,
+        graphData,
         errors,
         fileName: file.name,
         processingTime: Date.now() - startTime,
@@ -309,8 +473,20 @@ export class PortfolioParser {
       return {
         success: false,
         data: [],
-        graphData: { barGraph: [], lineGraph: { investedValue: [], currentValue: [] }, pieChart: [] },
-        summary: { totalInvested: 0, totalCurrent: 0, totalReturns: 0, totalSchemes: 0 },
+        summary: {
+          totalInvestments: 0,
+          currentPortfolioValue: 0,
+          profitLoss: 0,
+          profitLossPercentage: 0,
+          xirr: 0,
+        },
+        graphData: {
+          barGraph: [],
+          lineGraph: { investedValue: [], currentValue: [] },
+          pieChart: [],
+          categoryBreakdown: [],
+          amcBreakdown: [],
+        },
         errors,
         fileName: file.name,
         processingTime: Date.now() - startTime,

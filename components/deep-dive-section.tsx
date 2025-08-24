@@ -26,6 +26,7 @@ import {
   AlertCircle,
   Loader2,
   Zap,
+  FileSpreadsheet,
 } from "lucide-react"
 import { parsePortfolioFile } from "@/app/actions/portfolio-parsing"
 import PortfolioCharts from "./portfolio-charts"
@@ -180,9 +181,11 @@ export default function DeepDiveSection() {
             </CardHeader>
             <CardContent>
               <Alert>
+                <FileSpreadsheet className="h-4 w-4" />
                 <AlertDescription>
                   Upload your portfolio statements in CSV format to get instant analysis including performance metrics,
-                  category allocation, and detailed insights with dynamic charts.
+                  category allocation, AMC distribution, and detailed insights with dynamic charts. Supports formats
+                  like the one shown in your reference image.
                 </AlertDescription>
               </Alert>
             </CardContent>
@@ -214,13 +217,15 @@ export default function DeepDiveSection() {
                     <div className="space-y-4">
                       <Loader2 className="h-12 w-12 mx-auto text-blue-500 animate-spin" />
                       <p className="text-lg font-medium text-blue-700">Processing Portfolio...</p>
-                      <p className="text-sm text-gray-500">Analyzing your investment data</p>
+                      <p className="text-sm text-gray-500">Analyzing your investment data and generating charts</p>
                     </div>
                   ) : (
                     <>
                       <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
                       <p className="text-lg font-medium text-gray-700 mb-2">Drop files here or click to upload</p>
-                      <p className="text-sm text-gray-500 mb-4">Support for CSV files (Max 10MB each)</p>
+                      <p className="text-sm text-gray-500 mb-4">
+                        Support for CSV files with portfolio data (Max 10MB each)
+                      </p>
                       <Button variant="outline" className="bg-transparent" disabled={isPending}>
                         <Plus className="h-4 w-4 mr-2" />
                         Choose Files
@@ -311,6 +316,17 @@ export default function DeepDiveSection() {
                     </div>
                   </div>
                 )}
+
+                {/* Format Help */}
+                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
+                  <p className="font-medium mb-1">Expected CSV Format:</p>
+                  <p>• Personal Details section (Name, Mobile, PAN)</p>
+                  <p>• Holding Summary section (Total Investments, Current Value, etc.)</p>
+                  <p>
+                    • Holdings table with columns: Scheme Name, AMC, Category, Units, Invested Value, Current Value,
+                    Returns, XIRR
+                  </p>
+                </div>
               </CardContent>
             </Card>
 
@@ -375,8 +391,8 @@ export default function DeepDiveSection() {
             <Alert>
               <CheckCircle className="h-4 w-4" />
               <AlertDescription>
-                Successfully processed {parsedData.fileName} with {parsedData.data.length} investments in{" "}
-                {parsedData.processingTime}ms
+                Successfully processed {parsedData.fileName} with {parsedData.data.length} holdings in{" "}
+                {parsedData.processingTime}ms. Generated comprehensive portfolio analysis with charts.
               </AlertDescription>
             </Alert>
           )}
@@ -400,7 +416,7 @@ export default function DeepDiveSection() {
                   {uploadedFiles.map((file) => (
                     <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
-                        <FileText className="h-5 w-5 text-gray-500" />
+                        <FileSpreadsheet className="h-5 w-5 text-gray-500" />
                         <div>
                           <p className="font-medium text-sm">{file.name}</p>
                           <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
@@ -484,7 +500,8 @@ export default function DeepDiveSection() {
                 <Alert className="mt-6">
                   <AlertDescription>
                     Upload your portfolio CSV file to get instant AI-powered analysis with detailed insights and
-                    visualizations.
+                    visualizations. The system will automatically detect your portfolio format and generate
+                    comprehensive charts.
                   </AlertDescription>
                 </Alert>
               </CardContent>
