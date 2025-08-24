@@ -79,7 +79,7 @@ const banks = [
   "Axis Bank",
   "Kotak",
   "Yes Bank",
-  "FIRST",
+  "IDFC",
   "RBL",
   "Induslnd Bank",
   "SIB",
