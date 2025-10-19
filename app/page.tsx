@@ -26,8 +26,8 @@ export default function HomePage() {
           </h1>
 
           <p className="text-xl text-gray-600 mb-8 leading-relaxed">
-            Get personalized credit card recommendations and financial goals.
-            Make smarter financial decisions with CredWise.
+            Get personalized credit card recommendations and financial goals. Make smarter financial decisions with
+            CredWise.
           </p>
 
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-12">

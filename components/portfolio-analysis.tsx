@@ -2,504 +2,283 @@
 
 import type React from "react"
 
-import { useState, useRef } from "react"
-import { Button } from "@/components/ui/button"
+import { useState, useTransition } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
-import {
-  Upload,
-  FileText,
-  AlertCircle,
-  CheckCircle2,
-  TrendingUp,
-  DollarSign,
-  Calendar,
-  Building2,
-  CreditCard,
-  Loader2,
-} from "lucide-react"
-import { parseUniversalStatement } from "@/lib/universal-statement-parser"
+import { Upload, X, Plus, FileText, DollarSign, TrendingUp, PieChart } from "lucide-react"
+import { uploadPortfolioFile, addManualEntry, removePortfolioFile } from "@/app/actions/portfolio-actions"
 
-interface Transaction {
-  date: string
-  description: string
+interface PortfolioFile {
+  name: string
+  type: string
+  data: any[]
+  uploadedAt: Date
+}
+
+interface ManualEntry {
+  id: string
+  category: string
   amount: number
-  category?: string
-  type: "debit" | "credit"
+  description: string
+  date: string
+  type: "manual"
 }
 
-interface AnalysisResult {
-  totalTransactions: number
-  totalSpending: number
-  totalCredits: number
-  netAmount: number
-  categories: Record<string, { amount: number; count: number }>
-  monthlyBreakdown: Record<string, number>
-  topMerchants: Array<{ name: string; amount: number; count: number }>
-  insights: string[]
-}
+export default function PortfolioAnalysis() {
+  const [files, setFiles] = useState<PortfolioFile[]>([])
+  const [manualEntries, setManualEntries] = useState<ManualEntry[]>([])
+  const [isPending, startTransition] = useTransition()
+  const [showManualForm, setShowManualForm] = useState(false)
 
-export function PortfolioAnalysis() {
-  const [file, setFile] = useState<File | null>(null)
-  const [isAnalyzing, setIsAnalyzing] = useState(false)
-  const [analysisResult, setAnalysisResult] = useState<AnalysisResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const fileInputRef = useRef<HTMLInputElement>(null)
+  const handleFileUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0]
+    if (!file) return
 
-  const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const selectedFile = event.target.files?.[0]
-    if (selectedFile) {
-      setFile(selectedFile)
-      setError(null)
-      setAnalysisResult(null)
-    }
-  }
+    const formData = new FormData()
+    formData.append("file", file)
 
-  const handleAnalyze = async () => {
-    if (!file) {
-      setError("Please select a file to analyze")
-      return
-    }
+    startTransition(async () => {
+      const result = await uploadPortfolioFile(formData)
 
-    setIsAnalyzing(true)
-    setError(null)
-
-    try {
-      console.log("🔍 Starting portfolio analysis for:", file.name)
-
-      // Parse the statement file
-      const transactions = await parseUniversalStatement(file)
-
-      if (!transactions || transactions.length === 0) {
-        throw new Error("No transactions found in the file. Please check the file format.")
-      }
-
-      console.log(`📊 Parsed ${transactions.length} transactions`)
-
-      // Perform analysis
-      const analysis = analyzeTransactions(transactions)
-      setAnalysisResult(analysis)
-
-      console.log("✅ Analysis completed successfully")
-    } catch (err) {
-      console.error("❌ Analysis error:", err)
-      setError(err instanceof Error ? err.message : "Failed to analyze the file")
-    } finally {
-      setIsAnalyzing(false)
-    }
-  }
-
-  const analyzeTransactions = (transactions: Transaction[]): AnalysisResult => {
-    const categories: Record<string, { amount: number; count: number }> = {}
-    const monthlyBreakdown: Record<string, number> = {}
-    const merchantMap: Record<string, { amount: number; count: number }> = {}
-
-    let totalSpending = 0
-    let totalCredits = 0
-
-    transactions.forEach((transaction) => {
-      const { amount, type, description, date } = transaction
-      const month = new Date(date).toISOString().slice(0, 7) // YYYY-MM format
-
-      if (type === "debit") {
-        totalSpending += Math.abs(amount)
-
-        // Category analysis
-        const category = transaction.category || categorizeTransaction(description)
-        if (!categories[category]) {
-          categories[category] = { amount: 0, count: 0 }
+      if (result.success) {
+        const newFile: PortfolioFile = {
+          name: result.fileName!,
+          type: result.fileType!,
+          data: result.data,
+          uploadedAt: new Date(),
         }
-        categories[category].amount += Math.abs(amount)
-        categories[category].count += 1
-
-        // Monthly breakdown
-        if (!monthlyBreakdown[month]) {
-          monthlyBreakdown[month] = 0
-        }
-        monthlyBreakdown[month] += Math.abs(amount)
-
-        // Merchant analysis
-        const merchant = extractMerchantName(description)
-        if (!merchantMap[merchant]) {
-          merchantMap[merchant] = { amount: 0, count: 0 }
-        }
-        merchantMap[merchant].amount += Math.abs(amount)
-        merchantMap[merchant].count += 1
+        setFiles((prev) => [...prev, newFile])
       } else {
-        totalCredits += Math.abs(amount)
+        alert(result.error)
       }
     })
-
-    // Get top merchants
-    const topMerchants = Object.entries(merchantMap)
-      .map(([name, data]) => ({ name, ...data }))
-      .sort((a, b) => b.amount - a.amount)
-      .slice(0, 10)
-
-    // Generate insights
-    const insights = generateInsights(categories, monthlyBreakdown, totalSpending, transactions.length)
-
-    return {
-      totalTransactions: transactions.length,
-      totalSpending,
-      totalCredits,
-      netAmount: totalCredits - totalSpending,
-      categories,
-      monthlyBreakdown,
-      topMerchants,
-      insights,
-    }
   }
 
-  const categorizeTransaction = (description: string): string => {
-    const desc = description.toLowerCase()
+  const handleRemoveFile = async (fileName: string) => {
+    startTransition(async () => {
+      const result = await removePortfolioFile(fileName)
 
-    if (
-      desc.includes("restaurant") ||
-      desc.includes("food") ||
-      desc.includes("dining") ||
-      desc.includes("zomato") ||
-      desc.includes("swiggy")
-    ) {
-      return "Dining & Restaurants"
-    }
-    if (
-      desc.includes("fuel") ||
-      desc.includes("petrol") ||
-      desc.includes("gas") ||
-      desc.includes("hp") ||
-      desc.includes("iocl")
-    ) {
-      return "Fuel & Gas"
-    }
-    if (
-      desc.includes("grocery") ||
-      desc.includes("supermarket") ||
-      desc.includes("bigbasket") ||
-      desc.includes("grofers")
-    ) {
-      return "Groceries"
-    }
-    if (desc.includes("amazon") || desc.includes("flipkart") || desc.includes("shopping") || desc.includes("mall")) {
-      return "Online Shopping"
-    }
-    if (
-      desc.includes("uber") ||
-      desc.includes("ola") ||
-      desc.includes("taxi") ||
-      desc.includes("metro") ||
-      desc.includes("transport")
-    ) {
-      return "Transport"
-    }
-    if (
-      desc.includes("movie") ||
-      desc.includes("cinema") ||
-      desc.includes("netflix") ||
-      desc.includes("entertainment")
-    ) {
-      return "Entertainment"
-    }
-    if (
-      desc.includes("electricity") ||
-      desc.includes("water") ||
-      desc.includes("internet") ||
-      desc.includes("mobile") ||
-      desc.includes("utility")
-    ) {
-      return "Utilities & Bills"
-    }
-    if (desc.includes("hotel") || desc.includes("flight") || desc.includes("travel") || desc.includes("booking")) {
-      return "Travel & Hotels"
-    }
-    if (desc.includes("medical") || desc.includes("hospital") || desc.includes("pharmacy") || desc.includes("health")) {
-      return "Healthcare"
-    }
-
-    return "Others"
-  }
-
-  const extractMerchantName = (description: string): string => {
-    // Simple merchant name extraction - can be enhanced
-    const parts = description.split(" ")
-    return (
-      parts
-        .slice(0, 2)
-        .join(" ")
-        .replace(/[^a-zA-Z0-9\s]/g, "")
-        .trim() || "Unknown"
-    )
-  }
-
-  const generateInsights = (
-    categories: Record<string, { amount: number; count: number }>,
-    monthlyBreakdown: Record<string, number>,
-    totalSpending: number,
-    transactionCount: number,
-  ): string[] => {
-    const insights: string[] = []
-
-    // Top spending category
-    const topCategory = Object.entries(categories).sort(([, a], [, b]) => b.amount - a.amount)[0]
-
-    if (topCategory) {
-      const percentage = ((topCategory[1].amount / totalSpending) * 100).toFixed(1)
-      insights.push(`Your highest spending category is ${topCategory[0]} (${percentage}% of total spending)`)
-    }
-
-    // Average transaction amount
-    const avgTransaction = totalSpending / transactionCount
-    insights.push(`Your average transaction amount is ₹${avgTransaction.toFixed(0)}`)
-
-    // Monthly spending pattern
-    const months = Object.keys(monthlyBreakdown).sort()
-    if (months.length >= 2) {
-      const latestMonth = monthlyBreakdown[months[months.length - 1]]
-      const previousMonth = monthlyBreakdown[months[months.length - 2]]
-      const change = (((latestMonth - previousMonth) / previousMonth) * 100).toFixed(1)
-
-      if (Number.parseFloat(change) > 0) {
-        insights.push(`Your spending increased by ${change}% compared to the previous month`)
+      if (result.success) {
+        setFiles((prev) => prev.filter((f) => f.name !== fileName))
       } else {
-        insights.push(
-          `Your spending decreased by ${Math.abs(Number.parseFloat(change))}% compared to the previous month`,
-        )
+        alert(result.error)
       }
-    }
-
-    // High-frequency categories
-    const highFreqCategory = Object.entries(categories).sort(([, a], [, b]) => b.count - a.count)[0]
-
-    if (highFreqCategory && highFreqCategory[1].count > 5) {
-      insights.push(
-        `You make frequent transactions in ${highFreqCategory[0]} (${highFreqCategory[1].count} transactions)`,
-      )
-    }
-
-    return insights
+    })
   }
 
-  const formatCurrency = (amount: number) => {
-    return new Intl.NumberFormat("en-IN", {
-      style: "currency",
-      currency: "INR",
-      maximumFractionDigits: 0,
-    }).format(amount)
+  const handleManualEntry = async (event: React.FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+    const formData = new FormData(event.currentTarget)
+
+    startTransition(async () => {
+      const result = await addManualEntry(formData)
+
+      if (result.success) {
+        setManualEntries((prev) => [...prev, result.data])
+        setShowManualForm(false)
+        event.currentTarget.reset()
+      } else {
+        alert(result.error)
+      }
+    })
   }
+
+  const totalFiles = files.length
+  const totalEntries = manualEntries.length
+  const totalAmount = manualEntries.reduce((sum, entry) => sum + entry.amount, 0)
 
   return (
     <div className="space-y-6">
+      {/* Stats Overview */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <FileText className="h-4 w-4 text-blue-600" />
+              <div>
+                <p className="text-sm font-medium">Files Uploaded</p>
+                <p className="text-2xl font-bold">{totalFiles}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <Plus className="h-4 w-4 text-green-600" />
+              <div>
+                <p className="text-sm font-medium">Manual Entries</p>
+                <p className="text-2xl font-bold">{totalEntries}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <DollarSign className="h-4 w-4 text-yellow-600" />
+              <div>
+                <p className="text-sm font-medium">Total Amount</p>
+                <p className="text-2xl font-bold">₹{totalAmount.toLocaleString()}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="p-4">
+            <div className="flex items-center space-x-2">
+              <TrendingUp className="h-4 w-4 text-purple-600" />
+              <div>
+                <p className="text-sm font-medium">Categories</p>
+                <p className="text-2xl font-bold">{new Set(manualEntries.map((e) => e.category)).size}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* File Upload Section */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <FileText className="h-5 w-5" />
-            Portfolio Analysis
+            <Upload className="h-5 w-5" />
+            Upload Portfolio Files
           </CardTitle>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div>
-            <Label htmlFor="statement-file">Upload Bank Statement or Credit Card Statement</Label>
-            <div className="mt-2">
-              <Input
-                id="statement-file"
-                type="file"
-                accept=".pdf,.csv,.xlsx,.xls"
-                onChange={handleFileSelect}
-                ref={fileInputRef}
-                className="cursor-pointer"
-              />
+        <CardContent>
+          <div className="space-y-4">
+            <div className="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center">
+              <Upload className="mx-auto h-12 w-12 text-gray-400" />
+              <div className="mt-4">
+                <Label htmlFor="file-upload" className="cursor-pointer">
+                  <span className="mt-2 block text-sm font-medium text-gray-900">
+                    Upload income, investment, or expense files
+                  </span>
+                  <span className="mt-1 block text-xs text-gray-500">Supports CSV, Excel, and PDF files</span>
+                </Label>
+                <Input
+                  id="file-upload"
+                  type="file"
+                  className="hidden"
+                  accept=".csv,.xlsx,.xls,.pdf"
+                  onChange={handleFileUpload}
+                  disabled={isPending}
+                />
+              </div>
             </div>
-            <p className="text-sm text-gray-500 mt-1">Supported formats: PDF, CSV, Excel (.xlsx, .xls)</p>
-          </div>
 
-          {file && (
-            <Alert>
-              <CheckCircle2 className="h-4 w-4" />
-              <AlertDescription>
-                Selected file: <strong>{file.name}</strong> ({(file.size / 1024 / 1024).toFixed(2)} MB)
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          <Button onClick={handleAnalyze} disabled={!file || isAnalyzing} className="w-full">
-            {isAnalyzing ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                Analyzing...
-              </>
-            ) : (
-              <>
-                <Upload className="h-4 w-4 mr-2" />
-                Analyze Portfolio
-              </>
+            {/* Uploaded Files List */}
+            {files.length > 0 && (
+              <div className="space-y-2">
+                <h4 className="font-medium">Uploaded Files:</h4>
+                {files.map((file, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center space-x-3">
+                      <FileText className="h-4 w-4 text-blue-600" />
+                      <div>
+                        <p className="text-sm font-medium">{file.name}</p>
+                        <p className="text-xs text-gray-500">Uploaded {file.uploadedAt.toLocaleDateString()}</p>
+                      </div>
+                    </div>
+                    <Button variant="ghost" size="sm" onClick={() => handleRemoveFile(file.name)} disabled={isPending}>
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
             )}
-          </Button>
+          </div>
         </CardContent>
       </Card>
 
-      {analysisResult && (
-        <div className="space-y-6">
-          {/* Summary Cards */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Transactions</p>
-                    <p className="text-2xl font-bold">{analysisResult.totalTransactions}</p>
-                  </div>
-                  <CreditCard className="h-8 w-8 text-blue-500" />
+      {/* Manual Entry Section */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center justify-between">
+            <span className="flex items-center gap-2">
+              <Plus className="h-5 w-5" />
+              Manual Data Entry
+            </span>
+            <Button variant="outline" size="sm" onClick={() => setShowManualForm(!showManualForm)}>
+              {showManualForm ? "Cancel" : "Add Entry"}
+            </Button>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {showManualForm && (
+            <form onSubmit={handleManualEntry} className="space-y-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label htmlFor="category">Category</Label>
+                  <Input id="category" name="category" placeholder="e.g., Salary, Investment, Expense" required />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Spending</p>
-                    <p className="text-2xl font-bold text-red-600">{formatCurrency(analysisResult.totalSpending)}</p>
-                  </div>
-                  <TrendingUp className="h-8 w-8 text-red-500" />
+                <div>
+                  <Label htmlFor="amount">Amount (₹)</Label>
+                  <Input id="amount" name="amount" type="number" step="0.01" placeholder="0.00" required />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Total Credits</p>
-                    <p className="text-2xl font-bold text-green-600">{formatCurrency(analysisResult.totalCredits)}</p>
-                  </div>
-                  <DollarSign className="h-8 w-8 text-green-500" />
+                <div>
+                  <Label htmlFor="description">Description</Label>
+                  <Input id="description" name="description" placeholder="Brief description" required />
                 </div>
-              </CardContent>
-            </Card>
-
-            <Card>
-              <CardContent className="p-4">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <p className="text-sm text-gray-600">Net Amount</p>
-                    <p
-                      className={`text-2xl font-bold ${analysisResult.netAmount >= 0 ? "text-green-600" : "text-red-600"}`}
-                    >
-                      {formatCurrency(analysisResult.netAmount)}
-                    </p>
-                  </div>
-                  <Building2 className="h-8 w-8 text-gray-500" />
+                <div>
+                  <Label htmlFor="date">Date</Label>
+                  <Input id="date" name="date" type="date" required />
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+              </div>
+              <Button type="submit" disabled={isPending}>
+                {isPending ? "Adding..." : "Add Entry"}
+              </Button>
+            </form>
+          )}
 
-          {/* Spending Categories */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Spending by Category</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {Object.entries(analysisResult.categories)
-                  .sort(([, a], [, b]) => b.amount - a.amount)
-                  .map(([category, data]) => {
-                    const percentage = ((data.amount / analysisResult.totalSpending) * 100).toFixed(1)
-                    return (
-                      <div key={category} className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <Badge variant="outline">{category}</Badge>
-                          <span className="text-sm text-gray-600">{data.count} transactions</span>
-                        </div>
-                        <div className="text-right">
-                          <div className="font-semibold">{formatCurrency(data.amount)}</div>
-                          <div className="text-sm text-gray-500">{percentage}%</div>
-                        </div>
+          {/* Manual Entries List */}
+          {manualEntries.length > 0 && (
+            <div className="space-y-2">
+              <h4 className="font-medium">Manual Entries:</h4>
+              {manualEntries.map((entry) => (
+                <div key={entry.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <DollarSign className="h-4 w-4 text-green-600" />
+                    <div>
+                      <p className="text-sm font-medium">{entry.description}</p>
+                      <div className="flex items-center space-x-2 text-xs text-gray-500">
+                        <Badge variant="secondary" className="text-xs">
+                          {entry.category}
+                        </Badge>
+                        <span>₹{entry.amount.toLocaleString()}</span>
+                        <span>{entry.date}</span>
                       </div>
-                    )
-                  })}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Monthly Breakdown */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Calendar className="h-5 w-5" />
-                Monthly Spending Breakdown
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {Object.entries(analysisResult.monthlyBreakdown)
-                  .sort(([a], [b]) => b.localeCompare(a))
-                  .map(([month, amount]) => (
-                    <div key={month} className="flex justify-between items-center">
-                      <span className="font-medium">
-                        {new Date(month + "-01").toLocaleDateString("en-US", { year: "numeric", month: "long" })}
-                      </span>
-                      <span className="font-semibold">{formatCurrency(amount)}</span>
                     </div>
-                  ))}
-              </div>
-            </CardContent>
-          </Card>
-
-          {/* Top Merchants */}
-          <Card>
-            <CardHeader>
-              <CardTitle>Top Merchants</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {analysisResult.topMerchants.slice(0, 10).map((merchant, index) => (
-                  <div key={merchant.name} className="flex items-center justify-between">
-                    <div className="flex items-center gap-3">
-                      <Badge variant="secondary">#{index + 1}</Badge>
-                      <span className="font-medium">{merchant.name}</span>
-                      <span className="text-sm text-gray-600">{merchant.count} transactions</span>
-                    </div>
-                    <span className="font-semibold">{formatCurrency(merchant.amount)}</span>
                   </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
-          {/* Insights */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <TrendingUp className="h-5 w-5" />
-                Key Insights
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-3">
-                {analysisResult.insights.map((insight, index) => (
-                  <Alert key={index}>
-                    <CheckCircle2 className="h-4 w-4" />
-                    <AlertDescription>{insight}</AlertDescription>
-                  </Alert>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      {/* Insights Placeholder */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <PieChart className="h-5 w-5" />
+            Portfolio Insights
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="text-center py-8 text-gray-500">
+            <PieChart className="mx-auto h-12 w-12 mb-4" />
+            <p>Upload files or add manual entries to see graphical insights</p>
+            <p className="text-sm mt-2">Charts and analysis will appear here</p>
+          </div>
+        </CardContent>
+      </Card>
     </div>
   )
 }
-
-export default PortfolioAnalysis

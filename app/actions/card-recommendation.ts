@@ -66,7 +66,7 @@ export async function getCardRecommendations(data: CardSubmission): Promise<Reco
 
     // Apply rule-based filtering and ranking with configurable top N
     const topN = data.topN || 3
-    const recommendations = filterAndRankCards(
+    const recommendations = await filterAndRankCards(
       allCards,
       {
         creditScore: data.creditScore,
@@ -207,7 +207,7 @@ export async function getEnhancedCardRecommendations(
     const processedPreferredBrand =
       data.preferredBrand === undefined || data.preferredBrand === "Any" ? undefined : data.preferredBrand
 
-    const recommendations = filterAndRankCardsByRewards(
+    const recommendations = await filterAndRankCardsByRewards(
       allCards,
       {
         creditScore: data.creditScore,
