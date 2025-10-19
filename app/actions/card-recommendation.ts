@@ -1,30 +1,36 @@
 "use server"
 
-import { getCardsFromSheet } from "@/lib/google-sheets"
+import { fetchCreditCardsAction } from "./google-sheets-actions"
 
-export async function getCardData() {
+interface CreditCard {
+  id: string
+  cardName: string
+  bank: string
+  cardType: string
+  joiningFee: number
+  annualFee: number
+  creditScoreRequirement: number
+  monthlyIncomeRequirement: number
+  rewardsRate: number
+  signUpBonus: number
+  features: string[]
+  description: string
+  spendingCategories: string[]
+}
+
+export async function fetchAllCards(): Promise<{
+  success: boolean
+  cards?: CreditCard[]
+  error?: string
+}> {
   try {
-    const cards = await getCardsFromSheet()
-
-    if (!cards || cards.length === 0) {
-      return {
-        success: false,
-        error: "No card data available",
-        cards: [],
-      }
-    }
-
-    return {
-      success: true,
-      cards,
-      timestamp: new Date().toISOString(),
-    }
+    const result = await fetchCreditCardsAction()
+    return result
   } catch (error) {
-    console.error("Error fetching card data:", error)
+    console.error("Error fetching all cards:", error)
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to fetch card data",
-      cards: [],
+      error: error instanceof Error ? error.message : "Failed to fetch cards",
     }
   }
 }

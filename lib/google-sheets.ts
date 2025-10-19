@@ -1,111 +1,122 @@
-const SPREADSHEET_ID = "1mA36CcJWP20YMFwi-1vJGNBF4w8LgcOy1uRAWmQPfvs"
-const SHEET_NAME = "Card-Master"
-const API_KEY = process.env.NEXT_PUBLIC_GOOGLE_SHEETS_API_KEY
+// lib/google-sheets.ts - Credit card data fetching and recommendations
 
-export interface CreditCard {
+import { fetchCreditCardsAction } from "@/app/actions/google-sheets-actions"
+
+export interface CreditCardData {
+  id: string
   cardName: string
   bank: string
   cardType: string
-  minIncome: number
   joiningFee: number
   annualFee: number
-  categories: string[]
-  rewards: {
-    category: string
-    percentage: number
-  }[]
+  creditScoreRequirement: number
+  monthlyIncomeRequirement: number
+  rewardsRate: number
+  signUpBonus: number
   features: string[]
+  description: string
+  spendingCategories: string[]
 }
 
-export async function getCardsFromSheet(): Promise<CreditCard[]> {
-  if (!API_KEY) {
-    throw new Error("Google Sheets API key not configured")
-  }
+interface CreditCard {
+  id: string
+  cardName: string
+  bank: string
+  cardType: string
+  joiningFee: number
+  annualFee: number
+  creditScoreRequirement: number
+  monthlyIncomeRequirement: number
+  rewardsRate: number
+  signUpBonus: number
+  features: string[]
+  description: string
+  spendingCategories: string[]
+}
 
+interface UserSubmission {
+  creditScore: number
+  monthlyIncome: number
+  cardType: string
+  timestamp: string
+}
+
+// Fetch credit cards from Google Sheets via server action
+export async function fetchCreditCards(): Promise<CreditCard[]> {
   try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SPREADSHEET_ID}/values/${SHEET_NAME}!A2:Z?key=${API_KEY}`
-    const response = await fetch(url, {
-      next: { revalidate: 300 }, // Cache for 5 minutes
-    })
+    const result = await fetchCreditCardsAction()
 
-    if (!response.ok) {
-      throw new Error(`Google Sheets API error: ${response.status} ${response.statusText}`)
+    if (!result.success) {
+      console.error("Failed to fetch credit cards:", result.error)
+      throw new Error(result.error || "Failed to fetch credit cards")
     }
 
-    const data = await response.json()
-
-    if (!data.values || data.values.length === 0) {
-      return []
-    }
-
-    const cards: CreditCard[] = data.values.map((row: any[]) => {
-      // Parse categories (column index may vary based on sheet structure)
-      const categoriesStr = row[6] || ""
-      const categories = categoriesStr
-        .split(",")
-        .map((cat: string) => cat.trim())
-        .filter(Boolean)
-
-      // Parse rewards (format: "category:percentage,category:percentage")
-      const rewardsStr = row[7] || ""
-      const rewards = rewardsStr
-        .split(",")
-        .map((reward: string) => {
-          const [category, percentage] = reward.split(":").map((s) => s.trim())
-          return {
-            category: category || "",
-            percentage: Number.parseFloat(percentage) || 0,
-          }
-        })
-        .filter((r) => r.category && r.percentage > 0)
-
-      // Parse features
-      const featuresStr = row[8] || ""
-      const features = featuresStr
-        .split(",")
-        .map((feat: string) => feat.trim())
-        .filter(Boolean)
-
-      return {
-        cardName: row[0] || "",
-        bank: row[1] || "",
-        cardType: row[2] || "",
-        minIncome: Number.parseFloat(row[3]) || 0,
-        joiningFee: Number.parseFloat(row[4]) || 0,
-        annualFee: Number.parseFloat(row[5]) || 0,
-        categories,
-        rewards,
-        features,
-      }
-    })
-
-    return cards.filter((card) => card.cardName && card.bank)
+    return result.cards || []
   } catch (error) {
-    console.error("Error fetching cards from Google Sheets:", error)
+    console.error("❌ Error fetching credit cards:", error)
     throw error
   }
 }
 
-// Helper function to get unique values for filters
-export async function getFilterOptions() {
+// Fetch available spending categories from all cards
+export async function fetchAvailableSpendingCategories(): Promise<string[]> {
   try {
-    const cards = await getCardsFromSheet()
+    const cards = await fetchCreditCards()
+    const allCategories = new Set<string>()
 
-    const banks = Array.from(new Set(cards.map((card) => card.bank))).sort()
-    const cardTypes = Array.from(new Set(cards.map((card) => card.cardType))).sort()
-    const allCategories = Array.from(new Set(cards.flatMap((card) => card.categories))).sort()
+    cards.forEach((card) => {
+      card.spendingCategories.forEach((category) => {
+        allCategories.add(category)
+      })
+    })
 
-    return {
-      banks,
-      cardTypes,
-      categories: allCategories,
-    }
+    const sortedCategories = Array.from(allCategories).sort()
+    console.log("📊 Available spending categories from sheet:", sortedCategories)
+
+    return sortedCategories
   } catch (error) {
-    console.error("Error getting filter options:", error)
-    return {
-      banks: [],
-      cardTypes: [],
-      categories: [],
+    console.error("❌ Error fetching spending categories:", error)
+    return []
+  }
+}
+
+// Submit data to Google Sheets via Apps Script
+export async function submitToGoogleSheets(data: any): Promise<boolean> {
+  try {
+    const appsScriptUrl = process.env.NEXT_PUBLIC_APPS_SCRIPT_URL
+
+    if (!appsScriptUrl) {
+      throw new Error("Apps Script URL not configured")
     }
+
+    const response = await fetch(appsScriptUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(data),
+    })
+
+    if (!response.ok) {
+      throw new Error(`HTTP error! status: ${response.status}`)
+    }
+
+    const result = await response.json()
+    return result.success === true
+  } catch (error) {
+    console.error("Error submitting to Google Sheets:", error)
+    return false
+  }
+}
+
+// Legacy function kept for backwards compatibility
+export async function submitUserData(submission: UserSubmission): Promise<boolean> {
+  try {
+    console.log("📝 User submission logged:", submission)
+    await new Promise((resolve) => setTimeout(resolve, 500))
+    return true
+  } catch (error) {
+    console.error("❌ Error submitting user data:", error)
+    return false
   }
 }

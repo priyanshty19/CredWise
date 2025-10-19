@@ -1,252 +1,236 @@
-import Navigation from "@/components/navigation"
-import { Button } from "@/components/ui/button"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
 import Link from "next/link"
-import { CreditCard, Target, Zap, ArrowRight, Star, Users, Shield, TrendingUp, Award, CheckCircle } from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
+import Navigation from "@/components/navigation"
+import { CreditCard, Target, Zap, Shield, TrendingUp, Award, CheckCircle2 } from "lucide-react"
 
-export default function HomePage() {
+export default function LandingPage() {
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-purple-50">
+    <div className="min-h-screen bg-gradient-to-b from-blue-50 to-white">
       <Navigation currentPage="HOME" />
 
       {/* Hero Section */}
-      <section className="container mx-auto px-4 py-20">
-        <div className="text-center max-w-4xl mx-auto">
-          <Badge variant="secondary" className="mb-6 px-6 py-2 text-base">
-            <Star className="h-4 w-4 mr-2 inline" />
-            India's Smartest Credit Card Recommendation Platform
-          </Badge>
-
-          <h1 className="text-5xl md:text-7xl font-bold text-gray-900 mb-6 leading-tight">
+      <section className="container mx-auto px-4 py-20 md:py-32">
+        <div className="max-w-4xl mx-auto text-center">
+          <h1 className="text-5xl md:text-6xl font-bold text-gray-900 mb-6 leading-tight">
             Find Your Perfect
-            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-600 to-purple-600">
-              {" "}
-              Credit Card
-            </span>
+            <span className="text-blue-600"> Credit Card</span>
           </h1>
-
-          <p className="text-xl md:text-2xl text-gray-600 mb-10 leading-relaxed max-w-3xl mx-auto">
-            Get AI-powered, personalized credit card recommendations based on your spending patterns, income, and
-            preferences. Make smarter financial decisions with CredWise.
+          <p className="text-xl md:text-2xl text-gray-600 mb-8 leading-relaxed">
+            Smart recommendations powered by AI. Get personalized credit card suggestions based on your spending habits,
+            income, and preferences.
           </p>
-
-          <div className="flex flex-col sm:flex-row gap-6 justify-center items-center mb-16">
-            <Link href="/cards">
-              <Button
-                size="lg"
-                className="px-10 py-6 text-lg bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700 shadow-lg hover:shadow-xl transition-all"
-              >
-                <CreditCard className="mr-3 h-6 w-6" />
-                Get Recommendations Now
-                <ArrowRight className="ml-3 h-6 w-6" />
-              </Button>
-            </Link>
-          </div>
-
-          {/* Stats */}
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-8 mb-16">
-            <div className="text-center p-6 bg-white rounded-xl shadow-sm">
-              <div className="text-4xl font-bold text-blue-600 mb-2">500+</div>
-              <div className="text-gray-600 font-medium">Credit Cards Analyzed</div>
-            </div>
-            <div className="text-center p-6 bg-white rounded-xl shadow-sm">
-              <div className="text-4xl font-bold text-purple-600 mb-2">50K+</div>
-              <div className="text-gray-600 font-medium">Happy Users</div>
-            </div>
-            <div className="text-center p-6 bg-white rounded-xl shadow-sm">
-              <div className="text-4xl font-bold text-green-600 mb-2">₹2Cr+</div>
-              <div className="text-gray-600 font-medium">Savings Generated</div>
-            </div>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button asChild size="lg" className="text-lg px-8 py-6">
+              <Link href="/cards">Get Card Recommendations</Link>
+            </Button>
+            <Button asChild size="lg" variant="outline" className="text-lg px-8 py-6 bg-transparent">
+              <Link href="#how-it-works">Learn How It Works</Link>
+            </Button>
           </div>
         </div>
       </section>
 
       {/* How It Works Section */}
-      <section className="container mx-auto px-4 py-16 bg-white">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">How CredWise Works</h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Simple, smart, and personalized - find your perfect credit card in 3 easy steps
-          </p>
-        </div>
-
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-8 max-w-5xl mx-auto">
-          <div className="text-center">
-            <div className="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl font-bold text-blue-600">1</span>
-            </div>
-            <h3 className="text-xl font-bold mb-3">Share Your Profile</h3>
-            <p className="text-gray-600">Tell us about your income, spending categories, and card preferences</p>
+      <section id="how-it-works" className="py-20 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">How It Works</h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              Get personalized credit card recommendations in three simple steps
+            </p>
           </div>
 
-          <div className="text-center">
-            <div className="w-16 h-16 bg-purple-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl font-bold text-purple-600">2</span>
+          <div className="grid md:grid-cols-3 gap-8 max-w-5xl mx-auto">
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-6 text-2xl font-bold">
+                1
+              </div>
+              <h3 className="text-2xl font-semibold mb-4 text-gray-900">Share Your Profile</h3>
+              <p className="text-gray-600 text-lg">
+                Tell us about your income, spending categories, credit score, and preferences
+              </p>
             </div>
-            <h3 className="text-xl font-bold mb-3">AI Analysis</h3>
-            <p className="text-gray-600">Our advanced algorithm analyzes 500+ cards to find the best matches</p>
-          </div>
 
-          <div className="text-center">
-            <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-              <span className="text-2xl font-bold text-green-600">3</span>
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-6 text-2xl font-bold">
+                2
+              </div>
+              <h3 className="text-2xl font-semibold mb-4 text-gray-900">AI Analysis</h3>
+              <p className="text-gray-600 text-lg">
+                Our advanced algorithm analyzes 100+ cards to find the best matches for you
+              </p>
             </div>
-            <h3 className="text-xl font-bold mb-3">Get Top Picks</h3>
-            <p className="text-gray-600">Receive personalized recommendations ranked by rewards and benefits</p>
+
+            <div className="text-center">
+              <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-blue-100 text-blue-600 mb-6 text-2xl font-bold">
+                3
+              </div>
+              <h3 className="text-2xl font-semibold mb-4 text-gray-900">Get Top Picks</h3>
+              <p className="text-gray-600 text-lg">
+                Receive your top 7 personalized card recommendations with detailed comparisons
+              </p>
+            </div>
           </div>
         </div>
       </section>
 
       {/* Features Section */}
-      <section className="container mx-auto px-4 py-20">
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">Why Choose CredWise?</h2>
-          <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Advanced AI-powered recommendations tailored to your unique financial profile
-          </p>
-        </div>
+      <section className="py-20 bg-gray-50">
+        <div className="container mx-auto px-4">
+          <div className="text-center mb-16">
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">Why Choose CredWise?</h2>
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
+              The smartest way to find credit cards that match your lifestyle
+            </p>
+          </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
-          <Card className="hover:shadow-xl transition-shadow border-2 hover:border-blue-200">
-            <CardHeader>
-              <div className="w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mb-4">
-                <Target className="h-6 w-6 text-blue-600" />
-              </div>
-              <CardTitle>Personalized Recommendations</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                Get credit card suggestions based on your unique spending patterns, income, and financial preferences.
-              </p>
-            </CardContent>
-          </Card>
+          <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-8 max-w-6xl mx-auto">
+            <Card className="border-2 hover:border-blue-300 transition-colors">
+              <CardHeader>
+                <Target className="w-12 h-12 text-blue-600 mb-4" />
+                <CardTitle className="text-xl">Personalized Matches</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-base">
+                  Get recommendations tailored to your exact spending patterns and financial profile
+                </CardDescription>
+              </CardContent>
+            </Card>
 
-          <Card className="hover:shadow-xl transition-shadow border-2 hover:border-purple-200">
-            <CardHeader>
-              <div className="w-12 h-12 bg-purple-100 rounded-lg flex items-center justify-center mb-4">
-                <TrendingUp className="h-6 w-6 text-purple-600" />
-              </div>
-              <CardTitle>Smart Scoring Algorithm</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                Our advanced funnel-based system analyzes eligibility, categories, and fees to find your best matches.
-              </p>
-            </CardContent>
-          </Card>
+            <Card className="border-2 hover:border-blue-300 transition-colors">
+              <CardHeader>
+                <Zap className="w-12 h-12 text-blue-600 mb-4" />
+                <CardTitle className="text-xl">Instant Results</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-base">
+                  Receive your top card recommendations in seconds, not hours of manual research
+                </CardDescription>
+              </CardContent>
+            </Card>
 
-          <Card className="hover:shadow-xl transition-shadow border-2 hover:border-green-200">
-            <CardHeader>
-              <div className="w-12 h-12 bg-green-100 rounded-lg flex items-center justify-center mb-4">
-                <Zap className="h-6 w-6 text-green-600" />
-              </div>
-              <CardTitle>Instant Results</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                Get your personalized TOP 7 credit card recommendations in seconds with detailed scoring breakdown.
-              </p>
-            </CardContent>
-          </Card>
+            <Card className="border-2 hover:border-blue-300 transition-colors">
+              <CardHeader>
+                <Shield className="w-12 h-12 text-blue-600 mb-4" />
+                <CardTitle className="text-xl">100% Unbiased</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-base">
+                  No hidden commissions or sponsored rankings - only genuine recommendations
+                </CardDescription>
+              </CardContent>
+            </Card>
 
-          <Card className="hover:shadow-xl transition-shadow border-2 hover:border-orange-200">
-            <CardHeader>
-              <div className="w-12 h-12 bg-orange-100 rounded-lg flex items-center justify-center mb-4">
-                <Shield className="h-6 w-6 text-orange-600" />
-              </div>
-              <CardTitle>100% Secure & Private</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                Your financial data is encrypted and secure. We never store sensitive information or share your data.
-              </p>
-            </CardContent>
-          </Card>
+            <Card className="border-2 hover:border-blue-300 transition-colors">
+              <CardHeader>
+                <TrendingUp className="w-12 h-12 text-blue-600 mb-4" />
+                <CardTitle className="text-xl">Maximize Rewards</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-base">
+                  Find cards that offer the highest rewards for YOUR spending categories
+                </CardDescription>
+              </CardContent>
+            </Card>
 
-          <Card className="hover:shadow-xl transition-shadow border-2 hover:border-red-200">
-            <CardHeader>
-              <div className="w-12 h-12 bg-red-100 rounded-lg flex items-center justify-center mb-4">
-                <Users className="h-6 w-6 text-red-600" />
-              </div>
-              <CardTitle>Expert Insights</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                Backed by financial experts with continuously updated card database, offers, and benefits.
-              </p>
-            </CardContent>
-          </Card>
+            <Card className="border-2 hover:border-blue-300 transition-colors">
+              <CardHeader>
+                <Award className="w-12 h-12 text-blue-600 mb-4" />
+                <CardTitle className="text-xl">Premium Options</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-base">
+                  Discover premium cards with exclusive benefits you might have missed
+                </CardDescription>
+              </CardContent>
+            </Card>
 
-          <Card className="hover:shadow-xl transition-shadow border-2 hover:border-indigo-200">
-            <CardHeader>
-              <div className="w-12 h-12 bg-indigo-100 rounded-lg flex items-center justify-center mb-4">
-                <Award className="h-6 w-6 text-indigo-600" />
-              </div>
-              <CardTitle>Always Free</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <p className="text-gray-600">
-                Our recommendation service is completely free. No hidden charges, subscriptions, or commitments.
-              </p>
-            </CardContent>
-          </Card>
+            <Card className="border-2 hover:border-blue-300 transition-colors">
+              <CardHeader>
+                <CreditCard className="w-12 h-12 text-blue-600 mb-4" />
+                <CardTitle className="text-xl">Always Updated</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <CardDescription className="text-base">
+                  Our database is constantly updated with the latest card offers and benefits
+                </CardDescription>
+              </CardContent>
+            </Card>
+          </div>
         </div>
       </section>
 
-      {/* Benefits Section */}
-      <section className="container mx-auto px-4 py-16 bg-gradient-to-r from-blue-50 to-purple-50">
-        <div className="max-w-4xl mx-auto">
-          <div className="text-center mb-12">
-            <h2 className="text-3xl md:text-4xl font-bold text-gray-900 mb-4">What Makes Us Different?</h2>
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="flex items-start space-x-4">
-              <CheckCircle className="h-6 w-6 text-green-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Multi-Tier Filtering</h3>
-                <p className="text-gray-600">3-level funnel ensures only eligible and relevant cards reach you</p>
-              </div>
+      {/* What Makes Us Different */}
+      <section className="py-20 bg-white">
+        <div className="container mx-auto px-4">
+          <div className="max-w-4xl mx-auto">
+            <div className="text-center mb-16">
+              <h2 className="text-4xl font-bold text-gray-900 mb-4">What Makes Us Different</h2>
+              <p className="text-xl text-gray-600">
+                CredWise uses advanced algorithms to provide truly personalized recommendations
+              </p>
             </div>
 
-            <div className="flex items-start space-x-4">
-              <CheckCircle className="h-6 w-6 text-green-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Brand Preference Support</h3>
-                <p className="text-gray-600">Select up to 3 preferred banks and get prioritized recommendations</p>
+            <div className="space-y-6">
+              <div className="flex gap-4 items-start">
+                <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
+                <div>
+                  <h3 className="text-xl font-semibold mb-2 text-gray-900">Multi-Factor Analysis</h3>
+                  <p className="text-gray-600 text-lg">
+                    We consider income, credit score, spending categories, bank preferences, and fee tolerances
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-start space-x-4">
-              <CheckCircle className="h-6 w-6 text-green-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Category-Based Matching</h3>
-                <p className="text-gray-600">Matches cards to your top spending categories for maximum rewards</p>
+              <div className="flex gap-4 items-start">
+                <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
+                <div>
+                  <h3 className="text-xl font-semibold mb-2 text-gray-900">Two-Tier Recommendation System</h3>
+                  <p className="text-gray-600 text-lg">
+                    Prioritizes your preferred banks while ensuring you see the absolute best options
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-start space-x-4">
-              <CheckCircle className="h-6 w-6 text-green-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Fee Transparency</h3>
-                <p className="text-gray-600">Clear joining and annual fee filters to match your budget</p>
+              <div className="flex gap-4 items-start">
+                <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
+                <div>
+                  <h3 className="text-xl font-semibold mb-2 text-gray-900">Smart Scoring Algorithm</h3>
+                  <p className="text-gray-600 text-lg">
+                    Our proprietary scoring considers 4 different scenarios based on your preferences
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-start space-x-4">
-              <CheckCircle className="h-6 w-6 text-green-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Detailed Scoring</h3>
-                <p className="text-gray-600">See exactly why each card was recommended with score breakdowns</p>
+              <div className="flex gap-4 items-start">
+                <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
+                <div>
+                  <h3 className="text-xl font-semibold mb-2 text-gray-900">Category-Based Matching</h3>
+                  <p className="text-gray-600 text-lg">
+                    Matches your spending categories with cards that offer maximum rewards in those areas
+                  </p>
+                </div>
               </div>
-            </div>
 
-            <div className="flex items-start space-x-4">
-              <CheckCircle className="h-6 w-6 text-green-600 mt-1 flex-shrink-0" />
-              <div>
-                <h3 className="font-semibold text-lg mb-2">Always Updated</h3>
-                <p className="text-gray-600">Live Google Sheets integration ensures latest card data</p>
+              <div className="flex gap-4 items-start">
+                <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
+                <div>
+                  <h3 className="text-xl font-semibold mb-2 text-gray-900">Transparent Rankings</h3>
+                  <p className="text-gray-600 text-lg">
+                    Every recommendation includes a detailed score breakdown so you understand exactly why it was chosen
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex gap-4 items-start">
+                <CheckCircle2 className="w-6 h-6 text-green-600 flex-shrink-0 mt-1" />
+                <div>
+                  <h3 className="text-xl font-semibold mb-2 text-gray-900">Top 7 Curated List</h3>
+                  <p className="text-gray-600 text-lg">
+                    No overwhelming choices - just the 7 best cards perfectly suited to your profile
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -254,46 +238,53 @@ export default function HomePage() {
       </section>
 
       {/* CTA Section */}
-      <section className="container mx-auto px-4 py-20">
-        <Card className="bg-gradient-to-r from-blue-600 to-purple-600 text-white border-none shadow-2xl">
-          <CardContent className="p-12 md:p-16 text-center">
-            <h2 className="text-3xl md:text-4xl font-bold mb-4">Ready to Find Your Perfect Credit Card?</h2>
-            <p className="text-xl md:text-2xl mb-10 opacity-90 max-w-2xl mx-auto">
-              Join thousands of users who have already optimized their credit card rewards and benefits
-            </p>
-
-            <Link href="/cards">
-              <Button
-                size="lg"
-                variant="secondary"
-                className="px-10 py-6 text-lg shadow-lg hover:shadow-xl transition-all"
-              >
-                <CreditCard className="mr-3 h-6 w-6" />
-                Start Your Free Recommendation
-                <ArrowRight className="ml-3 h-6 w-6" />
-              </Button>
-            </Link>
-
-            <p className="mt-6 text-sm opacity-75">No signup required • 100% Free • Instant results</p>
-          </CardContent>
-        </Card>
+      <section className="py-20 bg-gradient-to-r from-blue-600 to-blue-700">
+        <div className="container mx-auto px-4 text-center">
+          <h2 className="text-4xl md:text-5xl font-bold text-white mb-6">Ready to Find Your Perfect Card?</h2>
+          <p className="text-xl text-blue-100 mb-8 max-w-2xl mx-auto">
+            Join thousands of users who have found their ideal credit cards with CredWise
+          </p>
+          <Button asChild size="lg" variant="secondary" className="text-lg px-8 py-6">
+            <Link href="/cards">Start Your Search Now</Link>
+          </Button>
+        </div>
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-white py-12">
+      <footer className="bg-gray-900 text-gray-300 py-12">
         <div className="container mx-auto px-4">
-          <div className="text-center">
-            <div className="flex items-center justify-center space-x-2 mb-4">
-              <CreditCard className="h-8 w-8 text-blue-400" />
-              <span className="text-2xl font-bold text-blue-400">CredWise</span>
+          <div className="grid md:grid-cols-3 gap-8 mb-8">
+            <div>
+              <h3 className="text-xl font-bold text-white mb-4">CredWise</h3>
+              <p className="text-gray-400">
+                Your trusted partner in finding the perfect credit card for your lifestyle.
+              </p>
             </div>
-            <p className="text-gray-400 mb-6 max-w-md mx-auto">
-              India's most intelligent credit card recommendation platform. Making financial decisions smarter, one card
-              at a time.
-            </p>
-            <div className="flex justify-center space-x-6 text-sm text-gray-400">
-              <span>© 2025 CredWise. All rights reserved.</span>
+            <div>
+              <h4 className="text-lg font-semibold text-white mb-4">Quick Links</h4>
+              <ul className="space-y-2">
+                <li>
+                  <Link href="/cards" className="hover:text-white transition-colors">
+                    Card Recommendations
+                  </Link>
+                </li>
+                <li>
+                  <Link href="/#how-it-works" className="hover:text-white transition-colors">
+                    How It Works
+                  </Link>
+                </li>
+              </ul>
             </div>
+            <div>
+              <h4 className="text-lg font-semibold text-white mb-4">Disclaimer</h4>
+              <p className="text-sm text-gray-400">
+                CredWise provides informational recommendations only. Please verify all details with card issuers before
+                applying.
+              </p>
+            </div>
+          </div>
+          <div className="border-t border-gray-800 pt-8 text-center text-sm text-gray-400">
+            <p>&copy; {new Date().getFullYear()} CredWise. All rights reserved.</p>
           </div>
         </div>
       </footer>
