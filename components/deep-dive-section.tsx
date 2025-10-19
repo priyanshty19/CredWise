@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState, useTransition, useRef } from "react"
+import { useState } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -22,15 +22,7 @@ import {
   Settings,
   Construction,
   Clock,
-  CheckCircle,
-  AlertCircle,
-  Loader2,
-  Zap,
-  FileSpreadsheet,
 } from "lucide-react"
-import { parsePortfolioFile } from "@/app/actions/portfolio-parsing"
-import PortfolioCharts from "./portfolio-charts"
-import type { PortfolioParseResult } from "@/lib/portfolio-parser"
 
 interface UploadedFile {
   id: string
@@ -43,15 +35,6 @@ interface UploadedFile {
 export default function DeepDiveSection() {
   const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([])
   const [dragActive, setDragActive] = useState(false)
-  const [parsedData, setParsedData] = useState<PortfolioParseResult | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [isPending, startTransition] = useTransition()
-
-  // File input refs
-  const fileInputRef = useRef<HTMLInputElement>(null)
-  const incomeInputRef = useRef<HTMLInputElement>(null)
-  const investmentInputRef = useRef<HTMLInputElement>(null)
-  const expenseInputRef = useRef<HTMLInputElement>(null)
 
   const handleFileUpload = (files: FileList | null, category = "other") => {
     if (!files) return
@@ -65,29 +48,6 @@ export default function DeepDiveSection() {
     }))
 
     setUploadedFiles((prev) => [...prev, ...newFiles])
-  }
-
-  const handlePortfolioProcessing = async (file: File) => {
-    setError(null)
-    setParsedData(null)
-
-    const formData = new FormData()
-    formData.append("file", file)
-
-    startTransition(async () => {
-      try {
-        const result = await parsePortfolioFile(formData)
-
-        if (result.success) {
-          setParsedData(result)
-        } else {
-          setError(result.errors.join(", ") || "Failed to process portfolio file")
-        }
-      } catch (err) {
-        setError("An unexpected error occurred during processing")
-        console.error("Processing error:", err)
-      }
-    })
   }
 
   const removeFile = (id: string) => {
@@ -130,30 +90,13 @@ export default function DeepDiveSection() {
     e.stopPropagation()
     setDragActive(false)
     if (e.dataTransfer.files && e.dataTransfer.files[0]) {
-      const file = e.dataTransfer.files[0]
       handleFileUpload(e.dataTransfer.files)
-      // Auto-process if it's a CSV file
-      if (file.name.toLowerCase().endsWith(".csv")) {
-        handlePortfolioProcessing(file)
-      }
     }
-  }
-
-  const handleFileInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0]
-      handleFileUpload(e.target.files)
-      // Auto-process the file
-      handlePortfolioProcessing(file)
-    }
-  }
-
-  const handleChooseFiles = () => {
-    fileInputRef.current?.click()
   }
 
   return (
     <div className="max-w-6xl mx-auto p-6 space-y-8">
+
       <Tabs defaultValue="portfolio" className="w-full">
         <TabsList className="grid w-full grid-cols-3">
           <TabsTrigger value="portfolio" className="flex items-center gap-2">
@@ -171,26 +114,6 @@ export default function DeepDiveSection() {
         </TabsList>
 
         <TabsContent value="portfolio" className="space-y-6">
-          {/* AI-Powered Analysis Header */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Zap className="h-5 w-5" />
-                AI-Powered Portfolio Analysis
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Alert>
-                <FileSpreadsheet className="h-4 w-4" />
-                <AlertDescription>
-                  Upload your portfolio statements in CSV format to get instant analysis including performance metrics,
-                  category allocation, AMC distribution, and detailed insights with dynamic charts. Supports formats
-                  like the one shown in your reference image.
-                </AlertDescription>
-              </Alert>
-            </CardContent>
-          </Card>
-
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             {/* File Upload Section */}
             <Card>
@@ -198,134 +121,88 @@ export default function DeepDiveSection() {
                 <CardTitle className="flex items-center gap-2">
                   <Upload className="h-5 w-5" />
                   Upload Financial Documents
-                  {isPending && <Loader2 className="h-4 w-4 animate-spin" />}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 {/* Drag and Drop Area */}
                 <div
-                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors cursor-pointer ${
+                  className={`border-2 border-dashed rounded-lg p-8 text-center transition-colors ${
                     dragActive ? "border-blue-500 bg-blue-50" : "border-gray-300 hover:border-gray-400"
-                  } ${isPending ? "opacity-50 pointer-events-none" : ""}`}
+                  }`}
                   onDragEnter={handleDrag}
                   onDragLeave={handleDrag}
                   onDragOver={handleDrag}
                   onDrop={handleDrop}
-                  onClick={handleChooseFiles}
                 >
-                  {isPending ? (
-                    <div className="space-y-4">
-                      <Loader2 className="h-12 w-12 mx-auto text-blue-500 animate-spin" />
-                      <p className="text-lg font-medium text-blue-700">Processing Portfolio...</p>
-                      <p className="text-sm text-gray-500">Analyzing your investment data and generating charts</p>
-                    </div>
-                  ) : (
-                    <>
-                      <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                      <p className="text-lg font-medium text-gray-700 mb-2">Drop files here or click to upload</p>
-                      <p className="text-sm text-gray-500 mb-4">
-                        Support for CSV files with portfolio data (Max 10MB each)
-                      </p>
-                      <Button variant="outline" className="bg-transparent" disabled={isPending}>
-                        <Plus className="h-4 w-4 mr-2" />
-                        Choose Files
-                      </Button>
-                    </>
-                  )}
+                  <Upload className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <p className="text-lg font-medium text-gray-700 mb-2">Drop files here or click to upload</p>
+                  <p className="text-sm text-gray-500 mb-4">Support for PDF, CSV, Excel files (Max 10MB each)</p>
+                  <Input
+                    type="file"
+                    multiple
+                    accept=".pdf,.csv,.xlsx,.xls"
+                    onChange={(e) => handleFileUpload(e.target.files)}
+                    className="hidden"
+                    id="file-upload"
+                  />
+                  <Label htmlFor="file-upload">
+                    <Button variant="outline" className="cursor-pointer bg-transparent">
+                      <Plus className="h-4 w-4 mr-2" />
+                      Choose Files
+                    </Button>
+                  </Label>
                 </div>
 
-                {/* Hidden file inputs */}
-                <Input
-                  ref={fileInputRef}
-                  type="file"
-                  multiple
-                  accept=".csv"
-                  onChange={handleFileInputChange}
-                  className="hidden"
-                  disabled={isPending}
-                />
-
                 {/* Category-specific Upload Buttons */}
-                {!isPending && (
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <Input
-                        ref={incomeInputRef}
-                        type="file"
-                        multiple
-                        accept=".csv"
-                        onChange={(e) => {
-                          handleFileUpload(e.target.files, "income")
-                          if (e.target.files?.[0]) handlePortfolioProcessing(e.target.files[0])
-                        }}
-                        className="hidden"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full bg-transparent"
-                        onClick={() => incomeInputRef.current?.click()}
-                      >
+                <div className="grid grid-cols-3 gap-2">
+                  <div>
+                    <Input
+                      type="file"
+                      multiple
+                      accept=".pdf,.csv,.xlsx,.xls"
+                      onChange={(e) => handleFileUpload(e.target.files, "income")}
+                      className="hidden"
+                      id="income-upload"
+                    />
+                    <Label htmlFor="income-upload">
+                      <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
                         <DollarSign className="h-4 w-4 mr-1" />
                         Income
                       </Button>
-                    </div>
-                    <div>
-                      <Input
-                        ref={investmentInputRef}
-                        type="file"
-                        multiple
-                        accept=".csv"
-                        onChange={(e) => {
-                          handleFileUpload(e.target.files, "investments")
-                          if (e.target.files?.[0]) handlePortfolioProcessing(e.target.files[0])
-                        }}
-                        className="hidden"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full bg-transparent"
-                        onClick={() => investmentInputRef.current?.click()}
-                      >
+                    </Label>
+                  </div>
+                  <div>
+                    <Input
+                      type="file"
+                      multiple
+                      accept=".pdf,.csv,.xlsx,.xls"
+                      onChange={(e) => handleFileUpload(e.target.files, "investments")}
+                      className="hidden"
+                      id="investments-upload"
+                    />
+                    <Label htmlFor="investments-upload">
+                      <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
                         <TrendingUp className="h-4 w-4 mr-1" />
                         Investments
                       </Button>
-                    </div>
-                    <div>
-                      <Input
-                        ref={expenseInputRef}
-                        type="file"
-                        multiple
-                        accept=".csv"
-                        onChange={(e) => {
-                          handleFileUpload(e.target.files, "expenses")
-                          if (e.target.files?.[0]) handlePortfolioProcessing(e.target.files[0])
-                        }}
-                        className="hidden"
-                      />
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        className="w-full bg-transparent"
-                        onClick={() => expenseInputRef.current?.click()}
-                      >
+                    </Label>
+                  </div>
+                  <div>
+                    <Input
+                      type="file"
+                      multiple
+                      accept=".pdf,.csv,.xlsx,.xls"
+                      onChange={(e) => handleFileUpload(e.target.files, "expenses")}
+                      className="hidden"
+                      id="expenses-upload"
+                    />
+                    <Label htmlFor="expenses-upload">
+                      <Button variant="outline" size="sm" className="w-full cursor-pointer bg-transparent">
                         <FileText className="h-4 w-4 mr-1" />
                         Expenses
                       </Button>
-                    </div>
+                    </Label>
                   </div>
-                )}
-
-                {/* Format Help */}
-                <div className="text-xs text-gray-500 bg-gray-50 p-3 rounded-lg">
-                  <p className="font-medium mb-1">Expected CSV Format:</p>
-                  <p>• Personal Details section (Name, Mobile, PAN)</p>
-                  <p>• Holding Summary section (Total Investments, Current Value, etc.)</p>
-                  <p>
-                    • Holdings table with columns: Scheme Name, AMC, Category, Units, Invested Value, Current Value,
-                    Returns, XIRR
-                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -378,25 +255,6 @@ export default function DeepDiveSection() {
             </Card>
           </div>
 
-          {/* Error Display */}
-          {error && (
-            <Alert variant="destructive">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          )}
-
-          {/* Success Message */}
-          {parsedData && parsedData.success && (
-            <Alert>
-              <CheckCircle className="h-4 w-4" />
-              <AlertDescription>
-                Successfully processed {parsedData.fileName} with {parsedData.data.length} holdings in{" "}
-                {parsedData.processingTime}ms. Generated comprehensive portfolio analysis with charts.
-              </AlertDescription>
-            </Alert>
-          )}
-
           {/* Uploaded Files List */}
           {uploadedFiles.length > 0 && (
             <Card>
@@ -416,7 +274,7 @@ export default function DeepDiveSection() {
                   {uploadedFiles.map((file) => (
                     <div key={file.id} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
                       <div className="flex items-center gap-3">
-                        <FileSpreadsheet className="h-5 w-5 text-gray-500" />
+                        <FileText className="h-5 w-5 text-gray-500" />
                         <div>
                           <p className="font-medium text-sm">{file.name}</p>
                           <p className="text-xs text-gray-500">{formatFileSize(file.size)}</p>
@@ -427,23 +285,9 @@ export default function DeepDiveSection() {
                           {file.category}
                         </span>
                       </div>
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => {
-                            // Trigger reprocessing by clicking the file input
-                            fileInputRef.current?.click()
-                          }}
-                          disabled={isPending}
-                        >
-                          <Zap className="h-4 w-4 mr-1" />
-                          Process
-                        </Button>
-                        <Button variant="ghost" size="sm" onClick={() => removeFile(file.id)}>
-                          <X className="h-4 w-4" />
-                        </Button>
-                      </div>
+                      <Button variant="ghost" size="sm" onClick={() => removeFile(file.id)}>
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   ))}
                 </div>
@@ -451,62 +295,45 @@ export default function DeepDiveSection() {
             </Card>
           )}
 
-          {/* AI-Processed Results */}
-          {parsedData && parsedData.success && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Portfolio Analysis Results
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <PortfolioCharts data={parsedData} />
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Placeholder when no data */}
-          {!parsedData && !isPending && (
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Portfolio Insights & Analytics
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                  {/* Placeholder for charts */}
-                  <div className="bg-gray-50 rounded-lg p-8 text-center">
-                    <PieChart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="font-medium text-gray-700 mb-2">Category Distribution</h3>
-                    <p className="text-sm text-gray-500">Upload your portfolio CSV to see category-wise allocation</p>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-lg p-8 text-center">
-                    <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="font-medium text-gray-700 mb-2">Performance Analysis</h3>
-                    <p className="text-sm text-gray-500">View returns, XIRR, and performance metrics</p>
-                  </div>
-
-                  <div className="bg-gray-50 rounded-lg p-8 text-center">
-                    <TrendingUp className="h-12 w-12 mx-auto text-gray-400 mb-4" />
-                    <h3 className="font-medium text-gray-700 mb-2">Investment Insights</h3>
-                    <p className="text-sm text-gray-500">Get detailed analysis of your investment portfolio</p>
-                  </div>
+          {/* Graphical Insights Placeholder */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <BarChart3 className="h-5 w-5" />
+                Portfolio Insights & Analytics
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                {/* Placeholder for charts */}
+                <div className="bg-gray-50 rounded-lg p-8 text-center">
+                  <PieChart className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="font-medium text-gray-700 mb-2">Expense Distribution</h3>
+                  <p className="text-sm text-gray-500">Dynamic chart will appear here based on uploaded data</p>
                 </div>
 
+                <div className="bg-gray-50 rounded-lg p-8 text-center">
+                  <BarChart3 className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="font-medium text-gray-700 mb-2">Income vs Expenses</h3>
+                  <p className="text-sm text-gray-500">Monthly comparison chart will be generated automatically</p>
+                </div>
+
+                <div className="bg-gray-50 rounded-lg p-8 text-center">
+                  <TrendingUp className="h-12 w-12 mx-auto text-gray-400 mb-4" />
+                  <h3 className="font-medium text-gray-700 mb-2">Investment Growth</h3>
+                  <p className="text-sm text-gray-500">Portfolio performance tracking and projections</p>
+                </div>
+              </div>
+
+              {uploadedFiles.length === 0 && (
                 <Alert className="mt-6">
                   <AlertDescription>
-                    Upload your portfolio CSV file to get instant AI-powered analysis with detailed insights and
-                    visualizations. The system will automatically detect your portfolio format and generate
-                    comprehensive charts.
+                    Upload your financial documents or enter manual data to see personalized insights and analytics.
                   </AlertDescription>
                 </Alert>
-              </CardContent>
-            </Card>
-          )}
+              )}
+            </CardContent>
+          </Card>
         </TabsContent>
 
         <TabsContent value="insights" className="space-y-6">
