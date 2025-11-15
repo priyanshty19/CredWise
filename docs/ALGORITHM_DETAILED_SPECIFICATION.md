@@ -1,7 +1,7 @@
 # CredWise - Algorithm Detailed Specification
-## Technical Implementation Guide
+## Funnel-Based Two-Tier Recommendation Engine
 
-**Version:** 1.0  
+**Version:** 2.0  
 **Last Updated:** January 2025  
 **Target Audience:** Development Team
 
@@ -10,41 +10,42 @@
 ## Table of Contents
 
 1. [Overview](#overview)
-2. [Algorithm 1: Funnel-Based Engine](#algorithm-1-funnel-based-engine)
-3. [Algorithm 2: Adaptive Intersection](#algorithm-2-adaptive-intersection)
-4. [Algorithm 3: Refined Scoring](#algorithm-3-refined-scoring)
-5. [Category Matching System](#category-matching-system)
-6. [Two-Tier System](#two-tier-system)
-7. [Testing Scenarios](#testing-scenarios)
+2. [Algorithm Architecture](#algorithm-architecture)
+3. [Level 1: Basic Eligibility](#level-1-basic-eligibility)
+4. [Level 2: Category Matching](#level-2-category-matching)
+5. [Level 3: Joining Fee Filter](#level-3-joining-fee-filter)
+6. [Two-Tier Recommendation System](#two-tier-recommendation-system)
+7. [Scoring Logic](#scoring-logic)
+8. [Category Matching System](#category-matching-system)
+9. [Testing Scenarios](#testing-scenarios)
 
 ---
 
 ## 1. Overview
 
-### Algorithm Selection Matrix
+### Algorithm Purpose
 
-\`\`\`
-User Scenario → Recommended Algorithm
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+The **Funnel-Based Two-Tier Recommendation Engine** is CredWise's primary and only recommendation algorithm. It combines:
 
-Complete Profile Entry
-└── Full form with categories + brands
-    └── Use: Funnel-Based Engine ✓
+1. **3-Level Funnel Filtering** - Progressive eligibility screening
+2. **Two-Tier Prioritization** - Preferred brand handling
+3. **Scenario-Based Scoring** - Dynamic weight allocation
+4. **TOP 7 Enforcement** - Strict result limiting
 
-Category-Focused Search
-└── User knows spending categories
-    └── Use: Adaptive Intersection ✓
+### Key Features
 
-Quick Card Lookup
-└── Testing specific cards
-    └── Use: Refined Scoring ✓
-\`\`\`
+- ✅ Multi-stage filtering reduces noise
+- ✅ Category matching with 65% threshold
+- ✅ Brand preference prioritization
+- ✅ Scenario-based dynamic scoring
+- ✅ Always returns maximum 7 cards
+- ✅ Transparent scoring breakdown
 
 ---
 
-## 2. Algorithm 1: Funnel-Based Engine
+## 2. Algorithm Architecture
 
-### 2.1 Complete Flow Diagram
+### Complete Flow Diagram
 
 \`\`\`
                         ┌─────────────────┐
@@ -149,9 +150,11 @@ Quick Card Lookup
                 └─────────────────┘
 \`\`\`
 
-### 2.2 Detailed Level Implementations
+---
 
-#### Level 1: Basic Eligibility
+## 3. Level 1: Basic Eligibility
+
+### Implementation
 
 \`\`\`typescript
 /**
@@ -200,7 +203,7 @@ function level1BasicEligibility(
 }
 \`\`\`
 
-**Edge Cases**:
+### Edge Cases
 
 1. **Zero Requirements**:
    \`\`\`typescript
@@ -224,7 +227,35 @@ function level1BasicEligibility(
    }
    \`\`\`
 
-#### Level 2: Category Matching
+### Examples
+
+\`\`\`typescript
+// Example 1: Pass All Criteria
+user: { income: 50000, credit: 700 }
+card: { incomeReq: 40000, creditReq: 650 }
+result: ✅ PASS (50000 >= 40000 AND 700 >= 650)
+
+// Example 2: Fail Income
+user: { income: 50000, credit: 700 }
+card: { incomeReq: 60000, creditReq: 650 }
+result: ❌ FAIL (50000 < 60000)
+
+// Example 3: Fail Credit Score
+user: { income: 50000, credit: 700 }
+card: { incomeReq: 40000, creditReq: 750 }
+result: ❌ FAIL (700 < 750)
+
+// Example 4: No Requirements
+user: { income: 25000, credit: 600 }
+card: { incomeReq: 0, creditReq: 0 }
+result: ✅ PASS (no requirements)
+\`\`\`
+
+---
+
+## 4. Level 2: Category Matching
+
+### Implementation
 
 \`\`\`typescript
 /**
@@ -271,7 +302,7 @@ function level2CategoryFiltering(
 }
 \`\`\`
 
-**Category Matching Algorithm**:
+### Category Matching Algorithm
 
 \`\`\`typescript
 /**
@@ -332,7 +363,7 @@ function synonymMatch(a: string, b: string): boolean {
 }
 \`\`\`
 
-**Matching Examples**:
+### Matching Examples
 
 \`\`\`typescript
 // Example 1: Exact Match
@@ -366,7 +397,11 @@ matches: ["Dining", "Travel"] (via synonyms)
 result: 2/3 = 66.7% ✅ PASS (> 65%)
 \`\`\`
 
-#### Level 3: Joining Fee Filtering
+---
+
+## 5. Level 3: Joining Fee Filter
+
+### Implementation
 
 \`\`\`typescript
 /**
@@ -417,7 +452,7 @@ function level3JoiningFeeAndBrandFiltering(
 }
 \`\`\`
 
-**Fee Filter Logic Table**:
+### Fee Filter Logic Table
 
 | User Preference | Logic | Examples |
 |----------------|-------|----------|
@@ -425,7 +460,11 @@ function level3JoiningFeeAndBrandFiltering(
 | `low_fee` | `fee <= 1000` | ₹0 ✅, ₹500 ✅, ₹1000 ✅, ₹1001 ❌ |
 | `no_concern` | `true` | ₹0 ✅, ₹500 ✅, ₹5000 ✅ |
 
-### 2.3 Two-Tier System Implementation
+---
+
+## 6. Two-Tier Recommendation System
+
+### Implementation
 
 \`\`\`typescript
 /**
@@ -572,7 +611,7 @@ function twoTierRecommendationSystem(
 }
 \`\`\`
 
-**Two-Tier Scenarios**:
+### Two-Tier Scenarios
 
 \`\`\`typescript
 // Scenario 1: Sufficient Preferred Brand Cards
@@ -613,7 +652,11 @@ showGeneralMessage: true
 message: "Showing all 4 available cards matching your criteria"
 \`\`\`
 
-### 2.4 Scoring Logic
+---
+
+## 7. Scoring Logic
+
+### Scenario-Based Scoring
 
 \`\`\`typescript
 /**
@@ -631,6 +674,9 @@ function scoreAndSortCards(
   userProfile: UserProfile,
   tier: 'preferred_brand' | 'general'
 ): ScoredCard[] {
+  
+  // Determine scoring scenario
+  const hasZeroFee = userProfile.joiningFeePreference ===   {
   
   // Determine scoring scenario
   const hasZeroFee = userProfile.joiningFeePreference === 'no_fee'
@@ -738,272 +784,53 @@ function scoreAndSortCards(
 }
 \`\`\`
 
-**Scoring Example**:
+### Scoring Scenarios
 
-\`\`\`typescript
-// Scenario: Fee >0 + No Brand Match
-// Weights: Category 30%, Rewards 60%, Sign-up 10%
+| Scenario | Fee | Brand | Category | Rewards | Brand Match | Sign-up Bonus |
+|----------|-----|-------|----------|---------|-------------|---------------|
+| 1 | Zero | Yes | 30% | 20% | 50% | - |
+| 2 | Zero | No | 30% | 60% | - | 10% |
+| 3 | >0 | Yes | 30% | 20% | 50% | - |
+| 4 | >0 | No | 30% | 60% | - | 10% |
 
-Card: HDFC Regalia
-- Category Match: 66.7% (2/3) → (0.667 × 30) = 20.0 points
-- Rewards Rate: 4% (max 5%) → (4/5 × 60) = 48.0 points
-- Sign-up Bonus: ₹10,000 (max ₹15,000) → (10000/15000 × 10) = 6.7 points
-- Total: 20.0 + 48.0 + 6.7 = 74.7 / 100
+### Scoring Example
 
-Card: SBI Cashback
-- Category Match: 100% (3/3) → (1.0 × 30) = 30.0 points
-- Rewards Rate: 5% (max 5%) → (5/5 × 60) = 60.0 points
-- Sign-up Bonus: ₹5,000 (max ₹15,000) → (5000/15000 × 10) = 3.3 points
-- Total: 30.0 + 60.0 + 3.3 = 93.3 / 100
+**User Profile**:
+- Categories: ["Dining", "Travel", "Shopping"]
+- Preferred Banks: ["HDFC"]
+- Fee Preference: "no_fee"
 
-Result: SBI Cashback ranks higher (93.3 > 74.7)
-\`\`\`
+**Card: HDFC Regalia First Year Free**:
+- Categories: ["Dining", "Hotel", "Airport Lounge"]
+- Rewards: 4%
+- Sign-up: ₹10,000
+- Joining: ₹0
 
----
+**Scenario**: Zero Fee + Brand Match (Scenario 1)
 
-## 3. Algorithm 2: Adaptive Intersection
+**Score Calculation**:
 
-### 3.1 Core Concept
+1. **Category Match** (30 points max):
+   - User: ["Dining", "Travel", "Shopping"]
+   - Card: ["Dining", "Hotel", "Airport Lounge"]
+   - Matches: Dining (exact), Hotel (synonym: Travel) = 2/3
+   - Score: (2/3) × 30 = **20.0 points**
 
-The Adaptive Intersection algorithm focuses on **category overlap** as the primary ranking factor.
+2. **Rewards Rate** (20 points max):
+   - Card: 4%, Max in DB: 5%
+   - Score: (4/5) × 20 = **16.0 points**
 
-**Philosophy**: 
-> "The best card is one that covers the most of your spending categories"
+3. **Brand Match** (50 points max):
+   - User prefers HDFC, Card is HDFC
+   - Score: **50.0 points**
 
-### 3.2 Implementation
-
-\`\`\`typescript
-/**
- * Adaptive Intersection-Based Recommendation
- * 
- * Prioritizes category intersection with additional scoring factors
- * 
- * @param cards - All cards from database
- * @param userPreferences - User's preferences
- * @param maxResults - Maximum recommendations (default 7)
- * @returns Recommendation result with statistics
- */
-export function getAdaptiveCardRecommendations(
-  cards: CreditCard[],
-  userPreferences: UserPreferences,
-  maxResults = 7
-): RecommendationResult {
-  
-  console.log('🎯 ADAPTIVE INTERSECTION-BASED ALGORITHM')
-  console.log('='.repeat(70))
-  
-  // STEP 1: Basic Eligibility
-  const eligible = cards.filter(card => {
-    const meetsCredit = card.creditScoreRequirement === 0 ||
-                        userPreferences.creditScore >= card.creditScoreRequirement
-    
-    const meetsIncome = card.monthlyIncomeRequirement === 0 ||
-                        userPreferences.monthlyIncome >= card.monthlyIncomeRequirement
-    
-    const meetsFee = checkJoiningFeeEligibility(
-      card.joiningFee,
-      userPreferences.joiningFeePreference
-    )
-    
-    return meetsCredit && meetsIncome && meetsFee
-  })
-  
-  console.log(`✅ Eligible cards: ${eligible.length}`)
-  
-  // STEP 2: Calculate Intersection Scores
-  const scored = eligible.map(card => {
-    
-    // Calculate intersection
-    const intersection = calculateCategoryIntersection(
-      userPreferences.spendingCategories,
-      card.spendingCategories
-    )
-    
-    // Scoring components (total: 100 points)
-    const maxRewards = Math.max(...eligible.map(c => c.rewardsRate), 1)
-    const maxSignUp = Math.max(...eligible.map(c => c.signUpBonus), 1)
-    const maxJoining = Math.max(...eligible.map(c => c.joiningFee), 1)
-    const maxAnnual = Math.max(...eligible.map(c => c.annualFee), 1)
-    
-    // 1. Category Intersection (40 points)
-    const intersectionScore = userPreferences.spendingCategories.length > 0
-      ? (intersection.intersectionCount / userPreferences.spendingCategories.length) * 40
-      : 0
-    
-    // 2. Rewards Rate (25 points)
-    const rewardsScore = (card.rewardsRate / maxRewards) * 25
-    
-    // 3. Bank Preference Bonus (15 points)
-    const bankBonus = userPreferences.preferredBanks.some(bank =>
-      card.bank.toLowerCase().includes(bank.toLowerCase())
-    ) ? 15 : 0
-    
-    // 4. Sign-up Bonus (10 points)
-    const signupScore = (card.signUpBonus / maxSignUp) * 10
-    
-    // 5. Joining Fee (5 points) - Lower is better
-    const joiningScore = maxJoining > 0
-      ? ((maxJoining - card.joiningFee) / maxJoining) * 5
-      : 5
-    
-    // 6. Annual Fee (5 points) - Lower is better
-    const annualScore = maxAnnual > 0
-      ? ((maxAnnual - card.annualFee) / maxAnnual) * 5
-      : 5
-    
-    const totalScore = intersectionScore + rewardsScore + bankBonus +
-                       signupScore + joiningScore + annualScore
-    
-    return {
-      card,
-      totalScore,
-      scoreBreakdown: {
-        intersectionScore,
-        rewardsScore,
-        bankBonus,
-        signupScore,
-        joiningScore,
-        annualScore
-      },
-      intersectionDetails: intersection,
-      eligible: true,
-      eligibilityReasons: []
-    }
-  })
-  
-  // STEP 3: Filter by intersection
-  const withIntersection = scored.filter(s => 
-    s.intersectionDetails.intersectionCount > 0
-  )
-  
-  console.log(`🎯 Cards with category match: ${withIntersection.length}`)
-  
-  // STEP 4: Sort and select top N
-  const finalCandidates = withIntersection.length > 0 
-    ? withIntersection 
-    : scored
-  
-  const recommendations = finalCandidates
-    .sort((a, b) => b.totalScore - a.totalScore)
-    .slice(0, maxResults)
-  
-  return {
-    recommendations,
-    stats: {
-      totalCards: cards.length,
-      eligibleCount: eligible.length,
-      withIntersection: withIntersection.length,
-      preferredBankCards: recommendations.filter(r => r.scoreBreakdown.bankBonus > 0).length
-    }
-  }
-}
-\`\`\`
-
-**Intersection Calculation**:
-
-\`\`\`typescript
-/**
- * Calculate intersection between user and card categories
- */
-function calculateCategoryIntersection(
-  userCategories: string[],
-  cardCategories: string[]
-) {
-  const matchedCategories: string[] = []
-  
-  const normalizedUser = userCategories.map(c => c.toLowerCase().trim())
-  const normalizedCard = cardCategories.map(c => c.toLowerCase().trim())
-  
-  for (const userCat of normalizedUser) {
-    for (const cardCat of normalizedCard) {
-      if (categoriesMatch(userCat, cardCat)) {
-        matchedCategories.push(userCat)
-        break  // Count each category once
-      }
-    }
-  }
-  
-  return {
-    intersectionCount: matchedCategories.length,
-    matchedCategories,
-    intersectionPercentage: userCategories.length > 0
-      ? (matchedCategories.length / userCategories.length) * 100
-      : 0
-  }
-}
-\`\`\`
+**Total Score**: 20.0 + 16.0 + 50.0 = **86.0 / 100**
 
 ---
 
-## 4. Algorithm 3: Refined Scoring
+## 8. Category Matching System
 
-### 4.1 Purpose
-
-Simplified scoring for **Card Tester** and quick lookups.
-
-### 4.2 Implementation
-
-\`\`\`typescript
-/**
- * Refined Scoring Algorithm
- * 
- * Simplified 6-component scoring (max 105 with bank bonus)
- */
-function calculateRefinedScore(
-  card: CreditCard,
-  userCategories: string[],
-  preferredBanks: string[],
-  maxValues: MaxValues
-) {
-  
-  // 1. Rewards Rate (30 points)
-  const rewardsScore = (card.rewardsRate / maxValues.rewards) * 30
-  
-  // 2. Category Match (30 points)
-  const matchingCategories = card.spendingCategories.filter(cat =>
-    userCategories.includes(cat)
-  )
-  const categoryScore = userCategories.length > 0
-    ? (matchingCategories.length / userCategories.length) * 30
-    : 0
-  
-  // 3. Sign-up Bonus (20 points)
-  const signupScore = (card.signUpBonus / maxValues.signup) * 20
-  
-  // 4. Joining Fee (10 points) - Lower is better
-  const joiningScore = ((maxValues.joining - card.joiningFee) / maxValues.joining) * 10
-  
-  // 5. Annual Fee (10 points) - Lower is better
-  const annualScore = ((maxValues.annual - card.annualFee) / maxValues.annual) * 10
-  
-  // 6. Bank Bonus (5 points)
-  const bankScore = preferredBanks.some(bank =>
-    card.bank.toLowerCase().includes(bank.toLowerCase())
-  ) ? 5 : 0
-  
-  const totalScore = rewardsScore + categoryScore + signupScore +
-                     joiningScore + annualScore + bankScore
-  
-  return {
-    total: totalScore,
-    breakdown: {
-      rewards: rewardsScore,
-      category: categoryScore,
-      signup: signupScore,
-      joining: joiningScore,
-      annual: annualScore,
-      bank: bankScore
-    },
-    categoryMatches: matchingCategories
-  }
-}
-\`\`\`
-
----
-
-## 5. Category Matching System
-
-### 5.1 Complete Synonym Table
+### Complete Synonym Table
 
 \`\`\`typescript
 const CATEGORY_SYNONYMS: Record<string, string[]> = {
@@ -1054,74 +881,23 @@ const CATEGORY_SYNONYMS: Record<string, string[]> = {
 }
 \`\`\`
 
----
-
-## 6. Two-Tier System
-
-### 6.1 Decision Tree
-
-\`\`\`
-User Selected Brands?
-│
-├─ YES
-│  │
-│  └─ Filter Level 3 cards by selected brands
-│     │
-│     ├─ Found ≥7 cards?
-│     │  │
-│     │  ├─ YES → Score, rank, take top 7 → DONE (Preferred only)
-│     │  │
-│     │  └─ NO → Score, rank, take all (e.g., 3 cards)
-│     │          │
-│     │          └─ Fill remaining slots (7-3=4 needed)
-│     │              │
-│     │              └─ Filter Level 3 cards (exclude selected 3)
-│     │                  │
-│     │                  └─ Score, rank, take top 4
-│     │                      │
-│     │                      └─ Combine: 3 preferred + 4 general = 7
-│     │                          │
-│     │                          └─ showGeneralMessage = true
-│
-└─ NO
-   │
-   └─ Use all Level 3 cards
-      │
-      └─ Score, rank, take top 7
-          │
-          └─ DONE (General only)
-\`\`\`
-
-### 6.2 Message Logic
+### Synonym Lookup Function
 
 \`\`\`typescript
 /**
- * Determine what message to show user
+ * Get synonyms for a category
  */
-function getTwoTierMessage(result: TwoTierResult): string {
-  const { preferredBrandCards, generalCards, showGeneralMessage } = result
-  
-  if (preferredBrandCards.length === 0 && generalCards.length > 0) {
-    return "Top recommendations based on your profile"
-  }
-  
-  if (preferredBrandCards.length === 7 && generalCards.length === 0) {
-    return "All recommendations are from your preferred brands"
-  }
-  
-  if (showGeneralMessage && preferredBrandCards.length > 0) {
-    return `Your selected brand${preferredBrandCards.length === 1 ? '' : 's'} have ${preferredBrandCards.length} matching card${preferredBrandCards.length === 1 ? '' : 's'}. Here are ${generalCards.length} additional card${generalCards.length === 1 ? '' : 's'} to complete your TOP 7 recommendations.`
-  }
-  
-  return "Personalized recommendations for you"
+function getCategorySynonyms(category: string): string[] {
+  const normalized = category.toLowerCase().trim()
+  return CATEGORY_SYNONYMS[normalized] || []
 }
 \`\`\`
 
 ---
 
-## 7. Testing Scenarios
+## 9. Testing Scenarios
 
-### 7.1 Complete Test Cases
+### Complete Test Cases
 
 \`\`\`typescript
 // Test Case 1: High Income, Excellent Credit, Multiple Categories
@@ -1230,7 +1006,7 @@ const testCase5 = {
 }
 \`\`\`
 
-### 7.2 Validation Tests
+### Validation Tests
 
 \`\`\`typescript
 /**
@@ -1270,34 +1046,28 @@ function validateAlgorithm() {
 
 ## Appendix: Quick Reference
 
-### Algorithm Selection Guide
+### Algorithm Flow Summary
 
 \`\`\`
-Choose Algorithm Based On:
-
-┌─────────────────────────────────────────┐
-│ Full Profile + Brand Preference        │
-│ → Funnel-Based Engine                  │
-└─────────────────────────────────────────┘
-
-┌─────────────────────────────────────────┐
-│ Category-Focused Shopping               │
-│ → Adaptive Intersection                 │
-└─────────────────────────────────────────┘
-
-┌─────────────────────────────────────────┐
-│ Quick Card Testing/Lookup               │
-│ → Refined Scoring                       │
-└─────────────────────────────────────────┘
+User Input → Fetch Cards → Level 1 (Eligibility) → Level 2 (Categories) 
+→ Level 3 (Fees) → Two-Tier System → Score & Rank → TOP 7 Output
 \`\`\`
 
 ### Scoring Weights Summary
 
-| Algorithm | Category | Rewards | Brand | Sign-up | Fees |
-|-----------|----------|---------|-------|---------|------|
-| Funnel | 30% | 20-60% | 0-50% | 0-10% | - |
-| Adaptive | 40% | 25% | 15% | 10% | 10% |
-| Refined | 30% | 30% | 5% | 20% | 20% |
+| Component | Weight Range | Notes |
+|-----------|--------------|-------|
+| Category Match | 30% | Always constant |
+| Rewards Rate | 20-60% | Varies by scenario |
+| Brand Match | 0-50% | Only if preferred brands |
+| Sign-up Bonus | 0-10% | Only if no brand match |
+
+### Key Thresholds
+
+- **Category Match**: >65% required to pass Level 2
+- **Card Limit**: Maximum 7 recommendations
+- **Low Fee**: ≤₹1,000 joining fee
+- **No Fee**: ₹0 joining fee
 
 ---
 
