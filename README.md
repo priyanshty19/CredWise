@@ -95,6 +95,23 @@ Scores are normalized and cards are ranked in descending order.
 
 ---
 
+## 🧠 How Final Ranking is Decided
+
+After cards pass eligibility, relevance, fee preference, and brand selection,
+final ranking is calculated using a value-based scoring approach.
+
+The engine considers:
+- Lifestyle match (how closely the card matches user spending)
+- Reward strength (normalized against other cards)
+- Reward achievability (milestone-based rewards are downgraded if unrealistic)
+- Cost efficiency (high annual fees reduce score)
+- Brand preference (trusted banks get priority when selected)
+- Sign-up incentives (minor boost, not dominant)
+
+This ensures premium cards rank high **only if they provide real, achievable value**.
+
+---
+
 ## 🚀 How It Works in Code
 
 The engine is executed by passing:
@@ -122,6 +139,19 @@ This builds trust and makes the system fully debuggable.
 
 ---
 
+
+## 🎯 Advertised vs Achievable Rewards
+
+Not all rewards are equally achievable.
+
+If a card’s rewards depend on high annual spend milestones and the user’s
+spending does not meet those thresholds, the engine adjusts the effective reward score.
+
+This prevents recommending cards that look attractive on paper
+but provide limited real-world benefit to the user.
+
+---
+
 ## 📊 Database Field Usage Summary
 
 | Database Field | Usage |
@@ -130,15 +160,15 @@ This builds trust and makes the system fully debuggable.
 | Bank | Brand filtering & brand score |
 | Card Type | UI / future logic |
 | Joining Fee | Level 3 filtering & reasoning |
-| Annual Fee | Reserved for future penalization |
+| Annual Fee | Applied as a soft penalty during ranking |
 | Credit Score Requirement | Level 1 eligibility |
 | Income Requirement | Level 1 eligibility |
 | Base Reward Rate | Reward scoring |
 | Optimized Reward Rate | Preferred reward scoring |
-| Reward Type | Context / UI |
+| Reward Type | Normalizes reward value (cashback > miles > points) |
 | Best For Categories | Category matching |
-| Min Annual Spend | Future milestone logic |
-| Milestone Dependency | Future reward realism |
+| Min Annual Spend | Used to evaluate reward achievability |
+| Milestone Dependency | Determines whether reward downgrade applies |
 | Sign Up Bonus | Scoring |
 | Features | UI bullets |
 | Spending Category | Category matching |
