@@ -12,6 +12,9 @@ export interface CreditCard {
   features: string[]
   description: string
   spendingCategories: string[]
+  minAnnualSpend?: number
+  milestoneDependency?: boolean
+  rewardType?: "cashback" | "miles" | "points"
 }
 
 export interface UserProfile {
@@ -46,10 +49,15 @@ export interface ScoredCard {
     rewardsRate: number
     brandMatch?: number
     signUpBonus?: number
+    rewardTypeBonus?: number
+    annualFeePenalty?: number
   }
   matchPercentage: number
   reasoning: string
   tier?: "preferred_brand" | "general"
+  isMilestoneBased?: boolean
+  effectiveRewardRate?: number
+  annualFeeImpact?: number
 }
 
 export interface TwoTierResult {
@@ -67,8 +75,68 @@ export interface TwoTierResult {
  * Level 2: Category Preference (>65% match required)
  * Level 3: Joining Fee + Brand Filtering
  * Final: Two-Tier Recommendation System (Preferred Brand + General)
+ *
+ * Enhanced Scoring: 6-component system with deterministic tie-breakers
+ * - Category Match, Rewards Rate, Brand Match, Sign-up Bonus
+ * - Reward Type Bonus (cashback > miles > points)
+ * - Annual Fee Penalty (soft penalty, no hard filtering)
+ * - Milestone Dependency Adjustment (50% reduction if unachievable)
  */
 export class FunnelRecommendationEngine {
+  /**
+   * Safe numeric parser that handles strings with symbols
+   * Examples: "5%" -> 5, "₹5000" -> 5000, "3x" -> 3
+   */
+  private static safeNumber(value: unknown, defaultValue: number = 0): number {
+    if (value === null || value === undefined) return defaultValue
+    if (typeof value === "number") return value
+    if (typeof value === "string") {
+      // Strip common symbols and whitespace
+      const cleaned = value.replace(/[₹$€¥,%x\s]/g, "").replace(/,/g, "")
+      const parsed = parseFloat(cleaned)
+      return isNaN(parsed) ? defaultValue : parsed
+    }
+    return defaultValue
+  }
+
+  /**
+   * Get reward type bonus multiplier
+   * Cashback is preferred, then miles, then points
+   */
+  private static getRewardTypeBonus(rewardType?: string): number {
+    if (!rewardType) return 0
+    const normalized = rewardType.toLowerCase()
+    if (normalized.includes("cashback")) return 15
+    if (normalized.includes("mile")) return 10
+    if (normalized.includes("point")) return 5
+    return 0
+  }
+
+  /**
+   * Calculate annual fee penalty (soft penalty, doesn't filter)
+   * Proportional: ₹200 annual fee = 1 point penalty
+   */
+  private static getAnnualFeePenalty(annualFee: number): number {
+    const fee = this.safeNumber(annualFee, 0)
+    return Math.min(fee / 200, 20) // Cap at 20 point penalty
+  }
+
+  /**
+   * Get effective reward rate considering milestone dependency
+   * If milestone-dependent and user spend insufficient, reduce by 50%
+   */
+  private static getEffectiveRewardRate(
+    baseRewardRate: number,
+    milestoneDependency?: boolean,
+    minAnnualSpend?: number,
+    userAnnualSpend?: number,
+  ): number {
+    let effective = this.safeNumber(baseRewardRate, 0)
+    if (milestoneDependency && minAnnualSpend && userAnnualSpend && userAnnualSpend < minAnnualSpend) {
+      effective = effective * 0.5 // 50% reduction if milestone unachievable
+    }
+    return effective
+  }
   /**
    * LEVEL 1: Basic Eligibility Filtering
    * Filter cards based on income and credit score requirements only
@@ -93,7 +161,7 @@ export class FunnelRecommendationEngine {
     }
 
     const level2Cards = level1Cards.filter((card) => {
-      const matchPercentage = this.calculateCategoryMatchPercentage(userSpendingCategories, card.spendingCategories)
+      const matchPercentage = this.calculateCategoryMatchPercentage(userSpendingCategories, card.spendingCategories || [])
       return matchPercentage > 65
     })
 
@@ -189,7 +257,9 @@ export class FunnelRecommendationEngine {
   }
 
   /**
-   * Score and sort cards using existing logic
+   * Score and sort cards with 6-component enhanced scoring
+   * Components: categoryMatch, rewardsRate, brandMatch, signUpBonus, rewardTypeBonus, annualFeePenalty
+   * Deterministic tie-breakers: score → categoryMatch → annualFee → rewardRate
    */
   private static scoreAndSortCards(
     cards: CreditCard[],
@@ -217,21 +287,25 @@ export class FunnelRecommendationEngine {
       weights = { categoryMatch: 30, rewardsRate: 60, signUpBonus: 10 }
     }
 
-    // Calculate max values for normalization
-    const maxRewardsRate = Math.max(...cards.map((c) => c.rewardsRate), 1)
-    const maxSignUpBonus = Math.max(...cards.map((c) => c.signUpBonus), 1)
+    // Calculate max values for normalization (with NaN guards)
+    const rewardRates = cards.map((c) => this.safeNumber(c.rewardsRate, 0)).filter((r) => r > 0)
+    const signUpBonuses = cards.map((c) => this.safeNumber(c.signUpBonus, 0)).filter((b) => b > 0)
+    const maxRewardsRate = rewardRates.length > 0 ? Math.max(...rewardRates) : 1
+    const maxSignUpBonus = signUpBonuses.length > 0 ? Math.max(...signUpBonuses) : 1
 
     // Score each card
     const scoredCards: ScoredCard[] = cards.map((card) => {
-      // 1. Category Match Score
       const matchPercentage = this.calculateCategoryMatchPercentage(
         userProfile.spendingCategories,
-        card.spendingCategories,
+        card.spendingCategories || [],
       )
+
+      // 1. Category Match Score
       const categoryScore = (matchPercentage / 100) * weights.categoryMatch
 
-      // 2. Rewards Rate Score
-      const rewardsScore = (card.rewardsRate / maxRewardsRate) * weights.rewardsRate
+      // 2. Rewards Rate Score (with safe numeric parsing)
+      const safeRewardRate = this.safeNumber(card.rewardsRate, 0)
+      const rewardsScore = (safeRewardRate / maxRewardsRate) * weights.rewardsRate
 
       // 3. Brand Match Score (if applicable)
       let brandScore = 0
@@ -242,10 +316,37 @@ export class FunnelRecommendationEngine {
       // 4. Sign-up Bonus Score (if applicable)
       let signUpScore = 0
       if (weights.signUpBonus) {
-        signUpScore = (card.signUpBonus / maxSignUpBonus) * weights.signUpBonus
+        const safeSignUpBonus = this.safeNumber(card.signUpBonus, 0)
+        signUpScore = (safeSignUpBonus / maxSignUpBonus) * weights.signUpBonus
       }
 
-      const totalScore = categoryScore + rewardsScore + brandScore + signUpScore
+      // 5. Reward Type Bonus (cashback > miles > points)
+      const rewardTypeBonus = this.getRewardTypeBonus(card.rewardType)
+
+      // 6. Annual Fee Penalty (soft penalty, no filtering)
+      const safeAnnualFee = this.safeNumber(card.annualFee, 0)
+      const annualFeePenalty = this.getAnnualFeePenalty(safeAnnualFee)
+
+      let totalScore = categoryScore + rewardsScore + brandScore + signUpScore + rewardTypeBonus - annualFeePenalty
+
+      // NaN guard with fallback
+      if (isNaN(totalScore)) {
+        console.warn(
+          `[ScoringWarning] NaN score for card ${card.cardName}. Breakdown:`,
+          { categoryScore, rewardsScore, brandScore, signUpScore, rewardTypeBonus, annualFeePenalty },
+        )
+        totalScore = 0
+      }
+
+      // Calculate effective reward rate considering milestones
+      const estimatedAnnualSpend = userProfile.spendingCategories.length * 500000 // Rough estimate
+      const effectiveRewardRate = this.getEffectiveRewardRate(
+        safeRewardRate,
+        card.milestoneDependency,
+        card.minAnnualSpend,
+        estimatedAnnualSpend,
+      )
+      const isMilestoneBased = card.milestoneDependency && card.minAnnualSpend ? true : false
 
       return {
         card,
@@ -255,15 +356,44 @@ export class FunnelRecommendationEngine {
           rewardsRate: rewardsScore,
           brandMatch: brandScore,
           signUpBonus: signUpScore,
+          rewardTypeBonus,
+          annualFeePenalty,
         },
         matchPercentage,
-        reasoning: this.generateReasoning(card, matchPercentage, scoringScenario, userProfile, tier),
+        reasoning: this.generateEnhancedReasoning(
+          card,
+          matchPercentage,
+          scoringScenario,
+          userProfile,
+          tier,
+          isMilestoneBased,
+          effectiveRewardRate,
+          safeAnnualFee,
+        ),
         tier,
+        isMilestoneBased,
+        effectiveRewardRate: Math.round(effectiveRewardRate * 100) / 100,
+        annualFeeImpact: safeAnnualFee,
       }
     })
 
-    // Sort by score (highest first)
-    return scoredCards.sort((a, b) => b.score - a.score)
+    // Sort with deterministic tie-breakers
+    return scoredCards.sort((a, b) => {
+      // Primary: Score (with 0.01 tolerance)
+      const scoreDiff = b.score - a.score
+      if (Math.abs(scoreDiff) > 0.01) return scoreDiff
+
+      // Secondary: Category Match (with 0.1 tolerance)
+      const catDiff = b.scoreBreakdown.categoryMatch - a.scoreBreakdown.categoryMatch
+      if (Math.abs(catDiff) > 0.1) return catDiff
+
+      // Tertiary: Annual Fee (lower is better)
+      const feeDiff = this.safeNumber(a.card.annualFee, 0) - this.safeNumber(b.card.annualFee, 0)
+      if (feeDiff !== 0) return feeDiff
+
+      // Quaternary: Reward Rate (higher is better)
+      return this.safeNumber(b.card.rewardsRate, 0) - this.safeNumber(a.card.rewardsRate, 0)
+    })
   }
 
   /**
@@ -312,7 +442,7 @@ export class FunnelRecommendationEngine {
     if (userCategories.length === 0) return 0
 
     const normalizedUserCategories = userCategories.map((cat) => cat.toLowerCase().trim())
-    const normalizedCardCategories = cardCategories.map((cat) => cat.toLowerCase().trim())
+    const normalizedCardCategories = (cardCategories || []).map((cat) => cat.toLowerCase().trim())
 
     let matchCount = 0
 
@@ -340,18 +470,21 @@ export class FunnelRecommendationEngine {
 
     // Keyword matching for common variations
     const keywordMappings: { [key: string]: string[] } = {
-      dining: ["restaurant", "food", "eat", "meal"],
-      restaurant: ["dining", "food", "eat", "meal"],
-      travel: ["hotel", "flight", "airline", "booking", "vacation"],
-      hotel: ["travel", "booking", "accommodation", "stay"],
-      shopping: ["retail", "store", "purchase", "buy"],
-      online: ["internet", "digital", "e-commerce", "web"],
-      fuel: ["gas", "petrol", "gasoline", "pump"],
-      gas: ["fuel", "petrol", "gasoline", "pump"],
-      entertainment: ["movie", "cinema", "streaming", "show"],
-      grocery: ["supermarket", "food", "groceries", "market"],
-      utility: ["bill", "electric", "water", "internet", "phone"],
-      transport: ["taxi", "uber", "metro", "bus", "ride"],
+      dining: ["restaurant", "food", "eat", "meal", "cafe"],
+      restaurant: ["dining", "food", "eat", "meal", "cafe"],
+      travel: ["hotel", "flight", "airline", "booking", "vacation", "air"],
+      hotel: ["travel", "booking", "accommodation", "stay", "lodging"],
+      flight: ["travel", "airline", "air", "booking"],
+      shopping: ["retail", "store", "purchase", "buy", "mall"],
+      online: ["internet", "digital", "e-commerce", "web", "shopping"],
+      fuel: ["gas", "petrol", "gasoline", "pump", "vehicle"],
+      gas: ["fuel", "petrol", "gasoline", "pump", "vehicle"],
+      entertainment: ["movie", "cinema", "streaming", "show", "music"],
+      grocery: ["supermarket", "groceries", "market", "shopping"],
+      utility: ["bill", "electric", "water", "internet", "phone", "mobile"],
+      transport: ["taxi", "uber", "metro", "bus", "ride", "travel"],
+      professional: ["business", "work", "office"],
+      business: ["professional", "work", "office"],
     }
 
     for (const [key, synonyms] of Object.entries(keywordMappings)) {
@@ -367,19 +500,29 @@ export class FunnelRecommendationEngine {
   }
 
   /**
-   * Generate reasoning text for each recommendation
+   * Generate enhanced reasoning text with explainability
    */
-  private static generateReasoning(
+  private static generateEnhancedReasoning(
     card: CreditCard,
     matchPercentage: number,
     scoringScenario: string,
     userProfile: UserProfile,
     tier: "preferred_brand" | "general",
+    isMilestoneBased: boolean,
+    effectiveRewardRate: number,
+    annualFee: number,
   ): string {
     const parts = []
 
     parts.push(`${matchPercentage.toFixed(1)}% category match`)
-    parts.push(`${card.rewardsRate}% rewards rate`)
+
+    // Effective reward rate if different from base
+    const safeRewardRate = this.safeNumber(card.rewardsRate, 0)
+    if (isMilestoneBased && effectiveRewardRate < safeRewardRate) {
+      parts.push(`${effectiveRewardRate.toFixed(1)}% effective rewards (milestone dependent)`)
+    } else {
+      parts.push(`${safeRewardRate}% rewards rate`)
+    }
 
     if (tier === "preferred_brand" && userProfile.preferredBrands.includes(card.bank)) {
       parts.push("preferred brand match")
@@ -391,11 +534,43 @@ export class FunnelRecommendationEngine {
       parts.push("no joining fee")
     }
 
-    if (card.signUpBonus > 0) {
-      parts.push(`₹${card.signUpBonus.toLocaleString()} welcome bonus`)
+    const safeSignUpBonus = this.safeNumber(card.signUpBonus, 0)
+    if (safeSignUpBonus > 0) {
+      parts.push(`₹${Math.round(safeSignUpBonus).toLocaleString()} welcome bonus`)
+    }
+
+    if (card.rewardType) {
+      const typeLabel = card.rewardType.charAt(0).toUpperCase() + card.rewardType.slice(1)
+      parts.push(`${typeLabel} rewards`)
+    }
+
+    if (annualFee > 0) {
+      parts.push(`₹${Math.round(annualFee).toLocaleString()} annual fee`)
     }
 
     const tierLabel = tier === "preferred_brand" ? "Preferred Brand Tier" : "General Tier"
-    return `Selected from ${tierLabel} based on ${parts.join(", ")}. Scoring: ${scoringScenario}.`
+    return `Selected from ${tierLabel} based on ${parts.join(", ")}. Scenario: ${scoringScenario}.`
+  }
+
+  /**
+   * Generate reasoning text for each recommendation (legacy)
+   */
+  private static generateReasoning(
+    card: CreditCard,
+    matchPercentage: number,
+    scoringScenario: string,
+    userProfile: UserProfile,
+    tier: "preferred_brand" | "general",
+  ): string {
+    return this.generateEnhancedReasoning(
+      card,
+      matchPercentage,
+      scoringScenario,
+      userProfile,
+      tier,
+      false,
+      this.safeNumber(card.rewardsRate, 0),
+      this.safeNumber(card.annualFee, 0),
+    )
   }
 }
