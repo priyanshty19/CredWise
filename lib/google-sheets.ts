@@ -65,13 +65,46 @@ export async function fetchAvailableSpendingCategories(): Promise<string[]> {
     const allCategories = new Set<string>()
 
     cards.forEach((card) => {
-      card.spendingCategories.forEach((category) => {
+      ;(card.spendingCategories || []).forEach((category) => {
         allCategories.add(category)
       })
     })
 
     const sortedCategories = Array.from(allCategories).sort()
     console.log("📊 Available spending categories from sheet:", sortedCategories)
+
+    // Compare with expected categories
+    const expectedCategories = [
+      "dining & restaurants",
+      "travel & hotels",
+      "entertainment",
+      "online shopping",
+      "groceries",
+      "utilities & bills",
+      "fuel & gas",
+      "transport",
+      "business & professional",
+    ]
+
+    const normalizedCategories = sortedCategories.map((cat) => cat.toLowerCase().trim())
+    const normalizedExpected = expectedCategories.map((cat) => cat.toLowerCase().trim())
+
+    const missing = normalizedExpected.filter((cat) => !normalizedCategories.includes(cat))
+    const extra = normalizedCategories.filter((cat) => !normalizedExpected.includes(cat))
+
+    console.log("\n🏷️ CATEGORY COMPARISON:")
+    console.log(`   Total found: ${sortedCategories.length}`)
+    console.log(`   Expected: ${expectedCategories.length}`)
+    if (missing.length > 0) {
+      console.log(`   ❌ Missing from sheet: [${missing.join(", ")}]`)
+    }
+    if (extra.length > 0) {
+      console.log(`   ⚠️ Extra/unexpected in sheet: [${extra.join(", ")}]`)
+    }
+    if (missing.length === 0 && extra.length === 0) {
+      console.log("   ✅ All expected categories found, no unexpected ones")
+    }
+    console.log("")
 
     return sortedCategories
   } catch (error) {

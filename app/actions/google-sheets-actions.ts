@@ -16,15 +16,153 @@ interface CreditCard {
   creditScoreRequirement: number
   monthlyIncomeRequirement: number
   rewardsRate: number
-  signUpBonus: number
-  features: string[]
-  description: string
   spendingCategories: string[]
 }
 
 // Use the correct spreadsheet ID from the original configuration
 const SHEET_ID = "1rHR5xzCmZZAlIjahAcpXrxwgYMcItVPckTCiOCSZfSo"
-const CARDS_RANGE = "Card-Data!A:L"
+const CARDS_RANGE = "Card-Data!A:P"
+
+/**
+ * Column mapping: maps sheet header patterns to CreditCard field names.
+ * Headers are normalized (lowercase, trimmed, newlines removed) before matching.
+ */
+interface ColumnMapConfig {
+  [fieldName: string]: string[] // fieldName -> array of header patterns to search for
+}
+
+const COLUMN_MAP: ColumnMapConfig = {
+  cardName: ["card name", "name"],
+  bank: ["bank", "brand", "issuer"],
+  cardType: ["card type", "type", "category"],
+  joiningFee: ["joining fee", "joining_fee", "joiningfee", "upfront fee"],
+  annualFee: ["annual fee", "annual_fee", "annualfee", "yearly fee"],
+  creditScoreRequirement: [
+    "credit score requirement",
+    "min credit score",
+    "credit score",
+    "min credit",
+  ],
+  monthlyIncomeRequirement: ["income requirement", "min income", "monthly income", "income"],
+  rewardsRate: [
+    "optimized reward rate",
+    "base reward rate",
+    "reward rate",
+    "rewards rate",
+  ],
+  spendingCategories: [
+    "spending category",
+    "spending categories",
+    "best for categories",
+    "best for",
+  ],
+}
+
+/**
+ * Normalize header by trimming whitespace and removing newline characters.
+ */
+function normalizeHeader(header: string): string {
+  return (header || "").toString().toLowerCase().trim().replace(/[\n\r]+/g, " ")
+}
+
+/**
+ * Find column index by matching normalized header against patterns.
+ * Returns -1 if not found.
+ */
+function findColumnIndex(
+  normalizedHeaders: string[],
+  patterns: string[],
+  fieldName: string,
+): number {
+  for (const pattern of patterns) {
+    const patternNorm = normalizeHeader(pattern)
+    const idx = normalizedHeaders.findIndex((h) => h === patternNorm || h.includes(patternNorm))
+    if (idx >= 0) {
+      return idx
+    }
+  }
+  console.warn(`⚠️  Column mapping: "${fieldName}" not found. Checked patterns: [${patterns.join(", ")}]`)
+  return -1
+}
+
+/**
+ * Build a column index map from headers using COLUMN_MAP.
+ */
+function buildColumnIndexMap(
+  headers: string[],
+): { [fieldName: string]: number } {
+  const normalizedHeaders = headers.map(normalizeHeader)
+
+  console.log("\n📋 RAW HEADERS FROM SHEET:")
+  console.log(headers)
+  console.log("\n📋 NORMALIZED HEADERS:")
+  console.log(normalizedHeaders)
+  console.log("")
+
+  const indexMap: { [fieldName: string]: number } = {}
+
+  for (const [fieldName, patterns] of Object.entries(COLUMN_MAP)) {
+    const idx = findColumnIndex(normalizedHeaders, patterns, fieldName)
+    indexMap[fieldName] = idx
+  }
+
+  console.log("🗂️  COLUMN INDEX MAP:")
+  for (const [fieldName, idx] of Object.entries(indexMap)) {
+    if (idx >= 0) {
+      console.log(`   ✅ ${fieldName}: index ${idx} (header: "${headers[idx]}")`)
+    } else {
+      console.log(`   ❌ ${fieldName}: NOT FOUND`)
+    }
+  }
+  console.log("")
+
+  return indexMap
+}
+
+/**
+ * Safely parse a numeric value from a sheet cell.
+ * Returns defaultValue if cell is empty, "NA", or not a valid number.
+ */
+function parseNumeric(value: any, defaultValue = 0): number {
+  if (!value || value === "NA" || value === "" || value === null || value === undefined) {
+    return defaultValue
+  }
+  const parsed = Number.parseFloat(value.toString().replace(/,/g, ""))
+  return isNaN(parsed) ? defaultValue : parsed
+}
+
+/**
+ * Safely parse an integer from a sheet cell.
+ */
+function parseInteger(value: any, defaultValue = 0): number {
+  if (!value || value === "NA" || value === "" || value === null || value === undefined) {
+    return defaultValue
+  }
+  const parsed = Number.parseInt(value.toString().replace(/,/g, ""), 10)
+  return isNaN(parsed) ? defaultValue : parsed
+}
+
+/**
+ * Safely get a string value, trimming whitespace.
+ */
+function getString(value: any, defaultValue = ""): string {
+  if (!value || value === "NA" || value === null || value === undefined) {
+    return defaultValue
+  }
+  return value.toString().trim()
+}
+
+/**
+ * Parse comma-separated spending categories into a string array (lowercased).
+ */
+function parseCategories(value: any): string[] {
+  const str = getString(value)
+  if (!str) return []
+  return str
+    .split(",")
+    .map((cat) => cat.trim().toLowerCase())
+    .filter((cat) => cat.length > 0)
+}
 
 async function fetchGoogleSheetData(sheetId: string, range: string): Promise<SheetData | null> {
   try {
@@ -135,7 +273,8 @@ function normalizeCardTypeFromSheet(sheetCardType: string): string | null {
 
 export async function fetchCreditCardsAction(): Promise<{ success: boolean; cards?: CreditCard[]; error?: string }> {
   try {
-    console.log("Fetching credit cards from Google Sheets...")
+    console.log("\n🔄 FETCHING CREDIT CARDS FROM GOOGLE SHEETS")
+    console.log("=".repeat(70))
 
     const sheetData = await fetchGoogleSheetData(SHEET_ID, CARDS_RANGE)
 
@@ -146,14 +285,19 @@ export async function fetchCreditCardsAction(): Promise<{ success: boolean; card
       }
     }
 
-    console.log(`Found ${sheetData.values.length} rows in sheet`)
+    console.log(`✅ Received ${sheetData.values.length} total rows from sheet`)
 
     const [headers, ...rows] = sheetData.values
+
+    // Build column index map from headers
+    const colMap = buildColumnIndexMap(headers)
+
     const cards: CreditCard[] = []
     let skippedRows = 0
     let processedRows = 0
+    let cardsWithNoCategories = 0
 
-    console.log("Headers:", headers)
+    console.log(`📝 PROCESSING ${rows.length} DATA ROWS:\n`)
 
     for (let index = 0; index < rows.length; index++) {
       const row = rows[index]
@@ -164,92 +308,87 @@ export async function fetchCreditCardsAction(): Promise<{ success: boolean; card
           continue
         }
 
+        // Check for minimum required fields
         if (row.length < 3) {
           skippedRows++
           continue
         }
 
-        const parseNumeric = (value: any, defaultValue = 0): number => {
-          if (!value || value === "NA" || value === "" || value === null || value === undefined) return defaultValue
-          const parsed = Number.parseFloat(value.toString().replace(/,/g, ""))
-          return isNaN(parsed) ? defaultValue : parsed
-        }
-
-        const parseInt = (value: any, defaultValue = 0): number => {
-          if (!value || value === "NA" || value === "" || value === null || value === undefined) return defaultValue
-          const parsed = Number.parseInt(value.toString().replace(/,/g, ""))
-          return isNaN(parsed) ? defaultValue : parsed
-        }
-
-        const getString = (value: any, defaultValue = ""): string => {
-          if (!value || value === "NA" || value === null || value === undefined) return defaultValue
-          return value.toString().trim()
-        }
-
-        const featuresString = getString(row[9])
-        const features =
-          !featuresString || featuresString === "NA"
-            ? []
-            : featuresString
-                .split(",")
-                .map((f: string) => f.trim())
-                .filter(Boolean)
-
-        const spendingCategoriesString = getString(row[11])
+        // Extract field values using column map
+        const cardName = getString(row[colMap.cardName])
+        const bank = getString(row[colMap.bank])
+        const cardTypeRaw = getString(row[colMap.cardType])
+        const joiningFee = parseNumeric(row[colMap.joiningFee])
+        const annualFee = parseNumeric(row[colMap.annualFee])
+        const creditScoreRequirement = parseInteger(row[colMap.creditScoreRequirement])
+        const monthlyIncomeRequirement = parseNumeric(row[colMap.monthlyIncomeRequirement])
+        const rewardsRate = parseNumeric(row[colMap.rewardsRate])
         const spendingCategories =
-          !spendingCategoriesString || spendingCategoriesString === "NA"
-            ? []
-            : spendingCategoriesString
-                .split(",")
-                .map((cat: string) => cat.trim().toLowerCase())
-                .filter(Boolean)
+          colMap.spendingCategories >= 0 ? parseCategories(row[colMap.spendingCategories]) : []
 
-        const rawCardType = getString(row[2])
+        // Validate required fields
+        if (!cardName || !bank || !cardTypeRaw) {
+          console.warn(
+            `⚠️  Skipping row ${index + 2}: Missing required fields (Name: "${cardName}", Bank: "${bank}", Type: "${cardTypeRaw}")`,
+          )
+          skippedRows++
+          continue
+        }
 
-        const card = {
+        // Normalize card type
+        const normalizedCardType = normalizeCardTypeFromSheet(cardTypeRaw)
+        if (!normalizedCardType) {
+          console.warn(`⚠️  Skipping row ${index + 2}: Invalid card type "${cardTypeRaw}"`)
+          skippedRows++
+          continue
+        }
+
+        // Log first 20 cards for debugging
+        if (processedRows < 20) {
+          console.log(
+            `✅ Card ${processedRows + 1}: "${cardName}" (${bank}) | Categories: [${spendingCategories.join(", ") || "NONE"}]`,
+          )
+        }
+
+        // Track cards with no spending categories
+        if (spendingCategories.length === 0) {
+          cardsWithNoCategories++
+          if (processedRows < 20) {
+            console.warn(`   ⚠️  "${cardName}" has NO spending categories assigned`)
+          }
+        }
+
+        const card: CreditCard = {
           id: `card_${processedRows + 1}`,
-          cardName: getString(row[0]),
-          bank: getString(row[1]),
-          cardType: rawCardType,
-          joiningFee: parseNumeric(row[3]),
-          annualFee: parseNumeric(row[4]),
-          creditScoreRequirement: parseInt(row[5]),
-          monthlyIncomeRequirement: parseNumeric(row[6]),
-          rewardsRate: parseNumeric(row[7]),
-          signUpBonus: parseNumeric(row[8]),
-          features,
-          description: getString(row[10]),
+          cardName,
+          bank,
+          cardType: normalizedCardType,
+          joiningFee,
+          annualFee,
+          creditScoreRequirement,
+          monthlyIncomeRequirement,
+          rewardsRate,
           spendingCategories,
         }
 
-        if (!card.cardName || !card.bank || !card.cardType) {
-          console.log(`Skipping row ${index + 2}: Missing required fields`, {
-            cardName: card.cardName,
-            bank: card.bank,
-            cardType: card.cardType,
-          })
-          skippedRows++
-          continue
-        }
-
-        const normalizedCardType = normalizeCardTypeFromSheet(card.cardType)
-        if (!normalizedCardType) {
-          console.log(`Skipping row ${index + 2}: Invalid card type "${card.cardType}"`)
-          skippedRows++
-          continue
-        }
-
-        card.cardType = normalizedCardType
         cards.push(card)
         processedRows++
       } catch (error) {
-        console.error(`Error processing row ${index + 2}:`, error)
+        console.error(`❌ Error processing row ${index + 2}:`, error)
         skippedRows++
         continue
       }
     }
 
-    console.log(`📊 Loaded ${cards.length} cards from Google Sheets (${skippedRows} skipped)`)
+    console.log(`\n📊 FINAL RESULTS:`)
+    console.log(`   ✅ Successfully loaded: ${cards.length} cards`)
+    console.log(`   ⏭️  Skipped: ${skippedRows} rows`)
+    console.log(`   📈 Total rows processed: ${rows.length}`)
+    if (cardsWithNoCategories > 0) {
+      console.warn(`   ⚠️  ${cardsWithNoCategories} cards have NO spending categories`)
+    }
+    console.log("=".repeat(70))
+    console.log("")
 
     return {
       success: true,
@@ -281,8 +420,8 @@ export async function testGoogleSheetsConnection(): Promise<{
     }
 
     // Test with the actual sheet first
-    console.log("Testing connection to main sheet...")
-    const mainSheetData = await fetchGoogleSheetData(SHEET_ID, "Card-Data!A1:L10")
+    console.log("\n🔌 Testing connection to main sheet...")
+    const mainSheetData = await fetchGoogleSheetData(SHEET_ID, "Card-Data!A1:P10")
 
     if (mainSheetData) {
       return {
